@@ -8,28 +8,28 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class AdjustmentReasonService {
-	
+
 	private final AdjustmentReasonRepository repository;
-	
+
 	public List<AdjustmentReason> getAll() {
 		return repository.findAll();
 	}
-	
+
 	public List<AdjustmentReason> getAllActive() {
-		return repository.findAllByIsActiveTrue();		
+		return repository.findAllByIsActiveTrue();
 	}
-	
+
 	@Transactional
 	public AdjustmentReason save(AdjustmentReason reason) {
-		//validation if needed
+		// validation if needed
 		return repository.save(reason);
 	}
-	
+
 	@Transactional
-    public void deleteLogical(Integer id) {
-        repository.findById(id).ifPresent(reason -> {
-            reason.setActive(false);
-            repository.save(reason);
-        });
-    }
+	public void deleteLogical(Integer id) {
+		repository.findById(id).ifPresent(reason -> {
+			reason.setActive(false);
+			repository.save(reason);
+		});
+	}
 }

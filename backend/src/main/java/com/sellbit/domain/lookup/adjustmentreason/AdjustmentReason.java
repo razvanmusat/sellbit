@@ -7,7 +7,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "adjustment_reason")
+@Table(name = "adjustment_reasons")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -22,7 +22,7 @@ public class AdjustmentReason {
 	@Column(nullable = false, unique = true, length = 50)
 	private String code; //EX: INVENTORY, BROKEN, EXPIRED
 	
-	@Column(nullable = false, length = 50)
+	@Column(nullable = false, length = 100)
 	private String label; // displayed name
 	
 	@Builder.Default
