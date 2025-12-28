@@ -1,9 +1,12 @@
 package com.sellbit.domain.lookup.vatrate;
 
-import lombok.RequiredArgsConstructor;
+import java.util.List;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import java.util.List;
+
+import jakarta.persistence.EntityNotFoundException;
+import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
@@ -21,14 +24,17 @@ public class VatRateService {
 
     @Transactional
     public VatRate save(VatRate vatRate) {
+    	if (vatRate.getId() != null && !repository.existsById(vatRate.getId())) {
+            throw new EntityNotFoundException();
+        }
         return repository.save(vatRate);
     }
 
     @Transactional
     public void deleteLogical(Integer id) {
-        repository.findById(id).ifPresent(vatRate -> {
-            vatRate.setActive(false);
-            repository.save(vatRate);
-        });
+    	VatRate vatRate = repository.findById(id)
+                .orElseThrow(EntityNotFoundException::new);
+    	vatRate.setActive(false);
+        repository.save(vatRate);
     }
 }

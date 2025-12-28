@@ -25,10 +25,7 @@ public class CashMovementTypeController {
 
     @PostMapping
     public ResponseEntity<CashMovementType> create(@RequestBody CashMovementType type) {
-        CashMovementType saved = service.save(type);
-        return ResponseEntity
-                .status(HttpStatus.CREATED)
-                .body(saved);
+    	return ResponseEntity.status(HttpStatus.CREATED).body(service.save(type));
     }
 
     @PutMapping("/{id}")

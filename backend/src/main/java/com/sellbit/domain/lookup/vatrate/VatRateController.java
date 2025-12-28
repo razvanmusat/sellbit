@@ -25,10 +25,7 @@ public class VatRateController {
 
     @PostMapping
     public ResponseEntity<VatRate> create(@RequestBody VatRate vatRate) {
-        VatRate saved = service.save(vatRate);
-        return ResponseEntity
-                .status(HttpStatus.CREATED)
-                .body(saved);
+    	return ResponseEntity.status(HttpStatus.CREATED).body(service.save(vatRate));
     }
 
     @PutMapping("/{id}")

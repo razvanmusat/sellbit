@@ -1,9 +1,12 @@
 package com.sellbit.domain.lookup.paymentmethod;
 
-import lombok.RequiredArgsConstructor;
+import java.util.List;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import java.util.List;
+
+import jakarta.persistence.EntityNotFoundException;
+import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
@@ -21,14 +24,17 @@ public class PaymentMethodService {
 
     @Transactional
     public PaymentMethod save(PaymentMethod method) {
+    	if (method.getId() != null && !repository.existsById(method.getId())) {
+            throw new EntityNotFoundException();
+        }
         return repository.save(method);
     }
 
     @Transactional
     public void deleteLogical(Integer id) {
-        repository.findById(id).ifPresent(method -> {
-            method.setActive(false);
-            repository.save(method);
-        });
+    	PaymentMethod method = repository.findById(id)
+                .orElseThrow(EntityNotFoundException::new);
+        method.setActive(false);
+        repository.save(method);
     }
 }

@@ -19,7 +19,7 @@ public class PaymentMethod {
     private String code; // CASH, CARD, VOUCHER
 
     @Column(nullable = false, length = 100)
-    private String label; // Numerar, Card Bancar, Tichet
+    private String label; // Numerar, Card Bancar, Voucher
 
     @Builder.Default
     @Column(name = "is_active")

@@ -3,6 +3,9 @@ package com.sellbit.domain.lookup.adjustmentreason;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import jakarta.persistence.EntityNotFoundException;
+
 import java.util.List;
 
 @Service
@@ -21,15 +24,17 @@ public class AdjustmentReasonService {
 
 	@Transactional
 	public AdjustmentReason save(AdjustmentReason reason) {
-		// validation if needed
+		if (reason.getId() != null && !repository.existsById(reason.getId())) {
+            throw new EntityNotFoundException();
+        }
 		return repository.save(reason);
 	}
 
 	@Transactional
 	public void deleteLogical(Integer id) {
-		repository.findById(id).ifPresent(reason -> {
-			reason.setActive(false);
-			repository.save(reason);
-		});
+		AdjustmentReason reason = repository.findById(id)
+                .orElseThrow(EntityNotFoundException::new);
+        reason.setActive(false);
+        repository.save(reason);
 	}
 }

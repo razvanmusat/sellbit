@@ -1,9 +1,12 @@
 package com.sellbit.domain.lookup.receiptstatus;
 
-import lombok.RequiredArgsConstructor;
+import java.util.List;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import java.util.List;
+
+import jakarta.persistence.EntityNotFoundException;
+import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
@@ -21,14 +24,17 @@ public class ReceiptStatusService {
 
     @Transactional
     public ReceiptStatus save(ReceiptStatus status) {
+    	if (status.getId() != null && !repository.existsById(status.getId())) {
+            throw new EntityNotFoundException();
+        }
         return repository.save(status);
     }
 
     @Transactional
     public void deleteLogical(Integer id) {
-        repository.findById(id).ifPresent(status -> {
-            status.setActive(false);
-            repository.save(status);
-        });
+    	ReceiptStatus status = repository.findById(id)
+                .orElseThrow(EntityNotFoundException::new);
+        status.setActive(false);
+        repository.save(status);
     }
 }

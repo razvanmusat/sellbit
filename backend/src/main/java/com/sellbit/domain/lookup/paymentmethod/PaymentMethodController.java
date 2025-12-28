@@ -26,10 +26,7 @@ public class PaymentMethodController {
 
     @PostMapping
     public ResponseEntity<PaymentMethod> create(@RequestBody PaymentMethod method) {
-    	PaymentMethod saved = service.save(method);
-        return ResponseEntity
-                .status(HttpStatus.CREATED)
-                .body(saved);
+    	return ResponseEntity.status(HttpStatus.CREATED).body(service.save(method));
     }
 
     @PutMapping("/{id}")

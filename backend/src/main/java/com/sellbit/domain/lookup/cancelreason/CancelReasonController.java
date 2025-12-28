@@ -26,10 +26,7 @@ public class CancelReasonController {
     
     @PostMapping
     public ResponseEntity<CancelReason> create(@RequestBody CancelReason reason) {
-    	CancelReason saved = service.save(reason);
-        return ResponseEntity
-                .status(HttpStatus.CREATED)
-                .body(saved);
+    	return ResponseEntity.status(HttpStatus.CREATED).body(service.save(reason));
     }
     
     @PutMapping("/{id}")

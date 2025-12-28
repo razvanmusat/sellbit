@@ -20,7 +20,7 @@ public class CancelReason {
 	private Integer id;
 	
 	@Column(nullable = false, unique = true, length = 50)
-	private String code;
+	private String code; // EX: CUSTOMER_REJECTION, ERROR_ENTRY
 	
 	@Column(nullable = false, length = 100)
 	private String label;

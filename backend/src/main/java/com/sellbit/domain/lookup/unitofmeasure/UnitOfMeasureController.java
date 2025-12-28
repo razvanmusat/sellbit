@@ -25,10 +25,7 @@ public class UnitOfMeasureController {
 
     @PostMapping
     public ResponseEntity<UnitOfMeasure> create(@RequestBody UnitOfMeasure uom) {
-        UnitOfMeasure saved = service.save(uom);
-        return ResponseEntity
-                .status(HttpStatus.CREATED)
-                .body(saved);
+    	return ResponseEntity.status(HttpStatus.CREATED).body(service.save(uom));
     }
 
     @PutMapping("/{id}")

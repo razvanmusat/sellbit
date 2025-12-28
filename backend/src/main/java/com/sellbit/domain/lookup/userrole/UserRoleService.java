@@ -1,9 +1,12 @@
 package com.sellbit.domain.lookup.userrole;
 
-import lombok.RequiredArgsConstructor;
+import java.util.List;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import java.util.List;
+
+import jakarta.persistence.EntityNotFoundException;
+import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
@@ -21,14 +24,17 @@ public class UserRoleService {
 
     @Transactional
     public UserRole save(UserRole role) {
+    	if (role.getId() != null && !repository.existsById(role.getId())) {
+            throw new EntityNotFoundException();
+        }
         return repository.save(role);
     }
 
     @Transactional
     public void deleteLogical(Integer id) {
-        repository.findById(id).ifPresent(role -> {
-            role.setActive(false);
-            repository.save(role);
-        });
+    	UserRole role = repository.findById(id)
+                .orElseThrow(EntityNotFoundException::new);
+        role.setActive(false);
+        repository.save(role);
     }
 }

@@ -25,10 +25,7 @@ public class ReceiptStatusController {
 
     @PostMapping
     public ResponseEntity<ReceiptStatus> create(@RequestBody ReceiptStatus status) {
-        ReceiptStatus saved = service.save(status);
-        return ResponseEntity
-                .status(HttpStatus.CREATED)
-                .body(saved);
+    	return ResponseEntity.status(HttpStatus.CREATED).body(service.save(status));
     }
 
     @PutMapping("/{id}")

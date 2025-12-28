@@ -1,9 +1,12 @@
 package com.sellbit.domain.lookup.cancelreason;
 
-import lombok.RequiredArgsConstructor;
+import java.util.List;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import java.util.List;
+
+import jakarta.persistence.EntityNotFoundException;
+import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
@@ -21,14 +24,17 @@ public class CancelReasonService {
 
 	@Transactional
 	public CancelReason save(CancelReason reason) {
-		return repository.save(reason);
+		if (reason.getId() != null && !repository.existsById(reason.getId())) {
+            throw new EntityNotFoundException();
+        }
+        return repository.save(reason);
 	}
 
 	@Transactional
 	public void deleteLogical(Integer id) {
-		repository.findById(id).ifPresent(reason -> {
-			reason.setActive(false);
-			repository.save(reason);
-		});
+		CancelReason reason = repository.findById(id)
+                .orElseThrow(EntityNotFoundException::new);
+        reason.setActive(false);
+        repository.save(reason);
 	}
 }

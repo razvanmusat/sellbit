@@ -26,10 +26,7 @@ public class AdjustmentReasonController {
     
     @PostMapping
     public ResponseEntity<AdjustmentReason> create(@RequestBody AdjustmentReason reason) {
-        AdjustmentReason saved = service.save(reason);
-        return ResponseEntity
-                .status(HttpStatus.CREATED)
-                .body(saved);
+    	return ResponseEntity.status(HttpStatus.CREATED).body(service.save(reason));
     }
     
     @PutMapping("/{id}")

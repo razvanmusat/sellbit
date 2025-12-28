@@ -1,9 +1,12 @@
 package com.sellbit.domain.lookup.unitofmeasure;
 
-import lombok.RequiredArgsConstructor;
+import java.util.List;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import java.util.List;
+
+import jakarta.persistence.EntityNotFoundException;
+import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
@@ -21,14 +24,17 @@ public class UnitOfMeasureService {
 
     @Transactional
     public UnitOfMeasure save(UnitOfMeasure uom) {
+    	if (uom.getId() != null && !repository.existsById(uom.getId())) {
+            throw new EntityNotFoundException();
+        }
         return repository.save(uom);
     }
 
     @Transactional
     public void deleteLogical(Integer id) {
-        repository.findById(id).ifPresent(uom -> {
-            uom.setActive(false);
-            repository.save(uom);
-        });
+    	UnitOfMeasure uom = repository.findById(id)
+                .orElseThrow(EntityNotFoundException::new);
+        uom.setActive(false);
+        repository.save(uom);
     }
 }

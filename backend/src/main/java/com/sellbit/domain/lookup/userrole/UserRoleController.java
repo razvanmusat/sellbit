@@ -25,10 +25,7 @@ public class UserRoleController {
 
     @PostMapping
     public ResponseEntity<UserRole> create(@RequestBody UserRole role) {
-        UserRole saved = service.save(role);
-        return ResponseEntity
-                .status(HttpStatus.CREATED)
-                .body(saved);
+    	return ResponseEntity.status(HttpStatus.CREATED).body(service.save(role));
     }
 
     @PutMapping("/{id}")
