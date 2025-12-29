@@ -17,13 +17,13 @@ public class VatRate {
     private Integer id;
 
     @Column(nullable = false, unique = true, length = 50)
-    private String code; // EX: TVA19, TVA9, TVA5
+    private String code; // EX: TVA21, TV11, TVA0
 
     @Column(nullable = false, length = 100)
-    private String label; // EX: Cota Normala 19%
+    private String label; // "TVA 21% (Băuturi/Jucării)", "TVA 11% (Alimente)",  "Scutit"
 
     @Column(nullable = false, precision = 5, scale = 2)
-    private BigDecimal rate; // EX: 19.00, 9.00
+    private BigDecimal rate; // EX: 21.00,11.00, 0.00
 
     @Builder.Default
     @Column(name = "is_active")

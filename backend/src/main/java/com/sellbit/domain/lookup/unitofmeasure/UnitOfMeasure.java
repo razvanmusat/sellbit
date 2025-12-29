@@ -16,10 +16,10 @@ public class UnitOfMeasure {
     private Integer id;
 
     @Column(nullable = false, unique = true, length = 50)
-    private String code; // EX: KG, BUC, L, M
+    private String code; // EX: BUC, HOUR, MINUTE
 
     @Column(nullable = false, length = 100)
-    private String label; // EX: Kilogram, Bucată, Litru
+    private String label; // EX: Bucată, Ora(acces loc de joaca), Minute(extra)
 
     @Builder.Default
     @Column(name = "is_active")

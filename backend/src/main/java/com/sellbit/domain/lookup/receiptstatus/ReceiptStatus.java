@@ -19,7 +19,7 @@ public class ReceiptStatus {
     private String code; // EX: OPEN, CLOSED, CANCELLED, REFUNDED
 
     @Column(nullable = false, length = 100)
-    private String label;
+    private String label; // EX: "În lucru", "Finalizată", "Anulată", "Returnată"
 
     @Builder.Default
     @Column(name = "is_active")

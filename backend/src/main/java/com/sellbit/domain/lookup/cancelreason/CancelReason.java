@@ -20,10 +20,10 @@ public class CancelReason {
 	private Integer id;
 	
 	@Column(nullable = false, unique = true, length = 50)
-	private String code; // EX: CUSTOMER_REJECTION, ERROR_ENTRY
+	private String code; // EX: CUSTOMER_REJECTION, ERROR_ENTRY, WRONG_ITEM
 	
 	@Column(nullable = false, length = 100)
-	private String label;
+	private String label; //EX: Refuz client, Eroare operare, Produs gresit
 	
 	@Builder.Default
 	@Column(name = "is_active")

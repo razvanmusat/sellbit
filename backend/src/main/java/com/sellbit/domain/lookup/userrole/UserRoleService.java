@@ -4,11 +4,14 @@ import java.util.List;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.validation.annotation.Validated;
 
 import jakarta.persistence.EntityNotFoundException;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 @Service
+@Validated
 @RequiredArgsConstructor
 public class UserRoleService {
 
@@ -23,7 +26,7 @@ public class UserRoleService {
     }
 
     @Transactional
-    public UserRole save(UserRole role) {
+    public UserRole save(@Valid UserRole role) {
     	if (role.getId() != null && !repository.existsById(role.getId())) {
             throw new EntityNotFoundException();
         }

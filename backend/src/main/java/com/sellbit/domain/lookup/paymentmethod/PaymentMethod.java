@@ -16,10 +16,10 @@ public class PaymentMethod {
     private Integer id;
 
     @Column(nullable = false, unique = true, length = 50)
-    private String code; // CASH, CARD, VOUCHER
+    private String code; // CASH, CARD, VOUCHER, BANK_TRANSFER
 
     @Column(nullable = false, length = 100)
-    private String label; // Numerar, Card Bancar, Voucher
+    private String label; // Numerar, Card Bancar, Voucher Cadou, Transfer Bancar
 
     @Builder.Default
     @Column(name = "is_active")

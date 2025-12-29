@@ -1,10 +1,23 @@
 package com.sellbit.domain.lookup.userrole;
 
-import jakarta.persistence.*;
-import lombok.*;
+import java.time.LocalDateTime;
+
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
-import java.time.LocalDateTime;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Entity
 @Table(name = "user_roles")
@@ -21,6 +34,11 @@ public class UserRole {
     @Column(nullable = false, length = 100)
     private String label; // EX: Administrator, Casier, Manager
 
+    @Column(name = "authority_level", nullable = false)
+    @Min(0)
+    @Max(100)
+    private Integer authorityLevel;
+    
     @Builder.Default
     @Column(name = "is_active")
     private boolean isActive = true;
