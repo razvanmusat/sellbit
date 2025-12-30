@@ -19,7 +19,7 @@ public class CashMovementType {
     private String code; // EX: PAYIN, PAYOUT
 
     @Column(nullable = false, length = 100)
-    private String label; // EX: Depunere numerar, Ridicare numerar
+    private String label; // EX: Introducere numerar, Depunere numerar banca
 
     @Builder.Default
     @Column(name = "is_active")
