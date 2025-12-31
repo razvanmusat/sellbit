@@ -9,4 +9,7 @@ import java.util.Optional;
 public interface UserRoleRepository extends JpaRepository<UserRole, Integer> {
     Optional<UserRole> findByCode(String code);
     List<UserRole> findAllByIsActiveTrue();
+    boolean existsByIdAndIsActiveTrue(Integer id);
+    long countByAuthorityLevelAndIsActiveTrue(Integer authorityLevel);
+
 }

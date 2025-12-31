@@ -6,6 +6,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
+import com.sellbit.domain.security.user.UserRepository;
+
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -16,6 +18,7 @@ import lombok.RequiredArgsConstructor;
 public class UserRoleService {
 
     private final UserRoleRepository repository;
+    private final UserRepository userRepository;
 
     public List<UserRole> getAll() {
         return repository.findAll();
@@ -35,9 +38,27 @@ public class UserRoleService {
 
     @Transactional
     public void deleteLogical(Integer id) {
-    	UserRole role = repository.findById(id)
+
+        UserRole role = repository.findById(id)
                 .orElseThrow(EntityNotFoundException::new);
+
+        // Protecție: ultimul rol cu autoritate maximă
+        if (role.getAuthorityLevel() == 100) {
+            long activeMaxRoles =
+                repository.countByAuthorityLevelAndIsActiveTrue(100);
+
+            if (activeMaxRoles <= 1) {
+                throw new RuntimeException("ERROR.ROLE.CANNOT_DEACTIVATE_LAST_ADMIN_ROLE");
+            }
+        }
+
+        // Protecție: rol folosit de useri activi
+        if (userRepository.existsByRole_IdAndIsActiveTrue(id)) {
+            throw new RuntimeException("ERROR.ROLE.IN_USE");
+        }
+
         role.setActive(false);
         repository.save(role);
     }
+
 }
