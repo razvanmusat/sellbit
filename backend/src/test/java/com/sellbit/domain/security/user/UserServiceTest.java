@@ -174,4 +174,28 @@ class UserServiceTest {
         List<UserResponseDTO> result = userService.getAllInactive();
         assertTrue(result.isEmpty());
     }
+    
+    @Test
+    @DisplayName("Update: Fail când încercăm să schimbăm rolul singurului Admin activ")
+    void update_Fail_ChangeRoleOfLastAdmin() {
+        // GIVEN: Avem un user care e Admin
+        when(userRepository.findById(1)).thenReturn(Optional.of(adminUser));
+        
+        // Rolul nou (Casier) are authority level mic (ex: 10)
+        UserRole cashierRole = UserRole.builder().id(2).authorityLevel(10).code("CASHIER").build();
+        when(roleRepository.findById(2)).thenReturn(Optional.of(cashierRole));
+        
+        // Simulăm că în bază este doar 1 admin activ
+        when(userRepository.countByRole_AuthorityLevelAndIsActiveTrue(100)).thenReturn(1L);
+
+        // DTO pentru update care vrea să schimbe rolul în ID 2 (Casier)
+        UpdateUserDTO dto = new UpdateUserDTO("admin.master", "Administrator Principal", 2, "ro");
+
+        // WHEN & THEN
+        RuntimeException ex = assertThrows(RuntimeException.class, () -> userService.update(1, dto));
+        assertEquals("ERROR.USER.CANNOT_DEACTIVATE_LAST_ADMIN", ex.getMessage());
+        
+        // Verificăm că NU s-a apelat save, deci nu am stricat nimic
+        verify(userRepository, never()).save(any());
+    }
 }

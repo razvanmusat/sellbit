@@ -19,111 +19,106 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class UserService {
 
-    private final UserRepository userRepository;
-    private final UserRoleRepository roleRepository;
-    private final PasswordEncoder passwordEncoder;
+	private final UserRepository userRepository;
+	private final UserRoleRepository roleRepository;
+	private final PasswordEncoder passwordEncoder;
 
-    // --- LISTARE USERS ---
-    public List<UserResponseDTO> getAllActive() {
-        return userRepository.findAllByIsActiveTrue().stream()
-                .map(UserResponseDTO::fromEntity)
-                .collect(Collectors.toList());
-    }
+	// --- LISTARE USERS ---
+	public List<UserResponseDTO> getAllActive() {
+		return userRepository.findAllByIsActiveTrue().stream().map(UserResponseDTO::fromEntity)
+				.collect(Collectors.toList());
+	}
 
-    public List<UserResponseDTO> getAllInactive() {
-        return userRepository.findAllByIsActiveFalse().stream()
-                .map(UserResponseDTO::fromEntity)
-                .collect(Collectors.toList());
-    }
+	public List<UserResponseDTO> getAllInactive() {
+		return userRepository.findAllByIsActiveFalse().stream().map(UserResponseDTO::fromEntity)
+				.collect(Collectors.toList());
+	}
 
-    // --- CREATE USER ---
-    @Transactional
-    public UserResponseDTO create(@Valid CreateUserDTO dto) {
-        String username = Utils.formatUsername(dto.username());
-        if (!Utils.isValidUsernameFormat(username)) {
-            throw new RuntimeException("ERROR.USER.INVALID_USERNAME_FORMAT");
-        }
-        if (userRepository.existsByUsername(username)) {
-            throw new RuntimeException("ERROR.USER.DUPLICATE");
-        }
-        if (!Utils.isValidPassword(dto.password())) {
-            throw new RuntimeException("ERROR.USER.INVALID_PASSWORD_STRENGTH");
-        }
+	// --- CREATE USER ---
+	@Transactional
+	public UserResponseDTO create(@Valid CreateUserDTO dto) {
+		String username = Utils.formatUsername(dto.username());
+		if (!Utils.isValidUsernameFormat(username)) {
+			throw new RuntimeException("ERROR.USER.INVALID_USERNAME_FORMAT");
+		}
+		if (userRepository.existsByUsername(username)) {
+			throw new RuntimeException("ERROR.USER.DUPLICATE");
+		}
+		if (!Utils.isValidPassword(dto.password())) {
+			throw new RuntimeException("ERROR.USER.INVALID_PASSWORD_STRENGTH");
+		}
 
-        UserRole role = roleRepository.findById(dto.roleId())
-                .orElseThrow(() -> new RuntimeException("ERROR.ROLE.NOT_FOUND"));
+		UserRole role = roleRepository.findById(dto.roleId())
+				.orElseThrow(() -> new RuntimeException("ERROR.ROLE.NOT_FOUND"));
 
-        User user = User.builder()
-                .username(username)
-                .passwordHash(passwordEncoder.encode(dto.password()))
-                .fullName(Utils.formatFullName(dto.fullName()))
-                .role(role)
-                .languageCode(dto.languageCode() != null ? dto.languageCode() : "ro")
-                .isActive(true)
-                .build();
+		User user = User.builder().username(username).passwordHash(passwordEncoder.encode(dto.password()))
+				.fullName(Utils.formatFullName(dto.fullName())).role(role)
+				.languageCode(dto.languageCode() != null ? dto.languageCode() : "ro").isActive(true).build();
 
-        return UserResponseDTO.fromEntity(userRepository.save(user));
-    }
+		return UserResponseDTO.fromEntity(userRepository.save(user));
+	}
 
-    // --- UPDATE USER ---
-    @Transactional
-    public UserResponseDTO update(Integer id, @Valid UpdateUserDTO dto) {
-        User user = userRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("ERROR.USER.NOT_FOUND"));
+	@Transactional
+	public UserResponseDTO update(Integer id, @Valid UpdateUserDTO dto) {
+		User user = userRepository.findById(id).orElseThrow(() -> new RuntimeException("ERROR.USER.NOT_FOUND"));
 
-        // Username editabil, validat
-        String username = Utils.formatUsername(dto.username());
-        if (!Utils.isValidUsernameFormat(username)) {
-            throw new RuntimeException("ERROR.USER.INVALID_USERNAME_FORMAT");
-        }
-        if (!username.equals(user.getUsername()) && userRepository.existsByUsername(username)) {
-            throw new RuntimeException("ERROR.USER.DUPLICATE");
-        }
+		String username = Utils.formatUsername(dto.username());
+		if (!Utils.isValidUsernameFormat(username)) {
+			throw new RuntimeException("ERROR.USER.INVALID_USERNAME_FORMAT");
+		}
+		if (!username.equals(user.getUsername()) && userRepository.existsByUsername(username)) {
+			throw new RuntimeException("ERROR.USER.DUPLICATE");
+		}
 
-        UserRole role = roleRepository.findById(dto.roleId())
-                .orElseThrow(() -> new RuntimeException("ERROR.ROLE.NOT_FOUND"));
+		UserRole role = roleRepository.findById(dto.roleId())
+				.orElseThrow(() -> new RuntimeException("ERROR.ROLE.NOT_FOUND"));
 
-        user.setUsername(username);
-        user.setFullName(Utils.formatFullName(dto.fullName()));
-        user.setRole(role);
-        if (dto.languageCode() != null) {
-            user.setLanguageCode(dto.languageCode());
-        }
+		if (user.getRole().getAuthorityLevel() == 100 && role.getAuthorityLevel() != 100) {
+			long activeAdmins = userRepository.countByRole_AuthorityLevelAndIsActiveTrue(100);
+			if (user.isActive() && activeAdmins <= 1) {
+				throw new RuntimeException("ERROR.USER.CANNOT_DEACTIVATE_LAST_ADMIN");
+			}
+		}
 
-        return UserResponseDTO.fromEntity(userRepository.save(user));
-    }
+		user.setUsername(username);
+		user.setFullName(Utils.formatFullName(dto.fullName()));
+		user.setRole(role);
+		if (dto.languageCode() != null) {
+			user.setLanguageCode(dto.languageCode());
+		}
 
-    // --- TOGGLE STATUS ---
-    @Transactional
-    public UserResponseDTO toggleStatus(Integer id) {
-        User user = userRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("ERROR.USER.NOT_FOUND"));
+		return UserResponseDTO.fromEntity(userRepository.save(user));
+	}
 
-        // Protecție ultimul admin activ
-        if (user.getRole().getAuthorityLevel() == 100 && user.isActive()) {
-            long activeAdmins = userRepository.countByRole_AuthorityLevelAndIsActiveTrue(100);
-            if (activeAdmins <= 1) {
-                throw new RuntimeException("ERROR.USER.CANNOT_DEACTIVATE_LAST_ADMIN");
-            }
-        }
+	// --- TOGGLE STATUS ---
+	@Transactional
+	public UserResponseDTO toggleStatus(Integer id) {
+		User user = userRepository.findById(id).orElseThrow(() -> new RuntimeException("ERROR.USER.NOT_FOUND"));
 
-        user.setActive(!user.isActive());
-        user.setDeactivatedAt(user.isActive() ? null : LocalDateTime.now());
+		// Protecție ultimul admin activ
+		if (user.getRole().getAuthorityLevel() == 100 && user.isActive()) {
+			long activeAdmins = userRepository.countByRole_AuthorityLevelAndIsActiveTrue(100);
+			if (activeAdmins <= 1) {
+				throw new RuntimeException("ERROR.USER.CANNOT_DEACTIVATE_LAST_ADMIN");
+			}
+		}
 
-        return UserResponseDTO.fromEntity(userRepository.save(user));
-    }
+		user.setActive(!user.isActive());
+		user.setDeactivatedAt(user.isActive() ? null : LocalDateTime.now());
 
-    // --- CHANGE PASSWORD ---
-    @Transactional
-    public void changePassword(Integer id, @Valid ChangePasswordDTO dto) {
-        if (!Utils.isValidPassword(dto.newPassword())) {
-            throw new RuntimeException("ERROR.USER.INVALID_PASSWORD_STRENGTH");
-        }
+		return UserResponseDTO.fromEntity(userRepository.save(user));
+	}
 
-        User user = userRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("ERROR.USER.NOT_FOUND"));
+	// --- CHANGE PASSWORD ---
+	@Transactional
+	public void changePassword(Integer id, @Valid ChangePasswordDTO dto) {
+		if (!Utils.isValidPassword(dto.newPassword())) {
+			throw new RuntimeException("ERROR.USER.INVALID_PASSWORD_STRENGTH");
+		}
 
-        user.setPasswordHash(passwordEncoder.encode(dto.newPassword()));
-        userRepository.save(user);
-    }
+		User user = userRepository.findById(id).orElseThrow(() -> new RuntimeException("ERROR.USER.NOT_FOUND"));
+
+		user.setPasswordHash(passwordEncoder.encode(dto.newPassword()));
+		userRepository.save(user);
+	}
 }
