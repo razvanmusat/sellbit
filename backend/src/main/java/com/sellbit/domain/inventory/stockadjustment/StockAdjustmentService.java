@@ -63,6 +63,10 @@ public class StockAdjustmentService {
         // 1. Identificare și Validare entități
         Product product = productRepository.findById(dto.productId())
                 .orElseThrow(() -> new RuntimeException("ERROR.PRODUCT.NOT_FOUND"));
+        
+        if (Boolean.FALSE.equals(product.getTrackStock())) {
+            throw new RuntimeException("ERROR.ADJUSTMENT.NOT_TRACKED_PRODUCT");
+        }
 
         Warehouse warehouse = warehouseRepository.findById(dto.warehouseId())
                 .orElseThrow(() -> new RuntimeException("ERROR.WAREHOUSE.NOT_FOUND"));
@@ -71,7 +75,7 @@ public class StockAdjustmentService {
                 .orElseThrow(() -> new RuntimeException("ERROR.USER.NOT_FOUND"));
 
         AdjustmentReason reason = reasonRepository.findById(dto.reasonId())
-                .orElseThrow(() -> new RuntimeException("ERROR.REASON.NOT_FOUND"));
+                .orElseThrow(() -> new RuntimeException("ERROR.ADJUSTMENT_REASON.NOT_FOUND"));
 
         // 2. VERIFICARE STOC (Prevenire Stoc Negativ)
         if (dto.quantityChange().compareTo(BigDecimal.ZERO) < 0) {

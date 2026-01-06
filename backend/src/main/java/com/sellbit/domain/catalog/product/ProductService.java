@@ -21,7 +21,7 @@ public class ProductService {
     private final UnitOfMeasureRepository unitOfMeasureRepository;
     private final VatRateRepository vatRateRepository;
     private final ProductTypeRepository productTypeRepository;
-
+    
     @Transactional(readOnly = true)
     public List<ProductDTO> getProductsForAdmin(Integer categoryId) {
         return productRepository.findByCategoryIdOrderByNameAsc(categoryId)

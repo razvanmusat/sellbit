@@ -34,7 +34,7 @@ public class CashMovementTypeService {
     public void deleteLogical(Integer id) {
     	CashMovementType type = repository.findById(id)
                 .orElseThrow(EntityNotFoundException::new);
-        type.setActive(false);
+        type.setIsActive(false);
         repository.save(type);
     }
 }

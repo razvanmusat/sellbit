@@ -5,7 +5,12 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+
+import jakarta.persistence.LockModeType;
 
 @Repository
 public interface StockCurrentRepository extends JpaRepository<StockCurrent, StockCurrentId> {
@@ -18,4 +23,11 @@ public interface StockCurrentRepository extends JpaRepository<StockCurrent, Stoc
 
     // Pentru React: Când încarci tabelul principal de stoc pentru gestiunea selectată
     List<StockCurrent> findById_WarehouseId(Integer warehouseId);
+    
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT s FROM StockCurrent s WHERE s.id.warehouseId = :warehouseId AND s.id.productId = :productId")
+    Optional<StockCurrent> findById_WarehouseIdAndId_ProductIdForUpdate(
+        @Param("warehouseId") Integer warehouseId, 
+        @Param("productId") Integer productId
+    );
 }

@@ -81,7 +81,10 @@ public class PurchaseService {
 
     @Transactional
     public void deductFromBatchesFIFO(Integer warehouseId, Integer productId, BigDecimal quantityToDeduct) {
-        List<Purchase> activeBatches = purchaseRepository.findActiveBatchesFIFO(warehouseId, productId);
+    	if (quantityToDeduct == null || quantityToDeduct.compareTo(BigDecimal.ZERO) <= 0) {
+            return; 
+        }
+    	List<Purchase> activeBatches = purchaseRepository.findActiveBatchesFIFO(warehouseId, productId);
         BigDecimal remaining = quantityToDeduct;
 
         for (Purchase batch : activeBatches) {
@@ -134,6 +137,24 @@ public class PurchaseService {
                         p.getExpirationDate(),
                         ChronoUnit.DAYS.between(LocalDate.now(), p.getExpirationDate())))
                 .toList();
+    }
+    
+    @Transactional(readOnly = true)
+    public BigDecimal getCurrentFIFOPurchasePrice(Integer warehouseId, Integer productId) {
+        // 1. Încearcă să găsească un lot care mai are marfă (STOC ACTIV)
+        return purchaseRepository.findActiveBatchesFIFO(warehouseId, productId)
+                .stream()
+                .findFirst()
+                .map(Purchase::getPurchasePrice)
+                .orElseGet(() -> 
+                    // 2. FALLBACK: Dacă stocul e ZERO, ia prețul de la absolut ULTIMA intrare făcută vreodată
+                    // Astfel, chiar și pe stoc negativ, calculăm profitul bazat pe ultimul preț cunoscut
+                    purchaseRepository.findAllBatchesFIFO(warehouseId, productId)
+                            .stream()
+                            .reduce((first, second) -> second) // Ia ultimul element (cel mai nou)
+                            .map(Purchase::getPurchasePrice)
+                            .orElse(BigDecimal.ZERO) // Doar dacă n-a existat NICIODATĂ nicio intrare dăm 0
+                ); 
     }
 
     private PurchaseDTOs.Response mapToResponse(Purchase p) {

@@ -14,7 +14,16 @@ public class CashMovementType {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
-
+    
+    /**
+     * Coduri standard utilizate în aplicație:
+     * SALE: Încasare bon fiscal
+     * REFUND: Returnare bani client (storno)
+     * PAYMENT_SUPPLIER: Plată furnizor din cash
+     * BANK_DEPOSIT: Depunere numerar la bancă
+     * CASH_IN: Alimentare
+     * CASH_OUT: Cheltuieli diverse/administrative
+     */
     @Column(nullable = false, unique = true, length = 50)
     private String code; // EX: PAYIN, PAYOUT
 
@@ -23,7 +32,7 @@ public class CashMovementType {
 
     @Builder.Default
     @Column(name = "is_active")
-    private boolean isActive = true;
+    private Boolean isActive = true;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)

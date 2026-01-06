@@ -23,7 +23,7 @@ public class PaymentMethod {
 
     @Builder.Default
     @Column(name = "is_active")
-    private boolean isActive = true;
+    private Boolean isActive = true;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)

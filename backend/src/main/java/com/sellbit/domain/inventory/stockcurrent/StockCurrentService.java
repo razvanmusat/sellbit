@@ -27,7 +27,7 @@ public class StockCurrentService {
 
     @Transactional(readOnly = true)
     public List<StockCurrentDTOs.Response> getStockByWarehouse(Integer warehouseId) {
-    	if (!warehouseRepository.existsById(warehouseId)) {
+        if (!warehouseRepository.existsById(warehouseId)) {
             throw new RuntimeException("ERROR.WAREHOUSE.NOT_FOUND");
         }
         return stockCurrentRepository.findById_WarehouseId(warehouseId).stream()
@@ -37,6 +37,7 @@ public class StockCurrentService {
 
     /**
      * LOGICA INVENTAR: Înlocuire faptică.
+     * Folosește Lock pentru a preveni suprascrierea dacă se face inventar simultan.
      */
     @Transactional
     public void setPhysicalStock(StockCurrentDTOs.UpdateQuantity request) {
@@ -47,9 +48,9 @@ public class StockCurrentService {
             return;
         }
 
-        StockCurrent stock = getOrCreateStock(request.warehouseId(), product);
+        // Folosim varianta cu LOCK pentru consistență
+        StockCurrent stock = getOrCreateStockForUpdate(request.warehouseId(), product);
 
-        // Regula business – inventar fizic nu poate fi negativ
         if (request.newQuantity().compareTo(BigDecimal.ZERO) < 0) {
             throw new RuntimeException("ERROR.STOCK.NEGATIVE_NOT_ALLOWED");
         }
@@ -60,6 +61,7 @@ public class StockCurrentService {
 
     /**
      * LOGICA MIȘCĂRI GENERALE: Adunare/Scădere (Achiziții, Retururi).
+     * Securizat cu PESSIMISTIC_WRITE.
      */
     @Transactional
     public void updateStockRelative(
@@ -74,10 +76,10 @@ public class StockCurrentService {
             return;
         }
 
-        StockCurrent stock = getOrCreateStock(warehouseId, product);
+        // BLOCHEAZĂ rândul în DB până la finalul tranzacției
+        StockCurrent stock = getOrCreateStockForUpdate(warehouseId, product);
         BigDecimal newQuantity = stock.getQuantity().add(deltaQuantity);
 
-        // Regula business – nu permitem stoc negativ
         if (newQuantity.compareTo(BigDecimal.ZERO) < 0) {
             throw new RuntimeException("ERROR.STOCK.INSUFFICIENT_QUANTITY");
         }
@@ -86,37 +88,35 @@ public class StockCurrentService {
         stockCurrentRepository.save(stock);
     }
 
-
     /**
      * LOGICA BONURI (Receipt): Sincronizare în timp real.
+     * Apelează updateStockRelative care are LOCK inclus.
      */
     @Transactional
     public void syncStockFromReceiptChange(Integer warehouseId, Integer productId, BigDecimal oldQty, BigDecimal newQty) {
-        // Delta calculat: dacă reducem cantitatea pe bon, punem înapoi în stoc (delta pozitiv)
-        BigDecimal delta = oldQty.subtract(newQty);
-        updateStockRelative(warehouseId, productId, delta);
+        
+        BigDecimal diff = newQty.subtract(oldQty);        
+        updateStockRelative(warehouseId, productId, diff.negate());
     }
     
     @Transactional(readOnly = true)
     public BigDecimal getQuantity(Integer warehouseId, Integer productId) {
         return stockCurrentRepository.findById(new StockCurrentId(warehouseId, productId))
                 .map(StockCurrent::getQuantity)
-                .orElse(BigDecimal.ZERO); // Dacă nu există rând în tabelă, stocul e 0
+                .orElse(BigDecimal.ZERO);
     }
 
     /**
-     * Helper pentru a asigura existența rândului în HUB-ul de stoc.
+     * HELPER CRITIC: Obține stocul folosind SELECT FOR UPDATE.
      */
-    private StockCurrent getOrCreateStock(@NonNull Integer warehouseId, Product product) {
-        StockCurrentId id = new StockCurrentId(warehouseId, product.getId());
-        
-        return stockCurrentRepository.findById(id)
+    private StockCurrent getOrCreateStockForUpdate(@NonNull Integer warehouseId, Product product) {
+        return stockCurrentRepository.findById_WarehouseIdAndId_ProductIdForUpdate(warehouseId, product.getId())
                 .orElseGet(() -> {
                     Warehouse warehouse = warehouseRepository.findById(warehouseId)
                             .orElseThrow(() -> new RuntimeException("ERROR.WAREHOUSE.NOT_FOUND"));
                     
                     return StockCurrent.builder()
-                            .id(id)
+                            .id(new StockCurrentId(warehouseId, product.getId()))
                             .warehouse(warehouse)
                             .product(product)
                             .quantity(BigDecimal.ZERO)

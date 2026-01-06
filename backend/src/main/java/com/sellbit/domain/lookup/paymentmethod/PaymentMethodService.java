@@ -34,7 +34,7 @@ public class PaymentMethodService {
     public void deleteLogical(Integer id) {
     	PaymentMethod method = repository.findById(id)
                 .orElseThrow(EntityNotFoundException::new);
-        method.setActive(false);
+        method.setIsActive(false);
         repository.save(method);
     }
 }
