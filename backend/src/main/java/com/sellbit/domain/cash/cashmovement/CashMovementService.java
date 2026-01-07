@@ -44,6 +44,7 @@ public class CashMovementService {
         BigDecimal finalAmount = amount;
 
         if (typeCode.equals("REFUND") || 
+        	typeCode.equals("REFUND_CARD") ||
             typeCode.equals("PAYMENT_SUPPLIER") || 
             typeCode.equals("BANK_DEPOSIT") || 
             typeCode.equals("CASH_OUT")) {
@@ -63,6 +64,8 @@ public class CashMovementService {
         movementRepository.save(movement);
 
         // 4. Actualizăm soldul LIVE în CashDrawer
-        cashDrawerService.updateBalance(warehouseId, finalAmount);
+        if (!typeCode.contains("CARD")) {
+            cashDrawerService.updateBalance(warehouseId, finalAmount);
+        }
     }
 }

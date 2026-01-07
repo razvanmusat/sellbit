@@ -1,5 +1,31 @@
 package com.sellbit.domain.sales.receipt;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
 import com.sellbit.domain.cash.cashmovement.CashMovementService;
 import com.sellbit.domain.inventory.purchase.PurchaseService;
 import com.sellbit.domain.inventory.stockcurrent.StockCurrentService;
@@ -13,25 +39,12 @@ import com.sellbit.domain.lookup.receiptstatus.ReceiptStatusRepository;
 import com.sellbit.domain.sales.receiptitem.ReceiptItem;
 import com.sellbit.domain.sales.receiptitem.ReceiptItemRepository;
 import com.sellbit.domain.sales.receiptpayment.ReceiptPayment;
+import com.sellbit.domain.sales.receiptpayment.ReceiptPaymentRepository;
 import com.sellbit.domain.security.user.User;
 import com.sellbit.domain.security.user.UserRepository;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-
-import java.math.BigDecimal;
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
-
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
+import com.sellbit.domain.store.StoreRepository;
+import com.sellbit.domain.voucher.customervoucher.CustomerVoucherRepository;
+import com.sellbit.domain.voucher.customervoucher.CustomerVoucherService;
 
 @ExtendWith(MockitoExtension.class)
 class ReceiptServiceTest {
@@ -45,6 +58,10 @@ class ReceiptServiceTest {
     @Mock private CashMovementService cashMovementService;
     @Mock private ReceiptItemRepository itemRepository;
     @Mock private PurchaseService purchaseService;
+    @Mock private CustomerVoucherService voucherService;
+    @Mock private ReceiptPaymentRepository paymentRepository;
+    @Mock private CustomerVoucherRepository customerVoucherRepository;
+    @Mock private StoreRepository storeRepository;
 
     @InjectMocks
     private ReceiptService receiptService;
@@ -148,7 +165,7 @@ class ReceiptServiceTest {
     @Test
     @DisplayName("closeReceipt - Succes: Închide bonul și procesează plățile")
     void closeReceipt_Success() {
-        // 1. Setup Statuses folosind Builder (conform entității tale)
+        // 1. Setup Statuses folosind Builder
         ReceiptStatus openStatus = ReceiptStatus.builder()
                 .code("OPEN")
                 .label("Deschis")
@@ -163,12 +180,12 @@ class ReceiptServiceTest {
         com.sellbit.domain.lookup.paymentmethod.PaymentMethod cashMethod = new com.sellbit.domain.lookup.paymentmethod.PaymentMethod();
         cashMethod.setCode("CASH");
 
-        // 3. Setup Plata (Legăm metoda de plată ca să nu mai dea NPE la getCode())
+        // 3. Setup Plata
         ReceiptPayment payment = new ReceiptPayment();
         payment.setAmount(new BigDecimal("100.00"));
         payment.setPaymentMethod(cashMethod);
 
-        // 4. Setup Warehouse și User (necesare pentru logica de CashMovement)
+        // 4. Setup Warehouse și User
         Warehouse warehouse = new Warehouse();
         warehouse.setId(1);
         
@@ -183,7 +200,7 @@ class ReceiptServiceTest {
         receipt.setUser(user);
         receipt.setTotalAmount(new BigDecimal("100.00"));
         receipt.setPayments(new java.util.ArrayList<>(List.of(payment)));
-        receipt.setItems(new java.util.ArrayList<>()); // Listă goală ca să nu crape la loop-ul FIFO
+        receipt.setItems(new java.util.ArrayList<>()); 
 
         // 6. Mockito Expectations
         when(receiptRepository.findById(100)).thenReturn(Optional.of(receipt));
@@ -195,7 +212,6 @@ class ReceiptServiceTest {
         // 8. Verificări
         assertEquals("CLOSED", receipt.getStatus().getCode());
         verify(receiptRepository).save(receipt);
-             
     }
 
     @Test
@@ -231,12 +247,11 @@ class ReceiptServiceTest {
     void createPartialRefund_Success() {
         receipt.setStatus(closedStatus);
         
-        // CORECCȚIE: Am adăugat unitPrice și vatRate pentru a evita NPE
         ReceiptItem originalItem = ReceiptItem.builder()
                 .id(1)
                 .quantity(new BigDecimal("2.00"))
-                .unitPrice(new BigDecimal("50.00")) // Adăugat: 2 buc * 50 = 100 total
-                .vatRate(new BigDecimal("25.00"))  // Adăugat: calculul tău original avea 20 TVA la 80 Net (25%)
+                .unitPrice(new BigDecimal("50.00"))
+                .vatRate(new BigDecimal("25.00")) 
                 .lineTotal(new BigDecimal("100.00"))
                 .netTotal(new BigDecimal("80.00"))
                 .vatTotal(new BigDecimal("20.00"))
@@ -249,7 +264,6 @@ class ReceiptServiceTest {
         PaymentMethod cash = PaymentMethod.builder().code("CASH").build();
         receipt.getPayments().add(ReceiptPayment.builder().paymentMethod(cash).amount(new BigDecimal("100.00")).build());
 
-        // Cerem stornarea unei singure bucăți (din cele 2)
         var req = new ReceiptDTOs.RefundRequest(1, List.of(new ReceiptDTOs.RefundItemRequest(1, BigDecimal.ONE)));
 
         when(receiptRepository.findById(100)).thenReturn(Optional.of(receipt));
@@ -259,14 +273,12 @@ class ReceiptServiceTest {
 
         var res = receiptService.createPartialRefund(100, req);
 
-        // Verificăm sync stoc (1 bucată stornată = newQty este -1 pe bonul de retur)
         verify(stockCurrentService).syncStockFromReceiptChange(
                 eq(1), eq(10), 
                 argThat(val -> val.compareTo(BigDecimal.ZERO) == 0), 
                 argThat(val -> val.compareTo(new BigDecimal("-1")) == 0)
         );
 
-        // Verificăm cash movement: 1 bucată la 50 RON = 50 RON returnați
         verify(cashMovementService).createMovement(
                 eq(1), eq("REFUND"), 
                 argThat(val -> val.compareTo(new BigDecimal("50")) == 0), 
@@ -281,26 +293,23 @@ class ReceiptServiceTest {
     @DisplayName("getGrossProfitReport - Succes")
     void getGrossProfitReport_Success() {
         when(itemRepository.calculateTotalProfit(any(), any())).thenReturn(new BigDecimal("150.00"));
+        when(paymentRepository.getTotalVoucherDiscounts(any(), any())).thenReturn(BigDecimal.ZERO);
         
         var res = receiptService.getGrossProfitReport(LocalDateTime.now(), LocalDateTime.now());
         
         assertEquals(0, new BigDecimal("150.00").compareTo(res));
     }
     
- // --- 8. getActiveReceipts (TESTE NOI) ---
-
+    // --- 8. getActiveReceipts ---
     @Test
     @DisplayName("getActiveReceipts - Succes: Returnează bonurile deschise pentru gestiunea corectă")
     void getActiveReceipts_Success() {
-        // GIVEN
         Integer warehouseId = 1;
         when(receiptRepository.findByWarehouseIdAndStatus_Code(warehouseId, "OPEN"))
                 .thenReturn(List.of(receipt));
 
-        // WHEN
         List<ReceiptDTOs.Response> result = receiptService.getActiveReceipts(warehouseId);
 
-        // THEN
         assertFalse(result.isEmpty());
         assertEquals(1, result.size());
         assertEquals("Masa 10", result.get(0).tableName());
@@ -310,25 +319,20 @@ class ReceiptServiceTest {
     @Test
     @DisplayName("getActiveReceipts - Valid: Returnează listă goală dacă nu sunt bonuri deschise")
     void getActiveReceipts_Empty() {
-        // GIVEN
         Integer warehouseId = 99;
         when(receiptRepository.findByWarehouseIdAndStatus_Code(warehouseId, "OPEN"))
                 .thenReturn(List.of());
 
-        // WHEN
         List<ReceiptDTOs.Response> result = receiptService.getActiveReceipts(warehouseId);
 
-        // THEN
         assertTrue(result.isEmpty());
         verify(receiptRepository).findByWarehouseIdAndStatus_Code(warehouseId, "OPEN");
     }
 
-    // --- 9. getReceiptsReport (TESTE NOI) ---
-
+    // --- 9. getReceiptsReport ---
     @Test
     @DisplayName("getReceiptsReport - Succes: Filtrează corect după status și perioadă")
     void getReceiptsReport_Success() {
-        // GIVEN
         Integer warehouseId = 1;
         String status = "CLOSED";
         LocalDateTime start = LocalDateTime.now().minusDays(1);
@@ -338,10 +342,8 @@ class ReceiptServiceTest {
         when(receiptRepository.findByWarehouseIdAndStatus_CodeAndClosedAtBetween(warehouseId, status, start, end))
                 .thenReturn(List.of(receipt));
 
-        // WHEN
         List<ReceiptDTOs.Response> result = receiptService.getReceiptsReport(warehouseId, status, start, end);
 
-        // THEN
         assertFalse(result.isEmpty());
         assertEquals(1, result.size());
         verify(receiptRepository).findByWarehouseIdAndStatus_CodeAndClosedAtBetween(warehouseId, status, start, end);
@@ -350,20 +352,128 @@ class ReceiptServiceTest {
     @Test
     @DisplayName("getReceiptsReport - Valid: Returnează listă goală când nu există date în intervalul ales")
     void getReceiptsReport_NoData() {
-        // GIVEN
         Integer warehouseId = 1;
         String status = "CLOSED";
-        LocalDateTime start = LocalDateTime.now().plusYears(1); // Viitor
+        LocalDateTime start = LocalDateTime.now().plusYears(1); 
         LocalDateTime end = LocalDateTime.now().plusYears(2);
         
         when(receiptRepository.findByWarehouseIdAndStatus_CodeAndClosedAtBetween(eq(warehouseId), eq(status), any(), any()))
                 .thenReturn(List.of());
 
-        // WHEN
         List<ReceiptDTOs.Response> result = receiptService.getReceiptsReport(warehouseId, status, start, end);
 
-        // THEN
         assertTrue(result.isEmpty());
         verify(receiptRepository).findByWarehouseIdAndStatus_CodeAndClosedAtBetween(eq(warehouseId), eq(status), any(), any());
+    }
+    
+ // --- 10. closeReceipt - Scenarii FIFO ---
+    @Test
+    @DisplayName("closeReceipt - Succes: Verifică salvarea prețului de achiziție FIFO")
+    void closeReceipt_Success_FIFO() {
+        ReceiptItem item = ReceiptItem.builder()
+                .product(new com.sellbit.domain.catalog.product.Product())
+                .quantity(new BigDecimal("2.00"))
+                .build();
+        item.getProduct().setId(5);
+        receipt.setItems(new ArrayList<>(List.of(item)));
+        receipt.setPayments(List.of(ReceiptPayment.builder().amount(new BigDecimal("100.00")).build()));
+
+        when(receiptRepository.findById(100)).thenReturn(Optional.of(receipt));
+        when(statusRepository.findByCode("CLOSED")).thenReturn(Optional.of(closedStatus));
+        when(purchaseService.getCurrentFIFOPurchasePrice(1, 5)).thenReturn(new BigDecimal("40.00"));
+
+        receiptService.closeReceipt(100);
+
+        assertEquals(new BigDecimal("40.00"), item.getPurchaseUnitPrice());
+        verify(purchaseService).deductFromBatchesFIFO(1, 5, new BigDecimal("2.00"));
+        verify(itemRepository).save(item);
+    }
+
+    // --- 11. createPartialRefund - Scenarii Card și Validări ---
+    @Test
+    @DisplayName("createPartialRefund - Succes: Verifică mișcare CARD")
+    void createPartialRefund_Success_Card() {
+        receipt.setStatus(closedStatus);
+        ReceiptItem item = ReceiptItem.builder().id(1).quantity(BigDecimal.ONE).unitPrice(BigDecimal.TEN).vatRate(BigDecimal.ZERO)
+                .product(new com.sellbit.domain.catalog.product.Product()).build();
+        item.getProduct().setId(1);
+        receipt.setItems(List.of(item));
+
+        PaymentMethod card = PaymentMethod.builder().code("CARD").build();
+        receipt.getPayments().add(ReceiptPayment.builder().paymentMethod(card).amount(BigDecimal.TEN).build());
+
+        when(receiptRepository.findById(100)).thenReturn(Optional.of(receipt));
+        when(statusRepository.findByCode("CLOSED")).thenReturn(Optional.of(closedStatus));
+        when(userRepository.getReferenceById(1)).thenReturn(new User());
+        when(receiptRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        receiptService.createPartialRefund(100, new ReceiptDTOs.RefundRequest(1, List.of(new ReceiptDTOs.RefundItemRequest(1, BigDecimal.ONE))));
+
+        // Am înlocuit anyInt() cu eq(1) (userId din request)
+        verify(cashMovementService).createMovement(eq(1), eq("REFUND_CARD"), any(BigDecimal.class), eq(1), anyString());
+    }
+
+    @Test
+    @DisplayName("createPartialRefund - Eroare: Cantitate returnată prea mare")
+    void createPartialRefund_Fail_QtyExceeded() {
+        receipt.setStatus(closedStatus);
+        receipt.setItems(List.of(ReceiptItem.builder().id(1).quantity(BigDecimal.ONE).build()));
+        when(receiptRepository.findById(100)).thenReturn(Optional.of(receipt));
+        
+        var req = new ReceiptDTOs.RefundRequest(1, List.of(new ReceiptDTOs.RefundItemRequest(1, new BigDecimal("2.00"))));
+        assertThrows(RuntimeException.class, () -> receiptService.createPartialRefund(100, req));
+    }
+
+    // --- 12. removeVoucherPayment (Metodă Nouă) ---
+    @Test
+    @DisplayName("removeVoucherPayment - Succes")
+    void removeVoucherPayment_Success() {
+        ReceiptPayment payment = ReceiptPayment.builder().id(1).receipt(receipt).build();
+        when(paymentRepository.findById(1)).thenReturn(Optional.of(payment));
+
+        receiptService.removeVoucherPayment(100, 1);
+
+        verify(paymentRepository).delete(payment);
+        verify(voucherService).cancelVoucherUsage(100);
+    }
+
+    @Test
+    @DisplayName("removeVoucherPayment - Eroare: Plata aparține altui bon")
+    void removeVoucherPayment_Fail_Mismatch() {
+        Receipt other = Receipt.builder().id(999).build();
+        ReceiptPayment payment = ReceiptPayment.builder().id(1).receipt(other).build();
+        when(paymentRepository.findById(1)).thenReturn(Optional.of(payment));
+
+        assertThrows(RuntimeException.class, () -> receiptService.removeVoucherPayment(100, 1));
+    }
+
+    // --- 13. getBillNoteData (Metodă Nouă - Print) ---
+    @Test
+    @DisplayName("getBillNoteData - Succes: Calculează restul de plată")
+    void getBillNoteData_Success_Open() {
+        com.sellbit.domain.store.Store store = new com.sellbit.domain.store.Store();
+        store.setName("Test Store");
+        when(storeRepository.getSettings()).thenReturn(Optional.of(store));
+        
+        receipt.setTotalAmount(new BigDecimal("100.00"));
+        receipt.getPayments().add(ReceiptPayment.builder()
+                .amount(new BigDecimal("20.00"))
+                .paymentMethod(PaymentMethod.builder().code("VOUCHER").build())
+                .build());
+
+        when(receiptRepository.findById(100)).thenReturn(Optional.of(receipt));
+        when(customerVoucherRepository.findByUsedReceiptId(100)).thenReturn(Optional.empty());
+
+        var res = receiptService.getBillNoteData(100);
+
+        assertEquals(new BigDecimal("20.00"), res.voucherValue());
+        assertEquals(new BigDecimal("80.00"), res.totalToPay()); 
+    }
+
+    @Test
+    @DisplayName("getBillNoteData - Eroare: Store lipsă")
+    void getBillNoteData_Fail_Store() {
+        when(storeRepository.getSettings()).thenReturn(Optional.empty());
+        assertThrows(RuntimeException.class, () -> receiptService.getBillNoteData(100));
     }
 }

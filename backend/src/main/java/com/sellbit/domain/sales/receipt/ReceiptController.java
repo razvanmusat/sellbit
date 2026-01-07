@@ -6,6 +6,7 @@ import java.util.List;
 
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -91,5 +92,16 @@ public class ReceiptController {
     @PostMapping("/{id}/refund")
     public ResponseEntity<ReceiptDTOs.Response> refund(@PathVariable Integer id, @RequestBody @Valid ReceiptDTOs.RefundRequest request) {
         return ResponseEntity.ok(receiptService.createPartialRefund(id, request));
+    }
+    
+    @GetMapping("/{id}/print-bill-note")
+    public ResponseEntity<ReceiptPrintDTO> getBillNoteForPrint(@PathVariable Integer id) {
+        return ResponseEntity.ok(receiptService.getBillNoteData(id));
+    }
+    
+    @DeleteMapping("/{receiptId}/payments/{paymentId}/voucher")
+    public ResponseEntity<Void> removeVoucher(@PathVariable Integer receiptId, @PathVariable Integer paymentId) {
+        receiptService.removeVoucherPayment(receiptId, paymentId);
+        return ResponseEntity.ok().build();
     }
 }

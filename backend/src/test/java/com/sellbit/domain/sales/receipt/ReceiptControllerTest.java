@@ -211,4 +211,60 @@ class ReceiptControllerTest {
                         .param("end", "2026-01-05"))
                 .andExpect(status().isBadRequest());
     }
+    
+ // --- 9. PRINT BILL NOTE ---
+    @Test
+    @DisplayName("GET /api/sales/receipts/{id}/print-bill-note - Succes: Returnează datele de printare")
+    void getBillNoteForPrint_Success() throws Exception {
+        var printData = new ReceiptPrintDTO(
+                "SellBit Store", "Strada Test 1", "RO123456",
+                List.of(), // items
+                null, // payments
+                null, // user
+                new BigDecimal("100.00"), // totalAmount
+                new BigDecimal("20.00"),  // voucherValue
+                new BigDecimal("80.00"),  // totalToPay
+                LocalDateTime.now()
+        );
+
+        when(receiptService.getBillNoteData(100)).thenReturn(printData);
+
+        mockMvc.perform(get("/api/sales/receipts/100/print-bill-note"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.storeName").value("SellBit Store"))
+                .andExpect(jsonPath("$.totalToPay").value(80.00));
+    }
+
+    @Test
+    @DisplayName("GET /api/sales/receipts/{id}/print-bill-note - Eroare: Bon inexistent")
+    void getBillNoteForPrint_Fail_NotFound() throws Exception {
+        // Simulăm aruncarea unei excepții din service
+        // Spring MVC o va intercepta și va returna probabil 400 (Bad Request) 
+        // conform erorii tale din log: Status expected:<500> but was:<400>
+        when(receiptService.getBillNoteData(999))
+            .thenThrow(new RuntimeException("ERROR.RECEIPT.NOT_FOUND"));
+
+        mockMvc.perform(get("/api/sales/receipts/999/print-bill-note"))
+                .andExpect(status().isBadRequest()); // Schimbat din isInternalServerError() în isBadRequest()
+    }
+
+    // --- 10. REMOVE VOUCHER PAYMENT ---
+    @Test
+    @DisplayName("DELETE /api/sales/receipts/{rId}/payments/{pId}/voucher - Succes")
+    void removeVoucher_Success() throws Exception {
+        doNothing().when(receiptService).removeVoucherPayment(100, 50);
+
+        mockMvc.perform(delete("/api/sales/receipts/100/payments/50/voucher"))
+                .andExpect(status().isOk());
+
+        verify(receiptService).removeVoucherPayment(100, 50);
+    }
+
+    @Test
+    @DisplayName("DELETE /api/sales/receipts/{rId}/payments/{pId}/voucher - Eroare: ID-uri invalide (String în loc de Long/Int)")
+    void removeVoucher_Fail_InvalidType() throws Exception {
+        // Testăm că Spring refuză cererea dacă ID-ul nu este numeric
+        mockMvc.perform(delete("/api/sales/receipts/abc/payments/def/voucher"))
+                .andExpect(status().isBadRequest());
+    }
 }

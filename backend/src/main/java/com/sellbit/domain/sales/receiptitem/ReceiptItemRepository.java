@@ -20,4 +20,5 @@ public interface ReceiptItemRepository extends JpaRepository<ReceiptItem, Intege
     	       "WHERE r.closedAt BETWEEN :start AND :end " +
     	       "AND r.status.code = 'CLOSED'")
     	BigDecimal calculateTotalProfit(LocalDateTime start, LocalDateTime end);
+      
 }

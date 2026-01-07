@@ -18,7 +18,8 @@ public class CashMovementType {
     /**
      * Coduri standard utilizate în aplicație:
      * SALE: Încasare bon fiscal
-     * REFUND: Returnare bani client (storno)
+     * REFUND: Returnare bani client (storno numerar)
+     * REFUND_CARD: Returnare bani client (storno card)
      * PAYMENT_SUPPLIER: Plată furnizor din cash
      * BANK_DEPOSIT: Depunere numerar la bancă
      * CASH_IN: Alimentare

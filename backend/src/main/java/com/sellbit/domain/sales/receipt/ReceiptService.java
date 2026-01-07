@@ -5,6 +5,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
@@ -22,8 +23,14 @@ import com.sellbit.domain.lookup.receiptstatus.ReceiptStatusRepository;
 import com.sellbit.domain.sales.receiptitem.ReceiptItem;
 import com.sellbit.domain.sales.receiptitem.ReceiptItemRepository;
 import com.sellbit.domain.sales.receiptpayment.ReceiptPayment;
+import com.sellbit.domain.sales.receiptpayment.ReceiptPaymentRepository;
 import com.sellbit.domain.security.user.User;
 import com.sellbit.domain.security.user.UserRepository;
+import com.sellbit.domain.store.Store;
+import com.sellbit.domain.store.StoreRepository;
+import com.sellbit.domain.voucher.customervoucher.CustomerVoucher;
+import com.sellbit.domain.voucher.customervoucher.CustomerVoucherRepository;
+import com.sellbit.domain.voucher.customervoucher.CustomerVoucherService;
 
 import lombok.RequiredArgsConstructor;
 
@@ -40,6 +47,10 @@ public class ReceiptService {
     private final CashMovementService cashMovementService;
     private final ReceiptItemRepository itemRepository;
     private final PurchaseService purchaseService;
+    private final CustomerVoucherRepository customerVoucherRepository;
+    private final StoreRepository storeRepository;
+    private final CustomerVoucherService voucherService;
+    private final ReceiptPaymentRepository paymentRepository;
         
     /**
      * OPERAȚIONAL: Pentru afișarea meselor/bonurilor deschise în tab-ul din React.
@@ -135,6 +146,7 @@ public class ReceiptService {
                 BigDecimal.ZERO
             );
         }
+        voucherService.cancelVoucherUsage(receiptId);
 
         receipt.setStatus(cancelledStatus);
         receipt.setCancelReason(reason);
@@ -202,6 +214,9 @@ public class ReceiptService {
         
         // 6. Salvare finală
         receiptRepository.save(receipt);
+        
+        // Emitere VOUCHERE
+        voucherService.checkAndIssueVouchers(receipt);
     }
 
     /**
@@ -340,6 +355,9 @@ public class ReceiptService {
         boolean wasCash = original.getPayments().stream()
                 .anyMatch(p -> "CASH".equals(p.getPaymentMethod().getCode()));
 
+        boolean wasCard = original.getPayments().stream()
+                .anyMatch(p -> "CARD".equals(p.getPaymentMethod().getCode()));
+        
         if (wasCash) {
             // Trimitem valoarea absolută, CashMovementService se ocupă de semnul de REFUND
             cashMovementService.createMovement(
@@ -350,13 +368,100 @@ public class ReceiptService {
                 "Stornare bon nr. " + original.getId()
             );
         }
+        
+        if (wasCard) {
+            // AICI: Depinde de cum ai CashMovementService. 
+            // Dacă ai un singur tabel de mișcări, trebuie să marchezi că e ieșire de pe CARD.
+            cashMovementService.createMovement(
+                original.getWarehouse().getId(),
+                "REFUND_CARD",
+                tAmount.abs(),
+                request.userId(),
+                "Stornare Card bon nr. " + original.getId()
+            );
+        }
 
         return mapToResponse(receiptRepository.save(refundReceipt));
     }
     
     @Transactional(readOnly = true)
     public BigDecimal getGrossProfitReport(LocalDateTime start, LocalDateTime end) {
-        // Apelăm metoda de calcul din repository
-        return itemRepository.calculateTotalProfit(start, end);
+        // 1. Profitul brut teoretic (din linii)
+        BigDecimal grossTheoreticalProfit = itemRepository.calculateTotalProfit(start, end);
+        
+        // 2. Suma discount-urilor oferite prin vouchere (plăți virtuale)
+        // Presupunem că ai injectat paymentRepository în ReceiptService
+        BigDecimal totalVouchers = paymentRepository.getTotalVoucherDiscounts(start, end);
+        
+        // 3. Profitul real = Profit Linii - Valoare Vouchere
+        return grossTheoreticalProfit.subtract(totalVouchers);
+    }
+    
+    @Transactional(readOnly = true)
+    public ReceiptPrintDTO getBillNoteData(Integer receiptId) {
+        Store store = storeRepository.getSettings()
+                .orElseThrow(() -> new RuntimeException("ERROR.STORE.NOT_CONFIGURED"));
+
+        Receipt receipt = receiptRepository.findById(receiptId)
+                .orElseThrow(() -> new RuntimeException("ERROR.RECEIPT.NOT_FOUND"));
+
+        // Calcule plăți
+        BigDecimal totalVoucher = receipt.getPayments().stream()
+                .filter(p -> "VOUCHER".equals(p.getPaymentMethod().getCode()))
+                .map(ReceiptPayment::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal paidOutOfPocket = receipt.getPayments().stream()
+                .filter(p -> !"VOUCHER".equals(p.getPaymentMethod().getCode()))
+                .map(ReceiptPayment::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        if ("OPEN".equals(receipt.getStatus().getCode())) {
+            paidOutOfPocket = receipt.getTotalAmount().subtract(totalVoucher);
+        }
+
+        // Extragere Voucher & Campanie
+        Optional<CustomerVoucher> voucherOpt = customerVoucherRepository.findByUsedReceiptId(receiptId);
+        String usedVoucherCode = voucherOpt.map(CustomerVoucher::getCode).orElse(null);
+        String campaignName = voucherOpt.map(v -> v.getCampaign().getName()).orElse(null);
+
+        // Mapare produse
+        List<BillNoteItemDTO> items = receipt.getItems().stream()
+                .map(item -> new BillNoteItemDTO(
+                        item.getProduct().getName(),
+                        item.getQuantity(),
+                        item.getUnitPrice()
+                )).toList();
+
+        // RETURN cu mapare pe index (respectând ordinea ta din record)
+        return new ReceiptPrintDTO(
+                store.getName(),           // 1
+                store.getAddress(),        // 2
+                store.getPhone(),          // 3
+                items,                     // 4
+                usedVoucherCode,           // 5 (voucherCode)
+                campaignName,              // 6 (voucherCampaignName)
+                receipt.getTotalAmount(),  // 7 (subtotal)
+                totalVoucher.compareTo(BigDecimal.ZERO) > 0 ? totalVoucher : null, // 8 (voucherValue)
+                paidOutOfPocket,           // 9 (totalToPay)
+                receipt.getCreatedAt()     // 10
+        );
+    }
+    
+    @Transactional
+    public void removeVoucherPayment(Integer receiptId, Integer paymentId) {
+        // 1. Verificăm dacă plata există și aparține acestui bon
+        ReceiptPayment payment = paymentRepository.findById(paymentId)
+                .orElseThrow(() -> new RuntimeException("ERROR.PAYMENT.NOT_FOUND"));
+                
+        if (!payment.getReceipt().getId().equals(receiptId)) {
+            throw new RuntimeException("ERROR.PAYMENT.MISMATCH");
+        }
+
+        // 2. Ștergem pata din bon
+        paymentRepository.delete(payment);
+        
+        // 3. Reactivam voucherul
+        voucherService.cancelVoucherUsage(receiptId);              
     }
 }

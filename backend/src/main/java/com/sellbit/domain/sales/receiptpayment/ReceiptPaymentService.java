@@ -11,6 +11,9 @@ import com.sellbit.domain.lookup.paymentmethod.PaymentMethod;
 import com.sellbit.domain.lookup.paymentmethod.PaymentMethodRepository;
 import com.sellbit.domain.sales.receipt.Receipt;
 import com.sellbit.domain.sales.receipt.ReceiptRepository;
+import com.sellbit.domain.voucher.customervoucher.CustomerVoucher;
+import com.sellbit.domain.voucher.customervoucher.CustomerVoucherRepository;
+import com.sellbit.domain.voucher.customervoucher.CustomerVoucherService;
 
 import lombok.RequiredArgsConstructor;
 
@@ -22,7 +25,8 @@ public class ReceiptPaymentService {
     private final ReceiptRepository receiptRepository;
     private final PaymentMethodRepository paymentMethodRepository;
     private final CashMovementService cashMovementService;
-
+    private final CustomerVoucherService voucherService;
+    private final CustomerVoucherRepository voucherRepository;
     /**
      * Adaugă o plată pe bon. 
      * Actualizează automat CashDrawer dacă metoda de plată este CASH.
@@ -105,6 +109,12 @@ public class ReceiptPaymentService {
                 "Anulare plată bon nr. " + receipt.getId()
             );
         }
+        
+        if ("VOUCHER".equals(payment.getPaymentMethod().getCode())) {
+            // Căutăm voucherul care a fost folosit pentru acest bon
+            // Avem nevoie de o metodă în voucherRepository sau service
+            voucherService.cancelVoucherUsage(payment.getReceipt().getId());
+        }
 
         paymentRepository.delete(payment);
     }
@@ -114,6 +124,46 @@ public class ReceiptPaymentService {
         return paymentRepository.findByReceiptId(receiptId).stream()
                 .map(this::mapToResponse)
                 .toList();
+    }
+    
+    @Transactional
+    public void applyVoucher(Integer receiptId, String voucherCode, Integer userId) {
+        // 1. Căutăm bonul
+        Receipt receipt = receiptRepository.findById(receiptId)
+                .orElseThrow(() -> new RuntimeException("ERROR.RECEIPT.NOT_FOUND"));
+
+        if (!"OPEN".equals(receipt.getStatus().getCode())) {
+            throw new RuntimeException("ERROR.RECEIPT.NOT_OPEN");
+        }
+
+        // 2. Validăm voucherul (Expirare, deja folosit, etc.)
+        // Folosim metoda existentă din CustomerVoucherService
+        var validation = voucherService.validateCode(voucherCode);
+        if (!validation.isValid()) {
+            throw new RuntimeException(validation.errorCode());
+        }
+
+        // 3. Recăuperăm entitatea completă a voucherului
+        CustomerVoucher voucher = voucherRepository.findByCode(voucherCode)
+                .orElseThrow(() -> new RuntimeException("ERROR.VOUCHER.NOT_FOUND"));
+
+        // 4. Calculăm VALOAREA monetară a voucherului pentru acest bon
+        BigDecimal voucherAmount = voucherService.calculateVoucherValue(voucher, receipt);
+
+        if (voucherAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new RuntimeException("ERROR.VOUCHER.NO_APPLICABLE_ITEMS");
+        }
+
+        // 5. Identificăm Metoda de Plată "VOUCHER" din nomenclator
+        PaymentMethod voucherMethod = paymentMethodRepository.findByCode("VOUCHER")
+                .orElseThrow(() -> new RuntimeException("ERROR.PAYMENT_METHOD.VOUCHER_NOT_CONFIGURED"));
+
+        // 6. Adăugăm plata efectivă pe bon
+        // Reutilizăm logica de bază, dar cu suma calculată
+        this.addPayment(receiptId, voucherMethod.getId(), voucherAmount, userId);
+
+        // 7. Consumăm voucherul (îl legăm de acest bon și îl marcăm ca folosit)
+        voucherService.consumeVoucher(voucherCode, receipt);
     }
 
     private ReceiptPaymentDTO.Response mapToResponse(ReceiptPayment payment) {

@@ -28,6 +28,16 @@ public class ReceiptPaymentController {
         paymentService.addPayment(receiptId, paymentMethodId, amount, userId);
         return ResponseEntity.ok().build();
     }
+    
+    @PostMapping("/apply-voucher")
+    public ResponseEntity<Void> applyVoucher(
+            @RequestParam Integer receiptId,
+            @RequestParam String voucherCode,
+            @RequestParam Integer userId) {
+        
+        paymentService.applyVoucher(receiptId, voucherCode, userId);
+        return ResponseEntity.ok().build();
+    }
 
     /**
      * Șterge o plată.
