@@ -51,4 +51,20 @@ public class Utils {
         if (password == null) return false;
         return Pattern.compile(PASSWORD_PATTERN).matcher(password).matches();
     }
+    
+    public static boolean isValidPhoneNumber(String phone) {
+        if (phone == null || phone.isBlank()) {
+            return false;
+        }
+
+        String cleanPhone = phone.trim();
+
+        // 1. Verificare pentru numere internaționale
+        if (cleanPhone.startsWith("+")) {
+            return cleanPhone.length() >= 5; // Minim 5 caractere pentru un nr internațional valid
+        }
+
+        // 2. Verificare strictă pentru România (07... + încă 8 cifre = 10 total)
+        return cleanPhone.matches("^07[0-9]{8}$");
+    }
 }
