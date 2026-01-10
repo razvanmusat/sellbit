@@ -1,9 +1,12 @@
 package com.sellbit.domain.catalog.product;
 
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
 import java.util.List;
 import java.util.Optional;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
 
 @Repository
 public interface ProductRepository extends JpaRepository<Product, Integer> {
@@ -27,6 +30,9 @@ public interface ProductRepository extends JpaRepository<Product, Integer> {
 	// dar Service-ul va decide ce face dacă e inactiv
 	Optional<Product> findByBarcode(String barcode);
 
+	@Query("SELECT p FROM Product p WHERE p.productType.code = :typeCode AND p.isActive = true")
+	List<Product> findByProductTypeCode(@Param("typeCode") String typeCode);
+	
 	// --- VALIDĂRI ---
 	boolean existsByBarcode(String barcode);
 

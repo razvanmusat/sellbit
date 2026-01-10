@@ -154,11 +154,7 @@ public class ReceiptService {
         receiptRepository.save(receipt);
     }
 
-    /**
-     * Închide bonul. Verifică dacă plățile (fracționate) acoperă totalul.
-     */
-    /**
-     * Închide bonul. 
+     /* Închide bonul. 
      * Această metodă finalizează vânzarea, verifică plățile și descarcă gestiunea (FIFO).
      */
     @Transactional

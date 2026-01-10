@@ -2,6 +2,7 @@ package com.sellbit.domain.sales.receiptitem;
 
 import com.sellbit.domain.catalog.product.Product;
 import com.sellbit.domain.catalog.product.ProductRepository;
+import com.sellbit.domain.catalog.productcomposite.ProductComponentRepository;
 import com.sellbit.domain.inventory.purchase.PurchaseService;
 import com.sellbit.domain.inventory.stockcurrent.StockCurrentService;
 import com.sellbit.domain.inventory.warehouse.Warehouse;
@@ -36,6 +37,7 @@ class ReceiptItemServiceTest {
     @Mock private StockCurrentService stockCurrentService;
     @Mock private ReceiptService receiptService;
     @Mock private PurchaseService purchaseService;
+    @Mock private ProductComponentRepository productComponentRepository;
 
     @InjectMocks
     private ReceiptItemService receiptItemService;
@@ -76,6 +78,9 @@ class ReceiptItemServiceTest {
         when(receiptRepository.findById(100)).thenReturn(Optional.of(receipt));
         when(productRepository.findById(50)).thenReturn(Optional.of(product));
         when(purchaseService.getCurrentFIFOPurchasePrice(1, 50)).thenReturn(new BigDecimal("50.00"));
+        
+        // Necesar aici pentru că addOrUpdateItem verifică rețeta
+        when(productComponentRepository.findByParentProductIdAndIsActiveTrue(50)).thenReturn(new ArrayList<>());
 
         receiptItemService.addOrUpdateItem(100, 50, new BigDecimal("2.000"));
 
@@ -111,9 +116,9 @@ class ReceiptItemServiceTest {
 
         when(itemRepository.findById(500)).thenReturn(Optional.of(item));
 
+        // Am scos stubbing-ul pentru productComponentRepository deoarece removeItem nu pare să îl folosească
         receiptItemService.removeItem(500);
 
-        // Verificăm că pune cantitatea înapoi în stoc (oldQty=1, newQty=0)
         verify(stockCurrentService).syncStockFromReceiptChange(eq(1), eq(50), eq(new BigDecimal("1.000")), eq(BigDecimal.ZERO));
         verify(itemRepository).delete(item);
     }

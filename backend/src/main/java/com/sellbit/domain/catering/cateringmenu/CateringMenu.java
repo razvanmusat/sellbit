@@ -17,8 +17,8 @@ public class CateringMenu {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
-    @Column(nullable = false, length = 100)
-    private String name;
+    @Column(name = "product_id", nullable = false, unique = true)
+    private Integer productId;
 
     @Column(name = "purchase_price", nullable = false, precision = 10, scale = 2)
     private BigDecimal purchasePrice;

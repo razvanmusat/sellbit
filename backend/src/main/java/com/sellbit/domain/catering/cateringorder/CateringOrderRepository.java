@@ -19,7 +19,12 @@ public interface CateringOrderRepository extends JpaRepository<CateringOrder, In
      * Folosit pentru Grid-ul de rezervări (pentru a vedea care are catering) 
      * și pentru lista zilnică de livrări.
      */
-    List<CateringOrder> findByOrderDateOrderByCreatedAtAsc(LocalDate date);
+	@Query("SELECT o FROM CateringOrder o " +
+	           "JOIN FETCH o.menu m " +
+	           "JOIN Product p ON m.productId = p.id " +
+	           "WHERE o.orderDate = :date " +
+	           "ORDER BY o.createdAt ASC")
+	    List<CateringOrder> findByOrderDateOrderByCreatedAtAsc(@Param("date") LocalDate date);
 
     /**
      * Găsește toate comenzile neplătite către furnizor într-un interval de timp.

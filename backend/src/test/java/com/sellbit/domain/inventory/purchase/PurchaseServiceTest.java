@@ -7,6 +7,7 @@ import static org.mockito.Mockito.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -20,6 +21,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.sellbit.domain.catalog.product.Product;
 import com.sellbit.domain.catalog.product.ProductRepository;
+import com.sellbit.domain.catalog.productcomposite.ProductComponentRepository;
 import com.sellbit.domain.inventory.stockcurrent.StockCurrentService;
 import com.sellbit.domain.inventory.warehouse.Warehouse;
 import com.sellbit.domain.inventory.warehouse.WarehouseRepository;
@@ -34,6 +36,7 @@ class PurchaseServiceTest {
     @Mock private WarehouseRepository warehouseRepository;
     @Mock private UserRepository userRepository;
     @Mock private StockCurrentService stockCurrentService;
+    @Mock private ProductComponentRepository productComponentRepository; // Adăugat pentru a fixa NPE
 
     @InjectMocks
     private PurchaseService purchaseService;
@@ -97,7 +100,13 @@ class PurchaseServiceTest {
         Purchase batch1 = Purchase.builder().id(1).remainingQuantity(new BigDecimal("5.000")).build();
         Purchase batch2 = Purchase.builder().id(2).remainingQuantity(new BigDecimal("10.000")).build();
         
+        // Adăugat: Serviciul are nevoie de produs pentru a valida operațiunea
+        when(productRepository.findById(10)).thenReturn(Optional.of(mockProduct));
+        
         when(purchaseRepository.findActiveBatchesFIFO(5, 10)).thenReturn(List.of(batch1, batch2));
+        
+        // Mock pentru a evita NPE (deja adăugat anterior)
+        when(productComponentRepository.findByParentProductIdAndIsActiveTrue(10)).thenReturn(new ArrayList<>());
 
         purchaseService.deductFromBatchesFIFO(5, 10, new BigDecimal("7.000"));
 

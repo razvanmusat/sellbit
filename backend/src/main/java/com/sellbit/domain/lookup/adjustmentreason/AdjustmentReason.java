@@ -20,10 +20,10 @@ public class AdjustmentReason {
 	private Integer id;
 	
 	@Column(nullable = false, unique = true, length = 50)
-	private String code; //EX: DAMAGED, EXPIRED, INVENTORY_COUNT, PROMO_GIVEAWAY
+	private String code; //EX: DAMAGED, EXPIRED, INVENTORY_COUNT
 	
 	@Column(nullable = false, length = 100)
-	private String label; // "Produs Deteriorat", "Expirat", "Inventar Periodic", "Protocol/Promovare"
+	private String label; // "Produs Deteriorat", "Expirat", "Inventar Periodic"
 	
 	@Builder.Default
 	@Column(name = "is_active")

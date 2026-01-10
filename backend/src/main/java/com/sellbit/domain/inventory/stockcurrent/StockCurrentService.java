@@ -11,6 +11,8 @@ import org.springframework.validation.annotation.Validated;
 
 import com.sellbit.domain.catalog.product.Product;
 import com.sellbit.domain.catalog.product.ProductRepository;
+import com.sellbit.domain.catalog.productcomposite.ProductComponent;
+import com.sellbit.domain.catalog.productcomposite.ProductComponentRepository;
 import com.sellbit.domain.inventory.warehouse.Warehouse;
 import com.sellbit.domain.inventory.warehouse.WarehouseRepository;
 
@@ -24,6 +26,7 @@ public class StockCurrentService {
     private final StockCurrentRepository stockCurrentRepository;
     private final ProductRepository productRepository;
     private final WarehouseRepository warehouseRepository;
+    private final ProductComponentRepository productComponentRepository;
 
     @Transactional(readOnly = true)
     public List<StockCurrentDTOs.Response> getStockByWarehouse(Integer warehouseId) {
@@ -90,13 +93,27 @@ public class StockCurrentService {
 
     /**
      * LOGICA BONURI (Receipt): Sincronizare în timp real.
-     * Apelează updateStockRelative care are LOCK inclus.
+     * Modificată pentru a suporta rețetare (produse compuse).
      */
     @Transactional
     public void syncStockFromReceiptChange(Integer warehouseId, Integer productId, BigDecimal oldQty, BigDecimal newQty) {
-        
-        BigDecimal diff = newQty.subtract(oldQty);        
-        updateStockRelative(warehouseId, productId, diff.negate());
+        BigDecimal diff = newQty.subtract(oldQty);
+        if (diff.compareTo(BigDecimal.ZERO) == 0) return;
+
+        // Căutăm dacă produsul are componente active (rețetă)
+        List<ProductComponent> components = productComponentRepository.findByParentProductIdAndIsActiveTrue(productId);
+
+        if (!components.isEmpty()) {
+            // Dacă are rețetă, aplicăm diferența pentru fiecare componentă
+            for (ProductComponent comp : components) {
+                BigDecimal compDiff = diff.multiply(comp.getQuantity());
+                // Scădem componenta (negate pentru că updateStockRelative adună delta)
+                updateStockRelative(warehouseId, comp.getChildProduct().getId(), compDiff.negate());
+            }
+        } else {
+            // Dacă este produs simplu, rămâne logica originală
+            updateStockRelative(warehouseId, productId, diff.negate());
+        }
     }
     
     @Transactional(readOnly = true)

@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.sellbit.domain.catalog.product.Product;
 import com.sellbit.domain.catalog.product.ProductRepository;
+import com.sellbit.domain.catalog.productcomposite.ProductComponentRepository;
 import com.sellbit.domain.inventory.purchase.PurchaseService;
 import com.sellbit.domain.inventory.stockcurrent.StockCurrentService;
 import com.sellbit.domain.sales.receipt.Receipt;
@@ -29,6 +30,7 @@ public class ReceiptItemService {
     private final StockCurrentService stockCurrentService;
     private final ReceiptService receiptService;
     private final PurchaseService purchaseService;
+    private final ProductComponentRepository productComponentRepository;
 
     /**
      * Adaugă sau actualizează un produs și returnează totalurile noi ale bonului.
@@ -51,14 +53,18 @@ public class ReceiptItemService {
                 .orElse(null);
 
         BigDecimal oldQty = (item != null) ? item.getQuantity() : BigDecimal.ZERO;
-
-        // AICI E TOATĂ ȘMECHERIA PE CARE AI CERUT-O
+      
         BigDecimal currentPurchasePrice;
-        if (Boolean.TRUE.equals(product.getTrackStock())) {
-            // Dacă are stoc, trage din FIFO
+        
+     // Verificăm dacă este produs compus (are rețetă)
+        boolean isComposite = !productComponentRepository.findByParentProductIdAndIsActiveTrue(productId).isEmpty();
+        
+        if (Boolean.TRUE.equals(product.getTrackStock()) || isComposite) {
+            // Dacă urmărim stocul SAU dacă este compus, cerem prețul de la PurchaseService
+            // PurchaseService știe deja să calculeze suma componentelor (modificarea anterioară)
             currentPurchasePrice = purchaseService.getCurrentFIFOPurchasePrice(receipt.getWarehouse().getId(), productId);
         } else {
-        	currentPurchasePrice = BigDecimal.ZERO;
+            currentPurchasePrice = BigDecimal.ZERO;
         }
 
         if (item == null) {

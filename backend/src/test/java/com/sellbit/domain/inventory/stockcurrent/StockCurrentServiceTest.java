@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -19,6 +20,7 @@ import org.mockito.quality.Strictness;
 
 import com.sellbit.domain.catalog.product.Product;
 import com.sellbit.domain.catalog.product.ProductRepository;
+import com.sellbit.domain.catalog.productcomposite.ProductComponentRepository;
 import com.sellbit.domain.inventory.warehouse.Warehouse;
 import com.sellbit.domain.inventory.warehouse.WarehouseRepository;
 
@@ -29,6 +31,7 @@ class StockCurrentServiceTest {
     @Mock private StockCurrentRepository stockCurrentRepository;
     @Mock private ProductRepository productRepository;
     @Mock private WarehouseRepository warehouseRepository;
+    @Mock private ProductComponentRepository productComponentRepository; // Adăugat pentru a fixa NPE
 
     @InjectMocks
     private StockCurrentService stockCurrentService;
@@ -44,9 +47,14 @@ class StockCurrentServiceTest {
         when(productRepository.findById(anyInt())).thenReturn(Optional.of(mockProduct));
         when(warehouseRepository.findById(anyInt())).thenReturn(Optional.of(mockWarehouse));
         when(warehouseRepository.existsById(anyInt())).thenReturn(true);
+        
         // Actualizat pentru a folosi metoda cu Lock
         when(stockCurrentRepository.findById_WarehouseIdAndId_ProductIdForUpdate(anyInt(), anyInt()))
                 .thenReturn(Optional.of(new StockCurrent()));
+
+        // Default stubbing pentru rețete (listă goală = produs simplu)
+        when(productComponentRepository.findByParentProductIdAndIsActiveTrue(anyInt()))
+                .thenReturn(new ArrayList<>());
     }
 
     // --- 1. setPhysicalStock ---
@@ -143,6 +151,10 @@ class StockCurrentServiceTest {
         
         when(stockCurrentRepository.findById_WarehouseIdAndId_ProductIdForUpdate(anyInt(), anyInt()))
                 .thenReturn(Optional.of(stock));
+        
+        // Asigurăm că pentru produsul 10 returnăm listă goală de componente
+        when(productComponentRepository.findByParentProductIdAndIsActiveTrue(10))
+                .thenReturn(new ArrayList<>());
 
         // Adăugăm pe bon (old 0, new 1) -> Trebuie să scadă 1 din stoc (Rezultat 9)
         stockCurrentService.syncStockFromReceiptChange(1, 10, BigDecimal.ZERO, BigDecimal.ONE);

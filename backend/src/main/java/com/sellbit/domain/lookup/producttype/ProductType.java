@@ -16,10 +16,10 @@ public class ProductType {
     private Integer id;
 
     @Column(nullable = false, unique = true, length = 50)
-    private String code; // EX: REGULAR, SERVICE, VOUCHER
+    private String code; // EX: REGULAR, SERVICE, CATERING
 
     @Column(nullable = false, length = 100)
-    private String label; // EX: Produs Standard, Serviciu, Voucher
+    private String label; // EX: Produs Standard, Serviciu, Produse Catering
 
     @Builder.Default
     @Column(name = "is_active")

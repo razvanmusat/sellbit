@@ -42,6 +42,12 @@ public class CateringMenuController {
     public ResponseEntity<CateringMenuDTOs.MenuFullResponse> toggle(@PathVariable Integer id) {
         return ResponseEntity.ok(menuService.toggleStatus(id));
     }
+    
+    @GetMapping("/available-products")
+    public ResponseEntity<List<CateringMenuDTOs.MenuShortResponse>> getAvailable() {
+        // Acum Service-ul returnează List<MenuShortResponse>, deci tipurile se potrivesc
+        return ResponseEntity.ok(menuService.getAvailableCateringProducts());
+    }
 
     // --- ENDPOINT-URI PENTRU STAFF (OPERATIONAL) ---
 

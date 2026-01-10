@@ -7,6 +7,7 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.sellbit.domain.catalog.product.ProductRepository;
 import com.sellbit.domain.catering.cateringmenu.CateringMenu;
 import com.sellbit.domain.catering.cateringmenu.CateringMenuRepository;
 import com.sellbit.domain.playground.PlaygroundReservation;
@@ -21,7 +22,8 @@ public class CateringOrderService {
     private final CateringOrderRepository orderRepository;
     private final CateringMenuRepository menuRepository;
     private final PlaygroundReservationRepository reservationRepository;
-
+    private final ProductRepository productRepository;
+    
     @Transactional
     public CateringOrderDTOs.OrderResponse createOrder(CateringOrderDTOs.CreateOrderRequest req) {
         CateringMenu menu = menuRepository.findById(req.menuId())
@@ -99,12 +101,15 @@ public class CateringOrderService {
     }
 
     // --- HELPER MAPPING ---
-
     private CateringOrderDTOs.OrderResponse mapToResponse(CateringOrder o) {
+        String productName = productRepository.findById(o.getMenu().getProductId())
+                .map(com.sellbit.domain.catalog.product.Product::getName)
+                .orElse("ERROR.PRODUCT.NOT_FOUND");
+
         return new CateringOrderDTOs.OrderResponse(
                 o.getId(),
                 o.getMenu().getId(),
-                o.getMenu().getName(),
+                productName,
                 o.getReservationId() != null ? o.getReservationId().getId() : null,
                 o.getQuantity(),
                 o.getOrderDate(),
