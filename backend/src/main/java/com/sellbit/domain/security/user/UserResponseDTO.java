@@ -16,6 +16,7 @@ public record UserResponseDTO(
 	    LocalDateTime deactivatedAt
 	) {
 	    public static UserResponseDTO fromEntity(User user) {
+	    	if (user == null) return null;
 	        return new UserResponseDTO(
 	            user.getId(),
 	            user.getUsername(),

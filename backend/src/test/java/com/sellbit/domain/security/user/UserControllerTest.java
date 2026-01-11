@@ -1,6 +1,7 @@
 package com.sellbit.domain.security.user;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sellbit.domain.config.GlobalExceptionHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -35,14 +36,16 @@ class UserControllerTest {
 
     @BeforeEach
     void setUp() {
-        // Aici instantiem MockMvc manual, fara context de Spring
-        mockMvc = MockMvcBuilders.standaloneSetup(userController).build();
+        // Standalone setup folosind pachetul tău exact pentru GlobalExceptionHandler
+        mockMvc = MockMvcBuilders.standaloneSetup(userController)
+                .setControllerAdvice(new GlobalExceptionHandler())
+                .build();
     }
 
     // --- TESTE LISTARE ---
 
     @Test
-    @DisplayName("GET /active - Trebuie sa mearga fara context Spring")
+    @DisplayName("GET /active - Verificare listare utilizatori activi")
     void shouldReturnActiveUsers() throws Exception {
         when(userService.getAllActive()).thenReturn(List.of());
 
@@ -53,8 +56,9 @@ class UserControllerTest {
     // --- TESTE CREATE ---
 
     @Test
-    @DisplayName("POST / - Verificare creare reusita")
+    @DisplayName("POST / - Verificare creare reușită")
     void shouldCreateUser() throws Exception {
+        // Folosim CreateUserDTO conform structurii tale record
         CreateUserDTO dto = new CreateUserDTO("user.test", "Pass123!", "Nume Test", 1, "ro");
 
         mockMvc.perform(post("/api/security/users")
@@ -66,8 +70,9 @@ class UserControllerTest {
     // --- TESTE UPDATE ---
 
     @Test
-    @DisplayName("PUT /{id} - Verificare update reusit")
+    @DisplayName("PUT /{id} - Verificare update reușit")
     void shouldUpdateUser() throws Exception {
+        // Folosim UpdateUserDTO conform structurii tale record
         UpdateUserDTO dto = new UpdateUserDTO("admin.ok", "Admin Nou", 1, "en");
 
         mockMvc.perform(put("/api/security/users/1")
@@ -79,7 +84,7 @@ class UserControllerTest {
     // --- TESTE TOGGLE STATUS ---
 
     @Test
-    @DisplayName("PATCH /{id}/toggle-status - Test logic switch")
+    @DisplayName("PATCH /{id}/toggle-status - Schimbare status")
     void shouldToggleStatusSuccessfully() throws Exception {
         mockMvc.perform(patch("/api/security/users/1/toggle-status"))
                 .andExpect(status().isOk());
@@ -90,6 +95,7 @@ class UserControllerTest {
     @Test
     @DisplayName("PATCH /{id}/change-password - Test succes")
     void shouldChangePasswordSuccessfully() throws Exception {
+        // Folosim ChangePasswordDTO conform structurii tale record
         ChangePasswordDTO dto = new ChangePasswordDTO("NewStrongPass123!");
 
         mockMvc.perform(patch("/api/security/users/1/change-password")
@@ -99,24 +105,18 @@ class UserControllerTest {
     }
 
     @Test
-    @DisplayName("PATCH /{id}/change-password - Test eroare propagata din Service")
+    @DisplayName("PATCH /{id}/change-password - Test eroare business (400) via GlobalExceptionHandler")
     void shouldReturn400WhenServiceThrowsException() throws Exception {
         ChangePasswordDTO dto = new ChangePasswordDTO("123");
         
-        // Simulam eroarea care vine din logica de business
+        // Simulăm eroarea de RuntimeException pe care GlobalExceptionHandler o prinde
         doThrow(new RuntimeException("ERROR.USER.INVALID_PASSWORD_STRENGTH"))
             .when(userService).changePassword(eq(1), any());
 
-        // FARA GlobalExceptionHandler configurat in standaloneSetup, 
-        // aici va arunca eroarea direct. Daca vrei sa testezi status 400, 
-        // trebuie sa adaugi .setControllerAdvice(new GlobalExceptionHandler()) in setUp()
-        
-        try {
-            mockMvc.perform(patch("/api/security/users/1/change-password")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(objectMapper.writeValueAsString(dto)));
-        } catch (Exception e) {
-            assert(e.getCause().getMessage().equals("ERROR.USER.INVALID_PASSWORD_STRENGTH"));
-        }
+        mockMvc.perform(patch("/api/security/users/1/change-password")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(dto)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("ERROR.USER.INVALID_PASSWORD_STRENGTH"));
     }
 }

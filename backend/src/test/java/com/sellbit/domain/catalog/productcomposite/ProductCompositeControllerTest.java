@@ -14,7 +14,7 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-public class ProductCompositeControllerTest {
+class ProductCompositeControllerTest {
 
     private MockMvc mockMvc;
     private ProductCompositeService compositeService;
@@ -22,7 +22,10 @@ public class ProductCompositeControllerTest {
 
     @BeforeEach
     void setUp() {
+        // Creăm mock-ul manual și îl injectăm în controller
         compositeService = mock(ProductCompositeService.class);
+        
+        // standaloneSetup izolează controllerul de filtrele de securitate JWT
         mockMvc = MockMvcBuilders.standaloneSetup(new ProductCompositeController(compositeService)).build();
     }
 

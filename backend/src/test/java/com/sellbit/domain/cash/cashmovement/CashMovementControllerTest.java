@@ -1,9 +1,11 @@
 package com.sellbit.domain.cash.cashmovement;
 
+import com.sellbit.domain.security.auth.JwtUtils;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -26,8 +28,18 @@ class CashMovementControllerTest {
     @Autowired
     private MockMvc mockMvc;
 
-    @MockitoBean private CashMovementService cashMovementService;
-    @MockitoBean private CashMovementRepository cashMovementRepository;
+    @MockitoBean 
+    private CashMovementService cashMovementService;
+    
+    @MockitoBean 
+    private CashMovementRepository cashMovementRepository;
+
+    // Mock-uri obligatorii pentru a trece de filtrul de securitate
+    @MockitoBean
+    private JwtUtils jwtUtils;
+
+    @MockitoBean
+    private UserDetailsService userDetailsService;
 
     @Test
     @DisplayName("POST /api/cash/movements - Succes")

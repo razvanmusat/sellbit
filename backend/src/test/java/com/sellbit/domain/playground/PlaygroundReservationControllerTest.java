@@ -1,11 +1,13 @@
 package com.sellbit.domain.playground;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sellbit.domain.security.auth.JwtUtils; // Import necesar
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.userdetails.UserDetailsService; // Import necesar
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -35,6 +37,13 @@ class PlaygroundReservationControllerTest {
     @MockitoBean
     private PlaygroundReservationService reservationService;
 
+    // Mock-uri pentru securitate pentru a permite contextului să pornească
+    @MockitoBean
+    private JwtUtils jwtUtils;
+
+    @MockitoBean
+    private UserDetailsService userDetailsService;
+
     private final LocalDateTime start = LocalDateTime.of(2026, 1, 10, 14, 0);
     private final LocalDateTime end = LocalDateTime.of(2026, 1, 10, 17, 0);
 
@@ -59,7 +68,6 @@ class PlaygroundReservationControllerTest {
     @Test
     @DisplayName("POST /: Eroare 400 când parentPhone lipsește (Validare @NotBlank)")
     void create_BadRequest_MissingPhone() throws Exception {
-        // parentPhone este null sau gol
         var req = new PlaygroundReservationDTOs.CreateReservationRequest(start, end, "Popescu", "", null, null, null, null);
 
         mockMvc.perform(post("/api/playground/reservations")
@@ -86,7 +94,7 @@ class PlaygroundReservationControllerTest {
     }
 
     @Test
-    @DisplayName("PUT /{id}: Eroare 400 dacă service-ul aruncă excepție (ex: telefon format invalid)")
+    @DisplayName("PUT /{id}: Eroare 400 dacă service-ul aruncă excepție")
     void update_LogicError_ReturnsBadRequest() throws Exception {
         var req = new PlaygroundReservationDTOs.CreateReservationRequest(start, end, "Popescu", "123", null, null, null, null);
         

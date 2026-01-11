@@ -26,7 +26,10 @@ class CateringOrderControllerTest {
     @BeforeEach
     void setUp() {
         orderService = mock(CateringOrderService.class);
-        mockMvc = MockMvcBuilders.standaloneSetup(new CateringOrderController(orderService)).build();
+        
+        // Setup standalone pentru a testa Controller-ul izolat de securitate.
+        mockMvc = MockMvcBuilders.standaloneSetup(new CateringOrderController(orderService))
+                .build();
     }
 
     @Test

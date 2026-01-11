@@ -23,12 +23,13 @@ public class UserService {
 	private final UserRoleRepository roleRepository;
 	private final PasswordEncoder passwordEncoder;
 
-	// --- LISTARE USERS ---
+	@Transactional(readOnly = true)
 	public List<UserResponseDTO> getAllActive() {
 		return userRepository.findAllByIsActiveTrue().stream().map(UserResponseDTO::fromEntity)
 				.collect(Collectors.toList());
 	}
 
+	@Transactional(readOnly = true)
 	public List<UserResponseDTO> getAllInactive() {
 		return userRepository.findAllByIsActiveFalse().stream().map(UserResponseDTO::fromEntity)
 				.collect(Collectors.toList());

@@ -9,11 +9,11 @@ import jakarta.annotation.PostConstruct;
 
 @SpringBootApplication
 public class BackendApplication {
-	
+
 	@PostConstruct
-    public void init() {
-        TimeZone.setDefault(TimeZone.getTimeZone("Europe/Bucharest"));
-    }
+	public void init() {
+		TimeZone.setDefault(TimeZone.getTimeZone("Europe/Bucharest"));
+	}
 
 	public static void main(String[] args) {
 		SpringApplication.run(BackendApplication.class, args);

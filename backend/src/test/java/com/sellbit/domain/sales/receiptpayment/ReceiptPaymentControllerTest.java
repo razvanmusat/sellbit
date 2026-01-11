@@ -1,11 +1,13 @@
 package com.sellbit.domain.sales.receiptpayment;
 
+import com.sellbit.domain.security.auth.JwtUtils;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -18,11 +20,21 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(ReceiptPaymentController.class)
-@AutoConfigureMockMvc(addFilters = false) // Dezactivăm Security pentru 401
+@AutoConfigureMockMvc(addFilters = false) // Dezactivăm Security pentru a evita 401 în teste unitare
 class ReceiptPaymentControllerTest {
 
-    @Autowired private MockMvc mockMvc;
-    @MockitoBean private ReceiptPaymentService paymentService;
+    @Autowired 
+    private MockMvc mockMvc;
+
+    @MockitoBean 
+    private ReceiptPaymentService paymentService;
+
+    // Mock-uri obligatorii pentru satisfacerea constructorului JwtAuthenticationFilter
+    @MockitoBean 
+    private JwtUtils jwtUtils;
+
+    @MockitoBean 
+    private UserDetailsService userDetailsService;
 
     // --- POST /api/sales/receipt-payments ---
     @Test

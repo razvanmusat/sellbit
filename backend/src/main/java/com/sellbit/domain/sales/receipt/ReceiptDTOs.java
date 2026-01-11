@@ -55,10 +55,11 @@ public class ReceiptDTOs {
      * DTO pentru stornări.
      */
     public record RefundRequest(
-            @NotNull(message = "ERROR.USER.REQUIRED") Integer userId,
-            @NotEmpty(message = "ERROR.ITEMS.REQUIRED") List<RefundItemRequest> items 
-    ) {
-    }
+    	    @NotNull(message = "ERROR.USER.REQUIRED") Integer userId,
+    	    @NotEmpty(message = "ERROR.ITEMS.REQUIRED") List<RefundItemRequest> items,
+    	    @NotNull(message = "ERROR.PAYMENT_METHOD.REQUIRED") Integer paymentMethodId // <--- ACESTA ESTE ID-UL DIN TABELUL TĂU (1, 2 sau 3)
+    	) {
+    	}
 
     public record RefundItemRequest(
             @NotNull(message = "ERROR.ITEM.REQUIRED") Integer receiptItemId,

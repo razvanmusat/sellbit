@@ -1,9 +1,11 @@
 package com.sellbit.domain.cash.cashdrawer;
 
+import com.sellbit.domain.security.auth.JwtUtils; // Import nou
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.security.core.userdetails.UserDetailsService; // Import nou
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -11,7 +13,7 @@ import java.math.BigDecimal;
 
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath; // Pentru verificarea mesajului
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 
@@ -26,6 +28,14 @@ class CashDrawerControllerTest {
 
     @MockitoBean
     private CashDrawerService cashDrawerService;
+
+    // --- ACESTEA SUNT CELE DOUA LINII PE CARE TREBUIA SA LE ADAUGI ---
+    @MockitoBean
+    private JwtUtils jwtUtils;
+
+    @MockitoBean
+    private UserDetailsService userDetailsService;
+    // ----------------------------------------------------------------
 
     @Test
     @DisplayName("GET /api/cash/drawer/warehouse/{id} - Succes: Returnează 200 și soldul")
@@ -48,12 +58,11 @@ class CashDrawerControllerTest {
         Integer warehouseId = 99;
         String errorMessage = "ERROR.WAREHOUSE.NOT_FOUND";
 
-        // Simulăm excepția pe care handler-ul o va prinde
         when(cashDrawerService.getOrCreateDrawer(warehouseId))
                 .thenThrow(new RuntimeException(errorMessage));
 
         mockMvc.perform(get("/api/cash/drawer/warehouse/{warehouseId}", warehouseId))
-                .andExpect(status().isBadRequest()) // Cod 400 conform @ExceptionHandler(RuntimeException.class)
-                .andExpect(jsonPath("$.message").value(errorMessage)); // Verificăm că JSON-ul are structura corectă
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(errorMessage));
     }
 }

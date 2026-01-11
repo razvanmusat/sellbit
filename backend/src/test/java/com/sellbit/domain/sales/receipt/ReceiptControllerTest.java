@@ -1,12 +1,14 @@
 package com.sellbit.domain.sales.receipt;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sellbit.domain.security.auth.JwtUtils;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -27,7 +29,12 @@ class ReceiptControllerTest {
 
     @Autowired private MockMvc mockMvc;
     @Autowired private ObjectMapper objectMapper;
+    
     @MockitoBean private ReceiptService receiptService;
+
+    // Mock-uri necesare pentru pornirea contextului (satisfac JwtAuthenticationFilter)
+    @MockitoBean private JwtUtils jwtUtils;
+    @MockitoBean private UserDetailsService userDetailsService;
 
     // --- 1. CREATE ---
     @Test
@@ -47,14 +54,13 @@ class ReceiptControllerTest {
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(1))
-                .andExpect(jsonPath("$.statusLabel").value("Deschis")) // Corectat conform DTO
+                .andExpect(jsonPath("$.statusLabel").value("Deschis"))
                 .andExpect(jsonPath("$.tableName").value("Masa 5"));
     }
 
     @Test
     @DisplayName("POST /api/sales/receipts - Eroare: Validare @NotBlank tableName")
     void create_Fail_Validation() throws Exception {
-        // Trimitem tableName gol pentru a declanșa @NotBlank
         var req = new ReceiptDTOs.CreateRequest(1, "", 1, null);
 
         mockMvc.perform(post("/api/sales/receipts")
@@ -106,7 +112,7 @@ class ReceiptControllerTest {
     @DisplayName("POST /api/sales/receipts/{id}/refund - Succes: Valorile negative din Response")
     void refund_Success() throws Exception {
         var itemReq = new ReceiptDTOs.RefundItemRequest(1, new BigDecimal("1.00"));
-        var refundReq = new ReceiptDTOs.RefundRequest(1, List.of(itemReq));
+        var refundReq = new ReceiptDTOs.RefundRequest(1, List.of(itemReq), 1);
         
         var response = new ReceiptDTOs.Response(
                 101, "Inchis", "REFUND: 100", 
@@ -146,9 +152,8 @@ class ReceiptControllerTest {
                         .param("end", "2026-01-05T23:59:59"))
                 .andExpect(status().isBadRequest());
     }
-    
- // --- 7. ACTIVE RECEIPTS (LIVE UI) ---
 
+    // --- 7. ACTIVE RECEIPTS (LIVE UI) ---
     @Test
     @DisplayName("GET /api/sales/receipts/active - Succes: Returnează lista de mese active")
     void getActive_Success() throws Exception {
@@ -170,13 +175,11 @@ class ReceiptControllerTest {
     @Test
     @DisplayName("GET /api/sales/receipts/active - Eroare: Lipsește parametrul warehouseId")
     void getActive_Fail_MissingParam() throws Exception {
-        // Testăm cazul în care React-ul uită să trimită gestiunea
         mockMvc.perform(get("/api/sales/receipts/active"))
                 .andExpect(status().isBadRequest());
     }
 
     // --- 8. REPORT (HISTORY) ---
-
     @Test
     @DisplayName("GET /api/sales/receipts/report - Succes: Returnează istoricul filtrat")
     void getReport_Success() throws Exception {
@@ -202,28 +205,24 @@ class ReceiptControllerTest {
     @Test
     @DisplayName("GET /api/sales/receipts/report - Eroare: Format dată invalid (ISO necesar)")
     void getReport_Fail_DateFormat() throws Exception {
-        // Testăm trimiterea unei date în format greșit (ex: doar an-lună-zi)
-        // Controllerul are @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
         mockMvc.perform(get("/api/sales/receipts/report")
                         .param("warehouseId", "1")
                         .param("status", "CLOSED")
-                        .param("start", "2026-01-01") // Lipsește ora/minutul
+                        .param("start", "2026-01-01") 
                         .param("end", "2026-01-05"))
                 .andExpect(status().isBadRequest());
     }
-    
- // --- 9. PRINT BILL NOTE ---
+
+    // --- 9. PRINT BILL NOTE ---
     @Test
     @DisplayName("GET /api/sales/receipts/{id}/print-bill-note - Succes: Returnează datele de printare")
     void getBillNoteForPrint_Success() throws Exception {
         var printData = new ReceiptPrintDTO(
                 "SellBit Store", "Strada Test 1", "RO123456",
-                List.of(), // items
-                null, // payments
-                null, // user
-                new BigDecimal("100.00"), // totalAmount
-                new BigDecimal("20.00"),  // voucherValue
-                new BigDecimal("80.00"),  // totalToPay
+                List.of(), null, null,
+                new BigDecimal("100.00"), 
+                new BigDecimal("20.00"), 
+                new BigDecimal("80.00"), 
                 LocalDateTime.now()
         );
 
@@ -238,14 +237,11 @@ class ReceiptControllerTest {
     @Test
     @DisplayName("GET /api/sales/receipts/{id}/print-bill-note - Eroare: Bon inexistent")
     void getBillNoteForPrint_Fail_NotFound() throws Exception {
-        // Simulăm aruncarea unei excepții din service
-        // Spring MVC o va intercepta și va returna probabil 400 (Bad Request) 
-        // conform erorii tale din log: Status expected:<500> but was:<400>
         when(receiptService.getBillNoteData(999))
             .thenThrow(new RuntimeException("ERROR.RECEIPT.NOT_FOUND"));
 
         mockMvc.perform(get("/api/sales/receipts/999/print-bill-note"))
-                .andExpect(status().isBadRequest()); // Schimbat din isInternalServerError() în isBadRequest()
+                .andExpect(status().isBadRequest()); 
     }
 
     // --- 10. REMOVE VOUCHER PAYMENT ---
@@ -261,9 +257,8 @@ class ReceiptControllerTest {
     }
 
     @Test
-    @DisplayName("DELETE /api/sales/receipts/{rId}/payments/{pId}/voucher - Eroare: ID-uri invalide (String în loc de Long/Int)")
+    @DisplayName("DELETE /api/sales/receipts/{rId}/payments/{pId}/voucher - Eroare: ID-uri invalide")
     void removeVoucher_Fail_InvalidType() throws Exception {
-        // Testăm că Spring refuză cererea dacă ID-ul nu este numeric
         mockMvc.perform(delete("/api/sales/receipts/abc/payments/def/voucher"))
                 .andExpect(status().isBadRequest());
     }

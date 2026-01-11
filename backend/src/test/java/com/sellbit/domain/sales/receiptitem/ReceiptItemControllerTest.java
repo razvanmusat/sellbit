@@ -1,10 +1,12 @@
 package com.sellbit.domain.sales.receiptitem;
 
+import com.sellbit.domain.security.auth.JwtUtils;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -18,11 +20,21 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(ReceiptItemController.class)
-@AutoConfigureMockMvc(addFilters = false) // Ignorăm securitatea (401)
+@AutoConfigureMockMvc(addFilters = false) // Ignorăm securitatea (filtrelor) pentru testare unitară
 class ReceiptItemControllerTest {
 
-    @Autowired private MockMvc mockMvc;
-    @MockitoBean private ReceiptItemService receiptItemService;
+    @Autowired 
+    private MockMvc mockMvc;
+
+    @MockitoBean 
+    private ReceiptItemService receiptItemService;
+
+    // Mock-uri obligatorii pentru a permite contextului de Spring să pornească (dependințe JwtAuthenticationFilter)
+    @MockitoBean 
+    private JwtUtils jwtUtils;
+
+    @MockitoBean 
+    private UserDetailsService userDetailsService;
 
     // --- POST /api/sales/receipt-items/sync ---
 
@@ -30,7 +42,7 @@ class ReceiptItemControllerTest {
     @DisplayName("POST /sync - Succes: Adăugare produs")
     void syncItem_Success() throws Exception {
         when(receiptItemService.addOrUpdateItem(anyInt(), anyInt(), any(BigDecimal.class)))
-                .thenReturn(null); // Returnăm null pentru că testăm doar statusul rutei
+                .thenReturn(null); 
 
         mockMvc.perform(post("/api/sales/receipt-items/sync")
                 .param("receiptId", "100")

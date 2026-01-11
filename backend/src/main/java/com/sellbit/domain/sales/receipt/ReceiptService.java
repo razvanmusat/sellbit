@@ -18,6 +18,8 @@ import com.sellbit.domain.inventory.warehouse.Warehouse;
 import com.sellbit.domain.inventory.warehouse.WarehouseRepository;
 import com.sellbit.domain.lookup.cancelreason.CancelReason;
 import com.sellbit.domain.lookup.cancelreason.CancelReasonRepository;
+import com.sellbit.domain.lookup.paymentmethod.PaymentMethod;
+import com.sellbit.domain.lookup.paymentmethod.PaymentMethodRepository;
 import com.sellbit.domain.lookup.receiptstatus.ReceiptStatus;
 import com.sellbit.domain.lookup.receiptstatus.ReceiptStatusRepository;
 import com.sellbit.domain.sales.receiptitem.ReceiptItem;
@@ -51,6 +53,7 @@ public class ReceiptService {
     private final StoreRepository storeRepository;
     private final CustomerVoucherService voucherService;
     private final ReceiptPaymentRepository paymentRepository;
+    private final PaymentMethodRepository paymentMethodRepository;
         
     /**
      * OPERAȚIONAL: Pentru afișarea meselor/bonurilor deschise în tab-ul din React.
@@ -348,34 +351,20 @@ public class ReceiptService {
         refundReceipt.setTotalVat(tVat);
 
         // 4. Logica de bani (Cash Movement)
-        boolean wasCash = original.getPayments().stream()
-                .anyMatch(p -> "CASH".equals(p.getPaymentMethod().getCode()));
+        PaymentMethod refundMethod = paymentMethodRepository.findById(request.paymentMethodId())
+                .orElseThrow(() -> new RuntimeException("ERROR.PAYMENT_METHOD.NOT_FOUND"));
 
-        boolean wasCard = original.getPayments().stream()
-                .anyMatch(p -> "CARD".equals(p.getPaymentMethod().getCode()));
-        
-        if (wasCash) {
-            // Trimitem valoarea absolută, CashMovementService se ocupă de semnul de REFUND
-            cashMovementService.createMovement(
-                original.getWarehouse().getId(),
-                "REFUND",
-                tAmount.abs(),
-                request.userId(),
-                "Stornare bon nr. " + original.getId()
-            );
-        }
-        
-        if (wasCard) {
-            // AICI: Depinde de cum ai CashMovementService. 
-            // Dacă ai un singur tabel de mișcări, trebuie să marchezi că e ieșire de pe CARD.
-            cashMovementService.createMovement(
-                original.getWarehouse().getId(),
-                "REFUND_CARD",
-                tAmount.abs(),
-                request.userId(),
-                "Stornare Card bon nr. " + original.getId()
-            );
-        }
+        String typeCode = "CASH".equals(refundMethod.getCode()) ? "REFUND" : "REFUND_CARD";
+
+        // Înregistrăm o singură mișcare, pe metoda aleasă de tine
+        cashMovementService.createMovement(
+            original.getWarehouse().getId(),
+            typeCode,
+            tAmount.abs(), 
+            request.userId(),
+            "Retur (" + refundMethod.getLabel() + ") pt bon nr. " + original.getId()
+        );
+       
 
         return mapToResponse(receiptRepository.save(refundReceipt));
     }

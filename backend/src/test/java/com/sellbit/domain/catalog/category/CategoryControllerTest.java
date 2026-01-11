@@ -34,7 +34,7 @@ class CategoryControllerTest {
     void setUp() {
         objectMapper.registerModule(new JavaTimeModule());
 
-        // Injectie manuala ca sa nu mai forțeze Mockito agentul de inline
+        // Setup standalone: Încarcă doar controller-ul, ignorând complet filtrele de securitate/JWT
         CategoryController categoryController = new CategoryController(categoryService);
         mockMvc = MockMvcBuilders.standaloneSetup(categoryController).build();
         

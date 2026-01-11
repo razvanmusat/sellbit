@@ -12,12 +12,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.math.BigDecimal;
 import java.util.List;
 
+import com.sellbit.domain.security.auth.JwtUtils;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -36,7 +38,13 @@ class PurchaseControllerTest {
     @MockitoBean
     private PurchaseService purchaseService;
 
-    // URL-ul de bază conform controller-ului tău
+    // Mock-uri necesare pentru a satisface dependințele JwtAuthenticationFilter la pornirea contextului
+    @MockitoBean
+    private JwtUtils jwtUtils;
+
+    @MockitoBean
+    private UserDetailsService userDetailsService;
+
     private static final String BASE_URL = "/api/inventory/purchases";
 
     @Test
@@ -78,8 +86,6 @@ class PurchaseControllerTest {
     @Test
     @DisplayName("POST: Eroare Validare - Request Body Invalid (400 Bad Request)")
     void addPurchases_ValidationError() throws Exception {
-        // Trimitem un body gol sau invalid pentru a declanșa @Valid
-        // Dacă BulkCreate are @NotNull pe listă sau user, va da 400
         String invalidJson = "{\"userId\": null, \"items\": []}";
 
         mockMvc.perform(post(BASE_URL + "/bulk")

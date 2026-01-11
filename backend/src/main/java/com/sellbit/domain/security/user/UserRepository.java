@@ -1,6 +1,8 @@
 package com.sellbit.domain.security.user;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import java.util.List;
 import java.util.Optional;
@@ -8,18 +10,18 @@ import java.util.Optional;
 @Repository
 public interface UserRepository extends JpaRepository<User, Integer> {
     
-    // Caută în toată tabela (activi/inactivi) pentru login și validare unicitate
-    Optional<User> findByUsername(String username);
+    @Query("SELECT u FROM User u JOIN FETCH u.role WHERE u.username = :username")
+    Optional<User> findByUsername(@Param("username") String username);
     
-    // Pentru dropdown-uri în operarea curentă (vânzări, gestiune)
+    @Query("SELECT u FROM User u JOIN FETCH u.role WHERE u.isActive = true")
     List<User> findAllByIsActiveTrue();
     
-    // Pentru panoul de admin: filtrare rapidă după status
+    @Query("SELECT u FROM User u JOIN FETCH u.role WHERE u.isActive = false")
     List<User> findAllByIsActiveFalse();
 
     boolean existsByUsername(String username);
 
     long countByRole_AuthorityLevelAndIsActiveTrue(Integer authorityLevel);
 
-	boolean existsByRole_IdAndIsActiveTrue(Integer id);
+    boolean existsByRole_IdAndIsActiveTrue(Integer id);
 }

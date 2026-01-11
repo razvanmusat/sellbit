@@ -1,6 +1,7 @@
 package com.sellbit.domain.catering.cateringmenu;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -25,8 +26,13 @@ class CateringMenuControllerTest {
 
     @BeforeEach
     void setUp() {
+        objectMapper.registerModule(new JavaTimeModule());
         menuService = mock(CateringMenuService.class);
-        mockMvc = MockMvcBuilders.standaloneSetup(new CateringMenuController(menuService)).build();
+        
+        // standaloneSetup: Izolat de securitate. 
+        // Am adăugat logica de bază pentru a procesa corect eventualele validări de obiecte.
+        mockMvc = MockMvcBuilders.standaloneSetup(new CateringMenuController(menuService))
+                .build();
     }
 
     @Test
@@ -47,7 +53,7 @@ class CateringMenuControllerTest {
     @Test
     @DisplayName("POST /manage: Returnează 400 dacă prețul este negativ")
     void create_InvalidPrice_Returns400() throws Exception {
-        // Validation constraint: @PositiveOrZero
+        // Validation constraint: @PositiveOrZero pe câmpul amount
         var req = new CateringMenuDTOs.CreateMenuRequest(100, new BigDecimal("-10.0"), true);
 
         mockMvc.perform(post("/api/catering/catering-menus/manage")

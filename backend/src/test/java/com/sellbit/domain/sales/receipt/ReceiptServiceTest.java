@@ -34,6 +34,7 @@ import com.sellbit.domain.inventory.warehouse.WarehouseRepository;
 import com.sellbit.domain.lookup.cancelreason.CancelReason;
 import com.sellbit.domain.lookup.cancelreason.CancelReasonRepository;
 import com.sellbit.domain.lookup.paymentmethod.PaymentMethod;
+import com.sellbit.domain.lookup.paymentmethod.PaymentMethodRepository;
 import com.sellbit.domain.lookup.receiptstatus.ReceiptStatus;
 import com.sellbit.domain.lookup.receiptstatus.ReceiptStatusRepository;
 import com.sellbit.domain.sales.receiptitem.ReceiptItem;
@@ -62,6 +63,7 @@ class ReceiptServiceTest {
     @Mock private ReceiptPaymentRepository paymentRepository;
     @Mock private CustomerVoucherRepository customerVoucherRepository;
     @Mock private StoreRepository storeRepository;
+    @Mock private PaymentMethodRepository paymentMethodRepository;
 
     @InjectMocks
     private ReceiptService receiptService;
@@ -260,11 +262,12 @@ class ReceiptServiceTest {
                 
         originalItem.getProduct().setId(10);
         receipt.getItems().add(originalItem);
-
-        PaymentMethod cash = PaymentMethod.builder().code("CASH").build();
+        
+        PaymentMethod cash = PaymentMethod.builder().id(1).code("CASH").build();
+        when(paymentMethodRepository.findById(1)).thenReturn(Optional.of(cash));
         receipt.getPayments().add(ReceiptPayment.builder().paymentMethod(cash).amount(new BigDecimal("100.00")).build());
 
-        var req = new ReceiptDTOs.RefundRequest(1, List.of(new ReceiptDTOs.RefundItemRequest(1, BigDecimal.ONE)));
+        var req = new ReceiptDTOs.RefundRequest(1, List.of(new ReceiptDTOs.RefundItemRequest(1, BigDecimal.ONE)),1);
 
         when(receiptRepository.findById(100)).thenReturn(Optional.of(receipt));
         when(statusRepository.findByCode("CLOSED")).thenReturn(Optional.of(closedStatus));
@@ -400,6 +403,7 @@ class ReceiptServiceTest {
         receipt.setItems(List.of(item));
 
         PaymentMethod card = PaymentMethod.builder().code("CARD").build();
+        when(paymentMethodRepository.findById(1)).thenReturn(Optional.of(card));
         receipt.getPayments().add(ReceiptPayment.builder().paymentMethod(card).amount(BigDecimal.TEN).build());
 
         when(receiptRepository.findById(100)).thenReturn(Optional.of(receipt));
@@ -407,7 +411,7 @@ class ReceiptServiceTest {
         when(userRepository.getReferenceById(1)).thenReturn(new User());
         when(receiptRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
-        receiptService.createPartialRefund(100, new ReceiptDTOs.RefundRequest(1, List.of(new ReceiptDTOs.RefundItemRequest(1, BigDecimal.ONE))));
+        receiptService.createPartialRefund(100, new ReceiptDTOs.RefundRequest(1, List.of(new ReceiptDTOs.RefundItemRequest(1, BigDecimal.ONE)),1));
 
         // Am înlocuit anyInt() cu eq(1) (userId din request)
         verify(cashMovementService).createMovement(eq(1), eq("REFUND_CARD"), any(BigDecimal.class), eq(1), anyString());
@@ -420,7 +424,7 @@ class ReceiptServiceTest {
         receipt.setItems(List.of(ReceiptItem.builder().id(1).quantity(BigDecimal.ONE).build()));
         when(receiptRepository.findById(100)).thenReturn(Optional.of(receipt));
         
-        var req = new ReceiptDTOs.RefundRequest(1, List.of(new ReceiptDTOs.RefundItemRequest(1, new BigDecimal("2.00"))));
+        var req = new ReceiptDTOs.RefundRequest(1, List.of(new ReceiptDTOs.RefundItemRequest(1, new BigDecimal("2.00"))),1);
         assertThrows(RuntimeException.class, () -> receiptService.createPartialRefund(100, req));
     }
 

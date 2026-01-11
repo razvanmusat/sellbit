@@ -62,4 +62,28 @@ public class GlobalExceptionHandler {
         
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errors);
     }
+    
+    /**
+     * Prinde erorile de autentificare (ex: parolă greșită la login)
+     */
+    @ExceptionHandler(org.springframework.security.core.AuthenticationException.class)
+    public ResponseEntity<ErrorResponse> handleAuthenticationException(org.springframework.security.core.AuthenticationException ex) {
+        // Dacă eroarea vine din UserDetailsService, ex.getMessage() va fi "ERROR.USER.NOT_FOUND"
+        // Dacă e parolă greșită, Spring va zice "Bad credentials", deci punem codul nostru
+        String message = ex.getMessage().equals("Bad credentials") ? "ERROR.AUTH.BAD_CREDENTIALS" : ex.getMessage();
+        
+        return ResponseEntity
+                .status(HttpStatus.UNAUTHORIZED)
+                .body(new ErrorResponse(message));
+    }
+
+    /**
+     * Prinde erorile de autorizare (ex: @PreAuthorize a eșuat - nivel prea mic)
+     */
+    @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleAccessDeniedException() {
+        return ResponseEntity
+                .status(HttpStatus.FORBIDDEN)
+                .body(new ErrorResponse("ERROR.AUTH.FORBIDDEN"));
+    }
 }
