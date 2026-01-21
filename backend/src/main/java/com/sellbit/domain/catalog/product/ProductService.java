@@ -21,7 +21,7 @@ public class ProductService {
     private final UnitOfMeasureRepository unitOfMeasureRepository;
     private final VatRateRepository vatRateRepository;
     private final ProductTypeRepository productTypeRepository;
-    
+
     @Transactional(readOnly = true)
     public List<ProductDTO> getProductsForAdmin(Integer categoryId) {
         return productRepository.findByCategoryIdOrderByNameAsc(categoryId)
@@ -66,7 +66,7 @@ public class ProductService {
 
         Product product = new Product();
         mapDtoToEntity(dto, product);
-        
+
         product.setIsActive(true);
         product.setTrackStock(dto.trackStock() != null ? dto.trackStock() : true);
 
@@ -91,10 +91,10 @@ public class ProductService {
     @Transactional
     public void moveProduct(Integer productId, Integer newCategoryId) {
         Product product = productRepository.findById(productId)
-            .orElseThrow(() -> new RuntimeException("ERROR.PRODUCT.NOT_FOUND"));
+                .orElseThrow(() -> new RuntimeException("ERROR.PRODUCT.NOT_FOUND"));
 
         Category category = categoryRepository.findById(newCategoryId)
-            .orElseThrow(() -> new RuntimeException("ERROR.CATEGORY.NOT_FOUND"));
+                .orElseThrow(() -> new RuntimeException("ERROR.CATEGORY.NOT_FOUND"));
 
         if (categoryRepository.existsByParent_Id(category.getId())) {
             throw new RuntimeException("ERROR.CATEGORY.NOT_LEAF");
@@ -103,7 +103,6 @@ public class ProductService {
         product.setCategory(category);
         productRepository.save(product);
     }
-
 
     @Transactional
     public void toggleStatus(Integer id, boolean active) {
@@ -117,14 +116,24 @@ public class ProductService {
         product.setName(dto.name());
         product.setBarcode(dto.barcode());
         product.setSalePrice(dto.salePrice());
-        if (dto.trackStock() != null) product.setTrackStock(dto.trackStock());
+        product.setPurchasePrice(dto.purchasePrice());
+        if (dto.trackStock() != null)
+            product.setTrackStock(dto.trackStock());
 
-        product.setCategory(categoryRepository.findById(dto.categoryId())
-                .orElseThrow(() -> new RuntimeException("ERROR.CATEGORY.NOT_FOUND")));
-        
+        // Validare Categorie: Trebuie să existe și să fie "frunză" (să nu aibă
+        // subcategorii)
+        Category category = categoryRepository.findById(dto.categoryId())
+                .orElseThrow(() -> new RuntimeException("ERROR.CATEGORY.NOT_FOUND"));
+
+        if (categoryRepository.existsByParent_Id(category.getId())) {
+            throw new RuntimeException("ERROR.CATEGORY.NOT_LEAF");
+        }
+
+        product.setCategory(category);
+
         product.setUnit(unitOfMeasureRepository.findById(dto.unitId())
                 .orElseThrow(() -> new RuntimeException("ERROR.UNIT.NOT_FOUND")));
-        
+
         product.setProductType(productTypeRepository.findById(dto.productTypeId())
                 .orElseThrow(() -> new RuntimeException("ERROR.PRODUCT_TYPE.NOT_FOUND")));
 
@@ -146,10 +155,10 @@ public class ProductService {
                 product.getUnit().getId(),
                 product.getVatRate() != null ? product.getVatRate().getId() : null,
                 product.getSalePrice(),
+                product.getPurchasePrice(),
                 product.getTrackStock(),
                 product.getIsActive(),
                 product.getCreatedAt(),
-                product.getUpdatedAt()
-        );
+                product.getUpdatedAt());
     }
 }

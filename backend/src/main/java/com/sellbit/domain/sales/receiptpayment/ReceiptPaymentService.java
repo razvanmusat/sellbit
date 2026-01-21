@@ -1,6 +1,7 @@
 package com.sellbit.domain.sales.receiptpayment;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
@@ -27,8 +28,9 @@ public class ReceiptPaymentService {
     private final CashMovementService cashMovementService;
     private final CustomerVoucherService voucherService;
     private final CustomerVoucherRepository voucherRepository;
+
     /**
-     * Adaugă o plată pe bon. 
+     * Adaugă o plată pe bon.
      * Actualizează automat CashDrawer dacă metoda de plată este CASH.
      */
     @Transactional
@@ -52,7 +54,8 @@ public class ReceiptPaymentService {
         BigDecimal amountToRecord = amount;
 
         if ("CASH".equals(method.getCode())) {
-            // Dacă suma primită e mai mare decât restul, încasăm doar restul (restul banilor se dau înapoi clientului)
+            // Dacă suma primită e mai mare decât restul, încasăm doar restul (restul
+            // banilor se dau înapoi clientului)
             if (amount.compareTo(remainingToPay) > 0) {
                 amountToRecord = remainingToPay;
             }
@@ -76,12 +79,11 @@ public class ReceiptPaymentService {
         // 2. Sincronizăm cu sertarul de bani (Update Live + Movement)
         if ("CASH".equals(method.getCode())) {
             cashMovementService.createMovement(
-                receipt.getWarehouse().getId(),
-                "SALE",
-                amountToRecord,
-                userId,
-                "Încasare bon nr. " + receipt.getId()
-            );
+                    receipt.getWarehouse().getId(),
+                    "SALE",
+                    amountToRecord,
+                    userId,
+                    "Încasare bon nr. " + receipt.getId());
         }
     }
 
@@ -92,9 +94,9 @@ public class ReceiptPaymentService {
     public void removePayment(Integer paymentId, Integer userId) {
         ReceiptPayment payment = paymentRepository.findById(paymentId)
                 .orElseThrow(() -> new RuntimeException("ERROR.PAYMENT.NOT_FOUND"));
-        
+
         Receipt receipt = payment.getReceipt();
-        
+
         if (!"OPEN".equals(receipt.getStatus().getCode())) {
             throw new RuntimeException("ERROR.RECEIPT.ALREADY_CLOSED");
         }
@@ -102,14 +104,13 @@ public class ReceiptPaymentService {
         // Dacă ștergem o plată CASH, trebuie să scădem banii din CashDrawer
         if ("CASH".equals(payment.getPaymentMethod().getCode())) {
             cashMovementService.createMovement(
-                receipt.getWarehouse().getId(),
-                "REFUND",
-                payment.getAmount(), // Suma devine negativă pentru a scădea din sold
-                userId,
-                "Anulare plată bon nr. " + receipt.getId()
-            );
+                    receipt.getWarehouse().getId(),
+                    "REFUND",
+                    payment.getAmount(), // Suma devine negativă pentru a scădea din sold
+                    userId,
+                    "Anulare plată bon nr. " + receipt.getId());
         }
-        
+
         if ("VOUCHER".equals(payment.getPaymentMethod().getCode())) {
             // Căutăm voucherul care a fost folosit pentru acest bon
             // Avem nevoie de o metodă în voucherRepository sau service
@@ -118,14 +119,14 @@ public class ReceiptPaymentService {
 
         paymentRepository.delete(payment);
     }
-    
+
     @Transactional(readOnly = true)
     public List<ReceiptPaymentDTO.Response> getPaymentsByReceipt(Integer receiptId) {
         return paymentRepository.findByReceiptId(receiptId).stream()
                 .map(this::mapToResponse)
                 .toList();
     }
-    
+
     @Transactional
     public void applyVoucher(Integer receiptId, String voucherCode, Integer userId) {
         // 1. Căutăm bonul
@@ -166,6 +167,17 @@ public class ReceiptPaymentService {
         voucherService.consumeVoucher(voucherCode, receipt);
     }
 
+    public ReceiptPaymentDTO.ReportResponse getPaymentsReport(LocalDateTime start, LocalDateTime end,
+            String methodCode) {
+        BigDecimal total = paymentRepository.calculatePaymentsSum(start, end, methodCode);
+
+        return new ReceiptPaymentDTO.ReportResponse(
+                total,
+                methodCode, // Returnăm exact codul primit (null dacă e "Toate")
+                start,
+                end);
+    }
+
     private ReceiptPaymentDTO.Response mapToResponse(ReceiptPayment payment) {
         return new ReceiptPaymentDTO.Response(
                 payment.getId(),
@@ -173,7 +185,6 @@ public class ReceiptPaymentService {
                 payment.getPaymentMethod().getLabel(), // MODIFICAT AICI: getLabel() în loc de getName()
                 payment.getPaymentMethod().getCode(),
                 payment.getAmount(),
-                payment.getPaidAt()
-        );
+                payment.getPaidAt());
     }
 }

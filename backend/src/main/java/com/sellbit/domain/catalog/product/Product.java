@@ -49,6 +49,10 @@ public class Product {
 	@Column(name = "sale_price", precision = 10, scale = 2)
 	private BigDecimal salePrice;
 	
+	// Prețul de achiziție sau costul fix (folosit momentan doar pentru Catering)
+    @Column(name = "purchase_price", precision = 10, scale = 2)
+    private BigDecimal purchasePrice;
+
 	@Builder.Default
 	@Column(name = "track_stock")
 	private Boolean trackStock = true;

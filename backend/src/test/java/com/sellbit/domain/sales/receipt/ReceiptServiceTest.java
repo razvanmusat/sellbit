@@ -27,6 +27,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.sellbit.domain.cash.cashmovement.CashMovementService;
+import com.sellbit.domain.catalog.product.Product;
+import com.sellbit.domain.catalog.product.ProductRepository;
+import com.sellbit.domain.lookup.producttype.ProductType;
+import com.sellbit.domain.lookup.vatrate.VatRate;
 import com.sellbit.domain.inventory.purchase.PurchaseService;
 import com.sellbit.domain.inventory.stockcurrent.StockCurrentService;
 import com.sellbit.domain.inventory.warehouse.Warehouse;
@@ -64,6 +68,7 @@ class ReceiptServiceTest {
     @Mock private CustomerVoucherRepository customerVoucherRepository;
     @Mock private StoreRepository storeRepository;
     @Mock private PaymentMethodRepository paymentMethodRepository;
+    @Mock private ProductRepository productRepository; // ADAUGAT: Necesar pentru Avans
 
     @InjectMocks
     private ReceiptService receiptService;
@@ -149,7 +154,7 @@ class ReceiptServiceTest {
     @Test
     @DisplayName("cancelOpenReceipt - Succes: Returnează stocul și anulează")
     void cancelOpenReceipt_Success() {
-        ReceiptItem item = ReceiptItem.builder().product(new com.sellbit.domain.catalog.product.Product()).quantity(new BigDecimal("5.00")).build();
+        ReceiptItem item = ReceiptItem.builder().product(new Product()).quantity(new BigDecimal("5.00")).build();
         item.getProduct().setId(20);
         receipt.getItems().add(item);
 
@@ -179,7 +184,7 @@ class ReceiptServiceTest {
                 .build();
 
         // 2. Setup Metoda de Plată
-        com.sellbit.domain.lookup.paymentmethod.PaymentMethod cashMethod = new com.sellbit.domain.lookup.paymentmethod.PaymentMethod();
+        PaymentMethod cashMethod = new PaymentMethod();
         cashMethod.setCode("CASH");
 
         // 3. Setup Plata
@@ -226,6 +231,25 @@ class ReceiptServiceTest {
         assertEquals("ERROR.RECEIPT.INCOMPLETE_PAYMENT", ex.getMessage());
     }
 
+    // NOU: Validare Catering
+    @Test
+    @DisplayName("closeReceipt - Eroare: Catering fără preț achiziție")
+    void closeReceipt_Fail_CateringPrice() {
+        Product cateringProduct = new Product();
+        ProductType type = new ProductType();
+        type.setCode("CATERING");
+        cateringProduct.setProductType(type);
+        cateringProduct.setPurchasePrice(null); 
+
+        ReceiptItem item = ReceiptItem.builder().product(cateringProduct).quantity(BigDecimal.ONE).build();
+        receipt.setItems(List.of(item));
+
+        when(receiptRepository.findById(100)).thenReturn(Optional.of(receipt));
+
+        RuntimeException ex = assertThrows(RuntimeException.class, () -> receiptService.closeReceipt(100));
+        assertEquals("ERROR.CATERING.PURCHASE_PRICE_NULL", ex.getMessage());
+    }
+
     // --- 5. updateReceiptTotals ---
     @Test
     @DisplayName("updateReceiptTotals - Succes: Recalculează corect")
@@ -257,7 +281,7 @@ class ReceiptServiceTest {
                 .lineTotal(new BigDecimal("100.00"))
                 .netTotal(new BigDecimal("80.00"))
                 .vatTotal(new BigDecimal("20.00"))
-                .product(new com.sellbit.domain.catalog.product.Product())
+                .product(new Product())
                 .build();
                 
         originalItem.getProduct().setId(10);
@@ -369,12 +393,12 @@ class ReceiptServiceTest {
         verify(receiptRepository).findByWarehouseIdAndStatus_CodeAndClosedAtBetween(eq(warehouseId), eq(status), any(), any());
     }
     
- // --- 10. closeReceipt - Scenarii FIFO ---
+    // --- 10. closeReceipt - Scenarii FIFO ---
     @Test
     @DisplayName("closeReceipt - Succes: Verifică salvarea prețului de achiziție FIFO")
     void closeReceipt_Success_FIFO() {
         ReceiptItem item = ReceiptItem.builder()
-                .product(new com.sellbit.domain.catalog.product.Product())
+                .product(new Product())
                 .quantity(new BigDecimal("2.00"))
                 .build();
         item.getProduct().setId(5);
@@ -398,7 +422,7 @@ class ReceiptServiceTest {
     void createPartialRefund_Success_Card() {
         receipt.setStatus(closedStatus);
         ReceiptItem item = ReceiptItem.builder().id(1).quantity(BigDecimal.ONE).unitPrice(BigDecimal.TEN).vatRate(BigDecimal.ZERO)
-                .product(new com.sellbit.domain.catalog.product.Product()).build();
+                .product(new Product()).build();
         item.getProduct().setId(1);
         receipt.setItems(List.of(item));
 
@@ -413,7 +437,6 @@ class ReceiptServiceTest {
 
         receiptService.createPartialRefund(100, new ReceiptDTOs.RefundRequest(1, List.of(new ReceiptDTOs.RefundItemRequest(1, BigDecimal.ONE)),1));
 
-        // Am înlocuit anyInt() cu eq(1) (userId din request)
         verify(cashMovementService).createMovement(eq(1), eq("REFUND_CARD"), any(BigDecimal.class), eq(1), anyString());
     }
 
@@ -479,5 +502,58 @@ class ReceiptServiceTest {
     void getBillNoteData_Fail_Store() {
         when(storeRepository.getSettings()).thenReturn(Optional.empty());
         assertThrows(RuntimeException.class, () -> receiptService.getBillNoteData(100));
+    }
+
+    // NOU: Teste Avans (lipseau din clasa veche)
+    @Test
+    @DisplayName("registerAdvancePayment - Succes: Flux complet")
+    void registerAdvancePayment_Success() {
+        Integer warehouseId = 1;
+        BigDecimal amount = new BigDecimal("119.00");
+        String pmCode = "CASH";
+        Integer userId = 5;
+
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(new User()));
+        
+        Product advanceProd = new Product();
+        VatRate vat = new VatRate();
+        vat.setRate(new BigDecimal("19.00"));
+        advanceProd.setVatRate(vat);
+        
+        when(productRepository.findByProductTypeCode("ADVANCE")).thenReturn(List.of(advanceProd));
+        
+        when(statusRepository.findByCode("CLOSED")).thenReturn(Optional.of(closedStatus));
+        when(paymentMethodRepository.findByCode(pmCode)).thenReturn(Optional.of(new PaymentMethod()));
+
+        when(receiptRepository.save(any(Receipt.class))).thenAnswer(i -> {
+            Receipt r = i.getArgument(0);
+            r.setId(777);
+            return r;
+        });
+
+        receiptService.registerAdvancePayment(warehouseId, amount, pmCode, userId);
+
+        verify(receiptRepository).save(argThat(r -> 
+            r.getStatus().getCode().equals("CLOSED") &&
+            r.getTotalAmount().compareTo(amount) == 0 &&
+            r.getTotalNet().compareTo(new BigDecimal("100.00")) == 0
+        ));
+
+        verify(itemRepository).save(any(ReceiptItem.class));
+        verify(paymentRepository).save(any(ReceiptPayment.class));
+        verify(cashMovementService).createMovement(eq(warehouseId), eq("SALE"), eq(amount), eq(userId), anyString());
+    }
+
+    @Test
+    @DisplayName("registerAdvancePayment - Eroare: Produs Avans neconfigurat")
+    void registerAdvancePayment_Fail_NoProduct() {
+        when(warehouseRepository.findById(1)).thenReturn(Optional.of(warehouse));
+        when(userRepository.findById(1)).thenReturn(Optional.of(new User()));
+        when(productRepository.findByProductTypeCode("ADVANCE")).thenReturn(List.of()); 
+
+        assertThrows(RuntimeException.class, () -> 
+            receiptService.registerAdvancePayment(1, BigDecimal.TEN, "CASH", 1)
+        );
     }
 }

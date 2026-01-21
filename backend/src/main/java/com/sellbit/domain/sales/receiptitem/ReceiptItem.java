@@ -50,10 +50,10 @@ public class ReceiptItem {
     @Column(name = "vat_total", precision = 10, scale = 2)
     private BigDecimal vatTotal;
 
-    @Column(name = "service_end_at")
+    @Column(name = "service_end_at") //Data de finalizare a serviciului cu timp asociat
     private LocalDateTime serviceEndAt;
 
     @Builder.Default
-    @Column(name = "is_service_time")
+    @Column(name = "is_service_time") //Indicativ produs cu timp asociat
     private boolean isServiceTime = false;
 }

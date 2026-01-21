@@ -16,6 +16,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -141,5 +142,77 @@ class ReceiptPaymentServiceTest {
         assertEquals(1, result.size());
         assertEquals("Numerar", result.get(0).paymentMethodName());
         assertTrue(new BigDecimal("20.00").compareTo(result.get(0).amount()) == 0);
+    }
+
+    // --- Teste getPaymentsReport ---
+
+    @Test
+    @DisplayName("getPaymentsReport - Succes: Calculează totalul pentru o metodă specifică")
+    void getPaymentsReport_Success_WithMethod() {
+        // Arrange
+        LocalDateTime start = LocalDateTime.now().minusDays(1);
+        LocalDateTime end = LocalDateTime.now();
+        String method = "CASH";
+        BigDecimal expectedTotal = new BigDecimal("1100.00");
+
+        when(paymentRepository.calculatePaymentsSum(start, end, method)).thenReturn(expectedTotal);
+
+        // Act
+        ReceiptPaymentDTO.ReportResponse result = paymentService.getPaymentsReport(start, end, method);
+
+        // Assert
+        assertNotNull(result);
+        assertEquals(expectedTotal, result.totalAmount());
+        assertEquals("CASH", result.methodCode());
+        assertEquals(start, result.start());
+        assertEquals(end, result.end());
+        verify(paymentRepository).calculatePaymentsSum(start, end, method);
+    }
+
+    @Test
+    @DisplayName("getPaymentsReport - Succes: Returnează total general când metoda este null")
+    void getPaymentsReport_Success_AllMethods() {
+        // Arrange
+        LocalDateTime start = LocalDateTime.now().minusDays(1);
+        LocalDateTime end = LocalDateTime.now();
+        when(paymentRepository.calculatePaymentsSum(start, end, null)).thenReturn(new BigDecimal("2000.00"));
+
+        // Act
+        var result = paymentService.getPaymentsReport(start, end, null);
+
+        // Assert
+        assertEquals(new BigDecimal("2000.00"), result.totalAmount());
+        assertNull(result.methodCode());
+    }
+
+    @Test
+    @DisplayName("getPaymentsReport - Caz Limită: Interval de timp inversat (start după end)")
+    void getPaymentsReport_StartAfterEnd_ReturnsZero() {
+        // Arrange
+        LocalDateTime start = LocalDateTime.now().plusDays(1);
+        LocalDateTime end = LocalDateTime.now();
+        // Repository va returna 0 datorită clauzei BETWEEN care nu va găsi nimic
+        when(paymentRepository.calculatePaymentsSum(start, end, null)).thenReturn(BigDecimal.ZERO);
+
+        // Act
+        var result = paymentService.getPaymentsReport(start, end, null);
+
+        // Assert
+        assertEquals(BigDecimal.ZERO, result.totalAmount());
+        verify(paymentRepository).calculatePaymentsSum(start, end, null);
+    }
+
+    @Test
+    @DisplayName("getPaymentsReport - Caz Limită: Metodă de plată inexistentă")
+    void getPaymentsReport_InvalidMethod_ReturnsZero() {
+        // Arrange
+        String invalidMethod = "NON_EXISTENT";
+        when(paymentRepository.calculatePaymentsSum(any(), any(), eq(invalidMethod))).thenReturn(BigDecimal.ZERO);
+
+        // Act
+        var result = paymentService.getPaymentsReport(LocalDateTime.now(), LocalDateTime.now(), invalidMethod);
+
+        // Assert
+        assertEquals(BigDecimal.ZERO, result.totalAmount());
     }
 }

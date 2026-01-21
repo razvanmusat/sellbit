@@ -2,8 +2,6 @@ package com.sellbit.domain.catering.cateringorder;
 
 import com.sellbit.domain.catalog.product.Product;
 import com.sellbit.domain.catalog.product.ProductRepository;
-import com.sellbit.domain.catering.cateringmenu.CateringMenu;
-import com.sellbit.domain.catering.cateringmenu.CateringMenuRepository;
 import com.sellbit.domain.playground.PlaygroundReservationRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -26,27 +24,28 @@ import static org.mockito.Mockito.*;
 class CateringOrderServiceTest {
 
     @Mock private CateringOrderRepository orderRepository;
-    @Mock private CateringMenuRepository menuRepository;
     @Mock private PlaygroundReservationRepository reservationRepository;
-    @Mock private ProductRepository productRepository; // Adăugat: necesar pentru mapToResponse
+    @Mock private ProductRepository productRepository;
 
     @InjectMocks private CateringOrderService orderService;
 
-    private CateringMenu menu;
     private Product product;
 
     @BeforeEach
     void setUp() {
-        product = Product.builder().id(50).name("Pizza Test").build();
-        menu = CateringMenu.builder().id(10).productId(50).build();
+        // Folosesc Builder-ul entității Product (presupunând că ai Lombok @Builder pe ea, conform structurii tale)
+        product = Product.builder()
+                .id(50)
+                .name("Pizza Test")
+                .build();
     }
 
     @Test
     @DisplayName("createOrder: Succes bar (fără rezervare, forțează data azi)")
     void createOrder_BarOrder_Success() {
-        var req = new CateringOrderDTOs.CreateOrderRequest(10, null, 2, LocalDate.now().plusDays(5));
+        // CreateOrderRequest(Integer productId, Integer reservationId, Integer quantity, LocalDate orderDate)
+        var req = new CateringOrderDTOs.CreateOrderRequest(50, null, 2, LocalDate.now().plusDays(5));
 
-        when(menuRepository.findById(10)).thenReturn(Optional.of(menu));
         when(productRepository.findById(50)).thenReturn(Optional.of(product));
         when(orderRepository.save(any(CateringOrder.class))).thenAnswer(i -> {
             CateringOrder o = i.getArgument(0);
@@ -57,19 +56,24 @@ class CateringOrderServiceTest {
         var result = orderService.createOrder(req);
 
         assertEquals(LocalDate.now(), result.orderDate());
-        assertEquals("Pizza Test", result.menuName());
+        assertEquals(50, result.productId());
+        assertEquals("Pizza Test", result.productName());
     }
 
     @Test
     @DisplayName("updateOrder: Succes editare comandă viitoare")
     void updateOrder_FutureDate_Success() {
-        var existing = CateringOrder.builder().id(1).menu(menu).orderDate(LocalDate.now().plusDays(1)).build();
-        var req = new CateringOrderDTOs.CreateOrderRequest(10, null, 15, LocalDate.now().plusDays(1));
+        var existing = CateringOrder.builder()
+                .id(1)
+                .product(product)
+                .orderDate(LocalDate.now().plusDays(1))
+                .build();
+        
+        var req = new CateringOrderDTOs.CreateOrderRequest(50, null, 15, LocalDate.now().plusDays(1));
 
         when(orderRepository.findById(1)).thenReturn(Optional.of(existing));
-        when(menuRepository.findById(10)).thenReturn(Optional.of(menu));
         when(productRepository.findById(50)).thenReturn(Optional.of(product));
-        when(orderRepository.save(any())).thenReturn(existing);
+        when(orderRepository.save(any(CateringOrder.class))).thenReturn(existing);
 
         var result = orderService.updateOrder(1, req);
 
@@ -80,8 +84,12 @@ class CateringOrderServiceTest {
     @Test
     @DisplayName("updateOrder: Eroare la editarea unei comenzi din trecut")
     void updateOrder_PastDate_ThrowsException() {
-        var pastOrder = CateringOrder.builder().id(1).orderDate(LocalDate.now().minusDays(1)).build();
-        var req = new CateringOrderDTOs.CreateOrderRequest(10, null, 1, LocalDate.now());
+        var pastOrder = CateringOrder.builder()
+                .id(1)
+                .orderDate(LocalDate.now().minusDays(1))
+                .build();
+        
+        var req = new CateringOrderDTOs.CreateOrderRequest(50, null, 1, LocalDate.now());
 
         when(orderRepository.findById(1)).thenReturn(Optional.of(pastOrder));
 
@@ -93,7 +101,9 @@ class CateringOrderServiceTest {
     @DisplayName("processBulkPayment: Execută plata bulk corect")
     void processBulkPayment_Success() {
         var req = new CateringOrderDTOs.BulkPayRequest(List.of(1, 2));
+        
         orderService.processBulkPayment(req);
+        
         verify(orderRepository).markAsPaidBulk(eq(List.of(1, 2)), any(LocalDateTime.class));
     }
 }

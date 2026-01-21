@@ -2,6 +2,7 @@ package com.sellbit.domain.sales.receiptitem;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDateTime;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
@@ -9,7 +10,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.sellbit.domain.catalog.product.Product;
 import com.sellbit.domain.catalog.product.ProductRepository;
-import com.sellbit.domain.catalog.productcomposite.ProductComponentRepository;
 import com.sellbit.domain.inventory.purchase.PurchaseService;
 import com.sellbit.domain.inventory.stockcurrent.StockCurrentService;
 import com.sellbit.domain.sales.receipt.Receipt;
@@ -30,7 +30,6 @@ public class ReceiptItemService {
     private final StockCurrentService stockCurrentService;
     private final ReceiptService receiptService;
     private final PurchaseService purchaseService;
-    private final ProductComponentRepository productComponentRepository;
 
     /**
      * Adaugă sau actualizează un produs și returnează totalurile noi ale bonului.
@@ -53,19 +52,10 @@ public class ReceiptItemService {
                 .orElse(null);
 
         BigDecimal oldQty = (item != null) ? item.getQuantity() : BigDecimal.ZERO;
-      
-        BigDecimal currentPurchasePrice;
-        
-     // Verificăm dacă este produs compus (are rețetă)
-        boolean isComposite = !productComponentRepository.findByParentProductIdAndIsActiveTrue(productId).isEmpty();
-        
-        if (Boolean.TRUE.equals(product.getTrackStock()) || isComposite) {
-            // Dacă urmărim stocul SAU dacă este compus, cerem prețul de la PurchaseService
-            // PurchaseService știe deja să calculeze suma componentelor (modificarea anterioară)
-            currentPurchasePrice = purchaseService.getCurrentFIFOPurchasePrice(receipt.getWarehouse().getId(), productId);
-        } else {
-            currentPurchasePrice = BigDecimal.ZERO;
-        }
+
+        BigDecimal currentPurchasePrice = purchaseService.getCurrentFIFOPurchasePrice(
+                receipt.getWarehouse().getId(),
+                productId);
 
         if (item == null) {
             item = ReceiptItem.builder()
@@ -73,7 +63,7 @@ public class ReceiptItemService {
                     .product(product)
                     .quantity(BigDecimal.ZERO)
                     .unitPrice(product.getSalePrice())
-                    .purchaseUnitPrice(currentPurchasePrice)
+                    .purchaseUnitPrice(currentPurchasePrice) // Prețul corect calculat mai sus
                     .vatRate(product.getVatRate() != null ? product.getVatRate().getRate() : BigDecimal.ZERO)
                     .isServiceTime(Boolean.FALSE.equals(product.getTrackStock()))
                     .build();
@@ -86,7 +76,9 @@ public class ReceiptItemService {
         calculateLineTotals(item);
         itemRepository.save(item);
 
+        // Sincronizare stoc (Scădere pentru vânzare)
         stockCurrentService.syncStockFromReceiptChange(receipt.getWarehouse().getId(), productId, oldQty, quantity);
+
         receiptService.updateReceiptTotals(receiptId);
 
         return receiptService.mapToResponse(receipt);
@@ -99,22 +91,21 @@ public class ReceiptItemService {
     public ReceiptDTOs.Response removeItem(Integer itemId) {
         ReceiptItem item = itemRepository.findById(itemId)
                 .orElseThrow(() -> new RuntimeException("ERROR.ITEM.NOT_FOUND"));
-        
+
         Receipt receipt = item.getReceipt();
-        
+
         if (!"OPEN".equals(receipt.getStatus().getCode())) {
             throw new RuntimeException("ERROR.RECEIPT.NOT_OPEN");
         }
-        
+
         stockCurrentService.syncStockFromReceiptChange(
                 receipt.getWarehouse().getId(),
                 item.getProduct().getId(),
                 item.getQuantity(),
-                BigDecimal.ZERO
-        );
+                BigDecimal.ZERO);
 
         itemRepository.delete(item);
-        
+
         // Sincronizăm header-ul după ștergere
         receiptService.updateReceiptTotals(receipt.getId());
 
@@ -123,11 +114,10 @@ public class ReceiptItemService {
 
     private void calculateLineTotals(ReceiptItem item) {
         BigDecimal total = item.getUnitPrice().multiply(item.getQuantity());
-        
+
         BigDecimal vatDivisor = BigDecimal.ONE.add(
-                item.getVatRate().divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP)
-        );
-        
+                item.getVatRate().divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP));
+
         BigDecimal net = total.divide(vatDivisor, 2, RoundingMode.HALF_UP);
         BigDecimal vat = total.subtract(net);
 
@@ -135,7 +125,7 @@ public class ReceiptItemService {
         item.setNetTotal(net);
         item.setVatTotal(vat);
     }
-    
+
     /**
      * Returnează lista de produse de pe un bon, mapată la DTO.
      */
@@ -145,7 +135,13 @@ public class ReceiptItemService {
                 .map(this::mapToItemResponse)
                 .toList();
     }
-    
+
+    @Transactional(readOnly = true)
+    public List<ReceiptItemDTO.QuantityReportResponse> getProductsQuantityReport(LocalDateTime start, LocalDateTime end,
+            List<Integer> productIds) {
+        return itemRepository.getProductsQuantityReport(start, end, productIds);
+    }
+
     public ReceiptItemResponse mapToItemResponse(ReceiptItem item) {
         return new ReceiptItemResponse(
                 item.getId(),
@@ -156,7 +152,6 @@ public class ReceiptItemService {
                 item.getVatRate(),
                 item.getLineTotal(),
                 item.getNetTotal(),
-                item.getVatTotal()
-        );
+                item.getVatTotal());
     }
 }

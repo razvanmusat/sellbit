@@ -9,13 +9,13 @@ import java.util.Optional;
 
 @Repository
 public interface UserRepository extends JpaRepository<User, Integer> {
-    
+
     @Query("SELECT u FROM User u JOIN FETCH u.role WHERE u.username = :username")
     Optional<User> findByUsername(@Param("username") String username);
-    
+
     @Query("SELECT u FROM User u JOIN FETCH u.role WHERE u.isActive = true")
     List<User> findAllByIsActiveTrue();
-    
+
     @Query("SELECT u FROM User u JOIN FETCH u.role WHERE u.isActive = false")
     List<User> findAllByIsActiveFalse();
 
@@ -24,4 +24,7 @@ public interface UserRepository extends JpaRepository<User, Integer> {
     long countByRole_AuthorityLevelAndIsActiveTrue(Integer authorityLevel);
 
     boolean existsByRole_IdAndIsActiveTrue(Integer id);
+
+    @Query("SELECT u FROM User u JOIN FETCH u.role WHERE u.role.code = :roleCode AND u.isActive = true")
+    List<User> findByRoleCodeAndIsActiveTrue(@Param("roleCode") String roleCode);
 }

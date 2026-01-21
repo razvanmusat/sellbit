@@ -39,6 +39,7 @@ class SecurityConfig {
         return http.build();
     }
 
+    //de schimbat in productie http://localhost:5173 cu https://domeniu.ro
     @Bean
     CorsFilter corsFilter() {
         final UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

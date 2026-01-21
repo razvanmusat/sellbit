@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -33,6 +34,9 @@ class CashMovementControllerTest {
     
     @MockitoBean 
     private CashMovementRepository cashMovementRepository;
+
+    @MockitoBean
+    private PasswordEncoder passwordEncoder;
 
     // Mock-uri obligatorii pentru a trece de filtrul de securitate
     @MockitoBean

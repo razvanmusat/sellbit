@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.userdetails.UserDetailsService; // Import necesar
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -43,6 +44,9 @@ class PlaygroundReservationControllerTest {
 
     @MockitoBean
     private UserDetailsService userDetailsService;
+
+    @MockitoBean
+    private PasswordEncoder passwordEncoder;   
 
     private final LocalDateTime start = LocalDateTime.of(2026, 1, 10, 14, 0);
     private final LocalDateTime end = LocalDateTime.of(2026, 1, 10, 17, 0);

@@ -161,6 +161,7 @@ CREATE TABLE products (
     product_type_id INT NOT NULL REFERENCES product_types(id),
     unit_id INT NOT NULL REFERENCES units_of_measure(id),
     sale_price DECIMAL(10, 2),
+    purchase_price DECIMAL(10, 2),
     vat_rate_id INT REFERENCES vat_rates(id),
     track_stock BOOLEAN DEFAULT TRUE,
     is_active BOOLEAN DEFAULT TRUE,
@@ -317,19 +318,9 @@ CREATE TABLE customer_vouchers (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
--- Corectat catering_menus pentru a avea legătură cu products (conform DBML)
-CREATE TABLE catering_menus (
-    id SERIAL PRIMARY KEY,
-    product_id INT NOT NULL UNIQUE REFERENCES products(id),
-    purchase_price DECIMAL(10,2) NOT NULL,
-    is_active BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW()
-);
-
 CREATE TABLE catering_orders (
     id SERIAL PRIMARY KEY,
-    menu_id INT NOT NULL REFERENCES catering_menus(id),
+    product_id INT NOT NULL REFERENCES products(id),
     reservation_id INT REFERENCES playground_reservations(id) ON DELETE CASCADE,
     quantity INT NOT NULL,
     order_date DATE NOT NULL,
@@ -345,3 +336,5 @@ CREATE INDEX idx_receipts_warehouse ON receipts(warehouse_id);
 CREATE INDEX idx_receipts_created ON receipts(created_at);
 CREATE INDEX idx_stock_current_product ON stock_current(product_id);
 CREATE INDEX idx_customer_vouchers_code ON customer_vouchers(code);
+ALTER TABLE voucher_campaigns ADD CONSTRAINT fk_vc_required_product FOREIGN KEY (required_product_id) REFERENCES products(id);
+ALTER TABLE voucher_campaigns ADD CONSTRAINT fk_vc_applicable_product FOREIGN KEY (applicable_product_id) REFERENCES products(id);

@@ -2,7 +2,7 @@ package com.sellbit.domain.inventory.purchase;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.*;
 
 import java.math.BigDecimal;
@@ -22,6 +22,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.sellbit.domain.catalog.product.Product;
 import com.sellbit.domain.catalog.product.ProductRepository;
 import com.sellbit.domain.catalog.productcomposite.ProductComponentRepository;
+import com.sellbit.domain.inventory.stockcurrent.StockCurrentRepository;
 import com.sellbit.domain.inventory.stockcurrent.StockCurrentService;
 import com.sellbit.domain.inventory.warehouse.Warehouse;
 import com.sellbit.domain.inventory.warehouse.WarehouseRepository;
@@ -31,15 +32,24 @@ import com.sellbit.domain.security.user.UserRepository;
 @ExtendWith(MockitoExtension.class)
 class PurchaseServiceTest {
 
-    @Mock private PurchaseRepository purchaseRepository;
-    @Mock private ProductRepository productRepository;
-    @Mock private WarehouseRepository warehouseRepository;
-    @Mock private UserRepository userRepository;
-    @Mock private StockCurrentService stockCurrentService;
-    @Mock private ProductComponentRepository productComponentRepository; // Adăugat pentru a fixa NPE
+    @Mock
+    private PurchaseRepository purchaseRepository;
+    @Mock
+    private ProductRepository productRepository;
+    @Mock
+    private WarehouseRepository warehouseRepository;
+    @Mock
+    private UserRepository userRepository;
+    @Mock
+    private StockCurrentService stockCurrentService;
+    @Mock
+    private ProductComponentRepository productComponentRepository; // Adăugat pentru a fixa NPE
 
     @InjectMocks
     private PurchaseService purchaseService;
+
+    @Mock
+    private StockCurrentRepository stockCurrentRepository;
 
     private User mockUser;
     private Product mockProduct;
@@ -57,17 +67,22 @@ class PurchaseServiceTest {
     @Test
     @DisplayName("Succes: Procesare bulk purchase corectă și actualizare stoc")
     void processBulkPurchase_Success() {
-        PurchaseDTOs.CreateItem item = new PurchaseDTOs.CreateItem(10, 5, new BigDecimal("10.000"), new BigDecimal("50.00"), null, "Nota test");
+        PurchaseDTOs.CreateItem item = new PurchaseDTOs.CreateItem(10, 5, new BigDecimal("10.000"),
+                new BigDecimal("50.00"), null, "Nota test");
         PurchaseDTOs.BulkCreate request = new PurchaseDTOs.BulkCreate(1, List.of(item));
+
+        mockProduct.setTrackStock(true);
 
         when(userRepository.findById(1)).thenReturn(Optional.of(mockUser));
         when(productRepository.findById(10)).thenReturn(Optional.of(mockProduct));
         when(warehouseRepository.findById(5)).thenReturn(Optional.of(mockWarehouse));
+        when(stockCurrentRepository.findById(any())).thenReturn(Optional.empty());
 
         purchaseService.processBulkPurchase(request);
 
         verify(purchaseRepository, times(1)).save(any(Purchase.class));
-        verify(stockCurrentService, times(1)).updateStockRelative(eq(5), eq(10), eq(new BigDecimal("10.000")));
+        verify(stockCurrentRepository, times(1))
+                .save(any(com.sellbit.domain.inventory.stockcurrent.StockCurrent.class));
     }
 
     @Test
@@ -76,7 +91,8 @@ class PurchaseServiceTest {
         PurchaseDTOs.BulkCreate request = new PurchaseDTOs.BulkCreate(99, List.of());
         when(userRepository.findById(99)).thenReturn(Optional.empty());
 
-        RuntimeException exception = assertThrows(RuntimeException.class, () -> purchaseService.processBulkPurchase(request));
+        RuntimeException exception = assertThrows(RuntimeException.class,
+                () -> purchaseService.processBulkPurchase(request));
         assertEquals("ERROR.USER.NOT_FOUND", exception.getMessage());
     }
 
@@ -99,12 +115,12 @@ class PurchaseServiceTest {
     void deductFromBatchesFIFO_MultipleBatches() {
         Purchase batch1 = Purchase.builder().id(1).remainingQuantity(new BigDecimal("5.000")).build();
         Purchase batch2 = Purchase.builder().id(2).remainingQuantity(new BigDecimal("10.000")).build();
-        
+
         // Adăugat: Serviciul are nevoie de produs pentru a valida operațiunea
         when(productRepository.findById(10)).thenReturn(Optional.of(mockProduct));
-        
+
         when(purchaseRepository.findActiveBatchesFIFO(5, 10)).thenReturn(List.of(batch1, batch2));
-        
+
         // Mock pentru a evita NPE (deja adăugat anterior)
         when(productComponentRepository.findByParentProductIdAndIsActiveTrue(10)).thenReturn(new ArrayList<>());
 
@@ -135,11 +151,9 @@ class PurchaseServiceTest {
 
         purchaseService.createVirtualReturnBatch(5, 10, 1, BigDecimal.TEN, "Test Reason");
 
-        verify(purchaseRepository).save(argThat(p -> 
-            p.getNote().contains("VIRTUAL_IN") && 
-            p.getPurchasedAt().getYear() == 1970 &&
-            p.getRemainingQuantity().equals(BigDecimal.TEN)
-        ));
+        verify(purchaseRepository).save(argThat(p -> p.getNote().contains("VIRTUAL_IN") &&
+                p.getPurchasedAt().getYear() == 1970 &&
+                p.getRemainingQuantity().equals(BigDecimal.TEN)));
     }
 
     // --- TESTE: Rapoarte și Alerte ---
@@ -168,7 +182,7 @@ class PurchaseServiceTest {
                 .remainingQuantity(BigDecimal.ONE)
                 .expirationDate(expiry)
                 .build();
-        
+
         when(purchaseRepository.findExpiringBatches(any())).thenReturn(List.of(p));
 
         List<PurchaseDTOs.ExpirationAlert> alerts = purchaseService.getExpirationAlerts(15);

@@ -10,19 +10,22 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface VoucherCampaignRepository extends JpaRepository<VoucherCampaign, Integer> {
-    
+
     // Pentru logica de business (emitere)
-	@Query("SELECT v FROM VoucherCampaign v WHERE v.active = true AND :today BETWEEN v.validFromDate AND v.validUntilDate")
+    @Query("SELECT v FROM VoucherCampaign v WHERE v.active = true AND :today BETWEEN v.validFromDate AND v.validUntilDate")
     List<VoucherCampaign> findAllActive(LocalDate today);
 
     // Pentru Admin UI (filtrare stare)
     List<VoucherCampaign> findAllByActiveTrue();
+
     List<VoucherCampaign> findAllByActiveFalse();
-    
+
     @Query("SELECT DISTINCT vc.prefix FROM VoucherCampaign vc " +
-    	       "WHERE vc.active = true " +
-    	       "AND vc.validFromDate <= :today " +
-    	       "AND vc.validUntilDate >= :today " +
-    	       "AND vc.prefix IS NOT NULL")
-    	List<String> findActivePrefixes(@Param("today") java.time.LocalDate today);
+            "WHERE vc.active = true " +
+            "AND vc.validFromDate <= :today " +
+            "AND vc.validUntilDate >= :today " +
+            "AND vc.prefix IS NOT NULL")
+    List<String> findActivePrefixes(@Param("today") java.time.LocalDate today);
+
+    boolean existsByPrefixAndActiveTrue(String prefix);
 }

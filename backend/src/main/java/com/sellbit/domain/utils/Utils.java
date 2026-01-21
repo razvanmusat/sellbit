@@ -1,11 +1,15 @@
 package com.sellbit.domain.utils;
 
+import java.security.SecureRandom;
 import java.text.Normalizer;
 import java.util.Arrays;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 public class Utils {
+
+    private static final String TEMP_CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    private static final SecureRandom RANDOM = new SecureRandom();
 
     // Minim 6 caractere, litera mica, litera mare, semn punctiatie, cifra
     private static final String PASSWORD_PATTERN = 
@@ -66,5 +70,13 @@ public class Utils {
 
         // 2. Verificare strictă pentru România (07... + încă 8 cifre = 10 total)
         return cleanPhone.matches("^07[0-9]{8}$");
+    }
+
+    public static String generateTempPassword() {
+        StringBuilder sb = new StringBuilder(4);
+        for (int i = 0; i < 4; i++) {
+            sb.append(TEMP_CHARS.charAt(RANDOM.nextInt(TEMP_CHARS.length())));
+        }
+        return sb.toString();
     }
 }

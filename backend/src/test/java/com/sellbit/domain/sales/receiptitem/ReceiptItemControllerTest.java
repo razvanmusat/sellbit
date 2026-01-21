@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -35,6 +36,9 @@ class ReceiptItemControllerTest {
 
     @MockitoBean 
     private UserDetailsService userDetailsService;
+
+    @MockitoBean
+    private PasswordEncoder passwordEncoder;   
 
     // --- POST /api/sales/receipt-items/sync ---
 
@@ -100,5 +104,55 @@ class ReceiptItemControllerTest {
     void getItems_Fail_WrongPath() throws Exception {
         mockMvc.perform(get("/api/sales/receipt-items/receipt/")) // Lipsește ID-ul în URL
                 .andExpect(status().isNotFound());
+    }
+
+    // --- GET /api/sales/receipt-items/report/quantity ---
+
+    @Test
+    @DisplayName("GET /report/quantity - Succes: Returnează lista de produse")
+    void getQuantityReport_Success() throws Exception {
+        var reportLine = new ReceiptItemDTO.QuantityReportResponse(
+                "Produs Test", new BigDecimal("10.00"), new BigDecimal("100.00"));
+
+        when(receiptItemService.getProductsQuantityReport(any(), any(), any()))
+                .thenReturn(List.of(reportLine));
+
+        mockMvc.perform(get("/api/sales/receipt-items/report/quantity")
+                .param("start", "2026-01-01T00:00:00")
+                .param("end", "2026-01-31T23:59:59"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].productName").value("Produs Test"))
+                .andExpect(jsonPath("$[0].totalQuantity").value(10.00))
+                .andExpect(jsonPath("$[0].totalAmount").value(100.00));
+    }
+
+    @Test
+    @DisplayName("GET /report/quantity - Succes: Filtrare după multiple ID-uri")
+    void getQuantityReport_WithIds_Success() throws Exception {
+        when(receiptItemService.getProductsQuantityReport(any(), any(), any()))
+                .thenReturn(List.of());
+
+        mockMvc.perform(get("/api/sales/receipt-items/report/quantity")
+                .param("start", "2026-01-01T00:00:00")
+                .param("end", "2026-01-31T23:59:59")
+                .param("productIds", "17,18,19")) // Testăm că acceptă listă de ID-uri
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("GET /report/quantity - Fail: Dată formatată greșit")
+    void getQuantityReport_Fail_InvalidDate() throws Exception {
+        mockMvc.perform(get("/api/sales/receipt-items/report/quantity")
+                .param("start", "2026/01/01") // Format non-ISO
+                .param("end", "2026-01-31T23:59:59"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("GET /report/quantity - Fail: Lipsă parametru obligatoriu 'end'")
+    void getQuantityReport_Fail_MissingEnd() throws Exception {
+        mockMvc.perform(get("/api/sales/receipt-items/report/quantity")
+                .param("start", "2026-01-01T00:00:00"))
+                .andExpect(status().isBadRequest());
     }
 }

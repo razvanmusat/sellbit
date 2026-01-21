@@ -29,41 +29,49 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             @NonNull HttpServletResponse response,
             @NonNull FilterChain filterChain
     ) throws ServletException, IOException {
-        
+
         final String authHeader = request.getHeader("Authorization");
         final String jwt;
         final String username;
 
-        // 1. Dacă nu avem header-ul corect, mergem la următorul filtru (Spring va bloca cererea mai târziu dacă e cazul)
+        // 1. Dacă nu avem header sau nu începe cu Bearer, trecem direct la următorul filtru
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        // 2. Extragem token-ul (sărim peste "Bearer ")
         jwt = authHeader.substring(7);
-        username = jwtUtils.extractUsername(jwt);
 
-        // 3. Dacă avem username și utilizatorul nu este deja autentificat în sesiune
-        if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-            UserDetails userDetails = this.userDetailsService.loadUserByUsername(username);
-            
-            // 4. Dacă token-ul este valid (nu e expirat și aparține utilizatorului)
-            if (jwtUtils.isTokenValid(jwt, userDetails)) {
-                UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
-                        userDetails,
-                        null,
-                        userDetails.getAuthorities()
-                );
+        try {
+            // 2. Încercăm să extragem username-ul. 
+            // Dacă token-ul este expirat, Jwts va arunca ExpiredJwtException aici.
+            username = jwtUtils.extractUsername(jwt);
+
+            // 3. Dacă avem username și nu suntem deja autentificați
+            if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+                UserDetails userDetails = this.userDetailsService.loadUserByUsername(username);
                 
-                authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                
-                // 5. Setăm utilizatorul în contextul global Spring Security
-                SecurityContextHolder.getContext().setAuthentication(authToken);
+                // 4. Verificăm validitatea (inclusiv data de expirare din nou, preventiv)
+                if (jwtUtils.isTokenValid(jwt, userDetails)) {
+                    UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
+                            userDetails,
+                            null,
+                            userDetails.getAuthorities()
+                    );
+                    authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                    
+                    // 5. Autentificăm utilizatorul în context
+                    SecurityContextHolder.getContext().setAuthentication(authToken);
+                }
             }
+        } catch (Exception e) {
+            // Dacă token-ul a expirat sau e invalid, prindem eroarea aici.
+            // NU aruncăm excepția mai departe, pentru a permite rutei de /login să proceseze cererea.
+            logger.warn("JWT validation failed: " + e.getMessage());
         }
-        
-        // 6. Continuăm execuția către controller
+
+        // 6. CONTINUĂM filtrul indiferent dacă token-ul a fost valid sau nu.
+        // Dacă e expirat, contextul rămâne gol, dar ruta de /login fiind permitAll va funcționa.
         filterChain.doFilter(request, response);
     }
 }

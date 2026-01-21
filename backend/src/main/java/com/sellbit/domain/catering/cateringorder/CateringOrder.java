@@ -7,7 +7,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
 
-import com.sellbit.domain.catering.cateringmenu.CateringMenu;
+import com.sellbit.domain.catalog.product.Product;
 import com.sellbit.domain.playground.PlaygroundReservation;
 
 import jakarta.persistence.Column;
@@ -35,8 +35,8 @@ public class CateringOrder {
     private Integer id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "menu_id", nullable = false)
-    private CateringMenu menu;
+    @JoinColumn(name = "product_id", nullable = false)
+    private Product product;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "reservation_id")

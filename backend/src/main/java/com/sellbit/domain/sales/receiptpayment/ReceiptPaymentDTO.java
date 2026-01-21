@@ -5,11 +5,18 @@ import java.time.LocalDateTime;
 
 public class ReceiptPaymentDTO {
 	public record Response(
-	        Integer id,
-	        Integer paymentMethodId,
-	        String paymentMethodName,
-	        String paymentMethodCode,
-	        BigDecimal amount,
-	        LocalDateTime paidAt
-	    ) {}
+			Integer id,
+			Integer paymentMethodId,
+			String paymentMethodName,
+			String paymentMethodCode,
+			BigDecimal amount,
+			LocalDateTime paidAt) {
+	}
+
+	public record ReportResponse(
+			BigDecimal totalAmount,
+			String methodCode,
+			LocalDateTime start,
+			LocalDateTime end) {
+	}
 }

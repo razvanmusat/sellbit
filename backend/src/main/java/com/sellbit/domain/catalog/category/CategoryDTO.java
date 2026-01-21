@@ -11,6 +11,7 @@ public record CategoryDTO(
 	    @NotBlank @Size(max = 100) String label,
 	    Integer parentId,
 	    Boolean isActive,
+		Boolean hasChildren,
 	    LocalDateTime createdAt,
 	    LocalDateTime updatedAt
 	) {}

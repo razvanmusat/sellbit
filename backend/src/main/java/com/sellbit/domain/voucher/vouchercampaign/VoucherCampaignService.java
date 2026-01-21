@@ -4,6 +4,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
+
+import com.sellbit.domain.catalog.product.ProductRepository;
+
 import jakarta.validation.Valid;
 
 import java.time.LocalDate;
@@ -16,7 +19,8 @@ import java.util.stream.Collectors;
 public class VoucherCampaignService {
 
     private final VoucherCampaignRepository repository;
-    
+    private final ProductRepository productRepository;
+
     @Transactional(readOnly = true)
     public List<String> getActivePrefixes(LocalDate today) {
         return repository.findActivePrefixes(today);
@@ -26,6 +30,37 @@ public class VoucherCampaignService {
     public VoucherCampaignDTOs.Response create(@Valid VoucherCampaignDTOs.Request request) {
         if (request.validUntilDate().isBefore(request.validFromDate())) {
             throw new RuntimeException("ERROR.VOUCHER_CAMPAIGN.INVALID_DATE_RANGE");
+        }
+
+        if (request.requiredProductId() != null) {
+            boolean exists = productRepository.existsById(request.requiredProductId());
+            if (!exists) {
+                throw new RuntimeException("ERROR.VOUCHER_CAMPAIGN.REQUIRED_PRODUCT_NOT_FOUND");
+            }
+        }
+
+        if (request.applicableProductId() != null) {
+            boolean exists = productRepository.existsById(request.applicableProductId());
+            if (!exists) {
+                throw new RuntimeException("ERROR.VOUCHER_CAMPAIGN.APPLICABLE_PRODUCT_NOT_FOUND");
+            }
+        }
+
+        if (request.discountValue() != null && request.discountValue().compareTo(java.math.BigDecimal.ZERO) < 0) {
+            throw new RuntimeException("ERROR.VOUCHER_CAMPAIGN.NEGATIVE_DISCOUNT");
+        }
+
+        if ("PERCENT".equals(request.discountType()) && request.discountValue() != null) {
+            if (request.discountValue().compareTo(new java.math.BigDecimal("100")) > 0) {
+                throw new RuntimeException("ERROR.VOUCHER_CAMPAIGN.PERCENT_OVER_100");
+            }
+        }
+
+        String finalPrefix = request.prefix() != null ? request.prefix() : "JOACA-";
+
+        // Verificăm dacă e deja folosit de o campanie activă
+        if (repository.existsByPrefixAndActiveTrue(finalPrefix)) {
+            throw new RuntimeException("ERROR.VOUCHER_CAMPAIGN.PREFIX_ALREADY_ACTIVE");
         }
 
         VoucherCampaign campaign = VoucherCampaign.builder()
@@ -75,7 +110,7 @@ public class VoucherCampaignService {
     public VoucherCampaignDTOs.Response toggleStatus(Integer id) {
         VoucherCampaign campaign = repository.findById(id)
                 .orElseThrow(() -> new RuntimeException("ERROR.VOUCHER_CAMPAIGN.NOT_FOUND"));
-        
+
         campaign.setActive(!campaign.getActive());
         VoucherCampaign updated = repository.save(campaign);
         return mapToResponse(updated);
@@ -92,7 +127,6 @@ public class VoucherCampaignService {
                 c.getDiscountValue(),
                 c.getApplicableDays(),
                 c.getRequiredProductId(),
-                c.getApplicableProductId()
-        );
+                c.getApplicableProductId());
     }
 }

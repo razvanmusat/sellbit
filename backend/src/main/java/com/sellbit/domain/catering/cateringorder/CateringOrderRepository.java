@@ -14,34 +14,16 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface CateringOrderRepository extends JpaRepository<CateringOrder, Integer> {
 
-    /**
-     * Returnează toate comenzile pentru o zi specifică.
-     * Folosit pentru Grid-ul de rezervări (pentru a vedea care are catering) 
-     * și pentru lista zilnică de livrări.
-     */
-	@Query("SELECT o FROM CateringOrder o " +
-	           "JOIN FETCH o.menu m " +
-	           "JOIN Product p ON m.productId = p.id " +
-	           "WHERE o.orderDate = :date " +
-	           "ORDER BY o.createdAt ASC")
-	    List<CateringOrder> findByOrderDateOrderByCreatedAtAsc(@Param("date") LocalDate date);
+    @Query("SELECT o FROM CateringOrder o " +
+           "JOIN FETCH o.product p " +
+           "WHERE o.orderDate = :date " +
+           "ORDER BY o.createdAt ASC")
+    List<CateringOrder> findByOrderDateOrderByCreatedAtAsc(@Param("date") LocalDate date);
 
-    /**
-     * Găsește toate comenzile neplătite către furnizor într-un interval de timp.
-     * Esențial pentru funcția de "Bulk Pay" a Adminului.
-     */
     List<CateringOrder> findByIsPaidFalseAndOrderDateBetweenOrderByOrderDateAsc(LocalDate start, LocalDate end);
 
-    /**
-     * Găsește o comandă specifică bazată pe rezervare.
-     * Utit pentru a preveni dublarea comenzilor pentru aceeași petrecere.
-     */
     Optional<CateringOrder> findByReservationId_Id(Integer reservationId);
 
-    /**
-     * Update bulk pentru marcarea plăților.
-     * Folosim o metodă optimizată pentru a nu face save() în buclă în Service.
-     */
     @Modifying
     @Query("UPDATE CateringOrder c SET c.isPaid = true, c.paidAt = :paidAt WHERE c.id IN :ids")
     void markAsPaidBulk(@Param("ids") List<Integer> ids, @Param("paidAt") LocalDateTime paidAt);

@@ -9,7 +9,7 @@ public class CateringOrderDTOs {
 
     public record CreateOrderRequest(
         @NotNull(message = "ERROR.CATERING_ORDER.MENU_REQUIRED")
-        Integer menuId,
+        Integer productId,
 
         Integer reservationId, // Nullable pentru bar
 
@@ -23,8 +23,8 @@ public class CateringOrderDTOs {
 
     public record OrderResponse(
         Integer id,
-        Integer menuId,
-        String menuName,
+        Integer productId,
+        String productName,
         Integer reservationId,
         Integer quantity,
         LocalDate orderDate,

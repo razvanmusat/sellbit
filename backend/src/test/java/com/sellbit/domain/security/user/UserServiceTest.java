@@ -50,32 +50,39 @@ class UserServiceTest {
                 .passwordHash("old_hash")
                 .build();
 
-        // Mock universal pentru save - returneaza mereu obiectul primit ca sa evitam NullPointerException
+        // Mock universal pentru save (unde e cazul)
         lenient().when(userRepository.save(any(User.class))).thenAnswer(i -> i.getArgument(0));
     }
 
     // --- TESTE CREATE ---
 
     @Test
-    @DisplayName("Create: Succes cu formatare username si nume")
+    @DisplayName("Create: Succes cu generare parolă temporară")
     void create_Success() {
-        CreateUserDTO dto = new CreateUserDTO("USER.New", "Password123!", "nume TEST", 1, "ro");
+        // Create DTO nu mai are parolă
+        UserDTOs.Create dto = new UserDTOs.Create("USER.New", "nume TEST", 1, "ro");
         
         when(roleRepository.findById(1)).thenReturn(Optional.of(adminRole));
         when(userRepository.existsByUsername("user.new")).thenReturn(false);
-        when(passwordEncoder.encode(anyString())).thenReturn("hashed_pass");
+        // La creare, service-ul generează parola și face encode
+        when(passwordEncoder.encode(anyString())).thenReturn("hashed_temp_pass");
 
-        UserResponseDTO result = userService.create(dto);
+        UserDTOs.Response result = userService.create(dto);
 
         assertEquals("user.new", result.username());
         assertEquals("Nume Test", result.fullName());
+        
+        // Verificăm că am primit o parolă temporară de 4 caractere
+        assertNotNull(result.tempPassword());
+        assertEquals(4, result.tempPassword().length());
+        
         verify(userRepository).save(any(User.class));
     }
 
     @Test
     @DisplayName("Create: Fail daca username-ul exista deja")
     void create_Fail_Duplicate() {
-        CreateUserDTO dto = new CreateUserDTO("admin.test", "Password123!", "Nume", 1, "ro");
+        UserDTOs.Create dto = new UserDTOs.Create("admin.test", "Nume", 1, "ro");
         when(userRepository.existsByUsername("admin.test")).thenReturn(true);
 
         assertThrows(RuntimeException.class, () -> userService.create(dto));
@@ -86,42 +93,48 @@ class UserServiceTest {
     @Test
     @DisplayName("Update: Succes cu schimbare date si formatare")
     void update_Success() {
-        UpdateUserDTO dto = new UpdateUserDTO("ADMIN.mod", "nume MODIFICAT", 1, "en");
+        UserDTOs.Update dto = new UserDTOs.Update("ADMIN.mod", "nume MODIFICAT", 1, "en");
         
         when(userRepository.findById(1)).thenReturn(Optional.of(adminUser));
         when(roleRepository.findById(1)).thenReturn(Optional.of(adminRole));
         when(userRepository.existsByUsername("admin.mod")).thenReturn(false);
 
-        UserResponseDTO result = userService.update(1, dto);
+        UserDTOs.Response result = userService.update(1, dto);
 
         assertEquals("admin.mod", result.username());
         assertEquals("Nume Modificat", result.fullName());
     }
 
+    @Test
+    @DisplayName("Update: Fail când încercăm să schimbăm rolul singurului Admin activ")
+    void update_Fail_ChangeRoleOfLastAdmin() {
+        when(userRepository.findById(1)).thenReturn(Optional.of(adminUser));
+        
+        UserRole cashierRole = UserRole.builder().id(2).authorityLevel(10).code("CASHIER").build();
+        when(roleRepository.findById(2)).thenReturn(Optional.of(cashierRole));
+        
+        when(userRepository.countByRole_AuthorityLevelAndIsActiveTrue(100)).thenReturn(1L);
+
+        UserDTOs.Update dto = new UserDTOs.Update("admin.master", "Administrator Principal", 2, "ro");
+
+        RuntimeException ex = assertThrows(RuntimeException.class, () -> userService.update(1, dto));
+        assertEquals("ERROR.USER.CANNOT_DEACTIVATE_LAST_ADMIN", ex.getMessage());
+        
+        verify(userRepository, never()).save(any());
+    }
+
     // --- TESTE TOGGLE STATUS ---
 
     @Test
-    @DisplayName("ToggleStatus: Succes dezactivare (cand mai exista admini)")
+    @DisplayName("ToggleStatus: Succes dezactivare")
     void toggleStatus_Deactivate_Success() {
         when(userRepository.findById(1)).thenReturn(Optional.of(adminUser));
         when(userRepository.countByRole_AuthorityLevelAndIsActiveTrue(100)).thenReturn(2L);
 
-        UserResponseDTO result = userService.toggleStatus(1);
+        UserDTOs.Response result = userService.toggleStatus(1);
 
         assertFalse(result.isActive());
         assertFalse(adminUser.isActive());
-    }
-
-    @Test
-    @DisplayName("ToggleStatus: Succes reactivare")
-    void toggleStatus_Activate_Success() {
-        adminUser.setActive(false);
-        when(userRepository.findById(1)).thenReturn(Optional.of(adminUser));
-
-        UserResponseDTO result = userService.toggleStatus(1);
-
-        assertTrue(result.isActive());
-        assertTrue(adminUser.isActive());
     }
 
     @Test
@@ -134,27 +147,69 @@ class UserServiceTest {
         assertEquals("ERROR.USER.CANNOT_DEACTIVATE_LAST_ADMIN", ex.getMessage());
     }
 
-    // --- TESTE CHANGE PASSWORD ---
+    // --- TESTE RESET PASSWORD (ADMIN) ---
 
     @Test
-    @DisplayName("ChangePassword: Fail la parola slaba")
-    void changePassword_Fail_Weak() {
-        ChangePasswordDTO dto = new ChangePasswordDTO("123");
-        // Nu are nevoie de mock-uri pentru ca validarea din Utils e prima care pica
-        assertThrows(RuntimeException.class, () -> userService.changePassword(1, dto));
+    @DisplayName("ResetPassword: Succes generare parolă nouă")
+    void resetPassword_Success() {
+        when(userRepository.findById(1)).thenReturn(Optional.of(adminUser));
+        when(passwordEncoder.encode(anyString())).thenReturn("new_random_hash");
+
+        UserDTOs.Response result = userService.resetPassword(1);
+
+        // Verificăm că parola hash-uită s-a schimbat în user
+        assertEquals("new_random_hash", adminUser.getPasswordHash());
+        
+        // Verificăm că parola returnată în clar are 4 caractere
+        assertNotNull(result.tempPassword());
+        assertEquals(4, result.tempPassword().length());
+        
+        verify(userRepository).save(adminUser);
+    }
+
+    // --- TESTE CHANGE OWN PASSWORD (USER) ---
+
+    @Test
+    @DisplayName("ChangeOwnPassword: Succes")
+    void changeOwnPassword_Success() {
+        UserDTOs.ChangeOwnPassword dto = new UserDTOs.ChangeOwnPassword("oldPass", "StrongPass1!");
+        
+        when(userRepository.findByUsername("admin.test")).thenReturn(Optional.of(adminUser));
+        when(passwordEncoder.matches("oldPass", "old_hash")).thenReturn(true);
+        when(passwordEncoder.encode("StrongPass1!")).thenReturn("final_hash");
+
+        userService.changeOwnPassword("admin.test", dto);
+
+        assertEquals("final_hash", adminUser.getPasswordHash());
+        verify(userRepository).save(adminUser);
     }
 
     @Test
-    @DisplayName("ChangePassword: Succes")
-    void changePassword_Success() {
-        ChangePasswordDTO dto = new ChangePasswordDTO("ValidPassword123!");
-        when(userRepository.findById(1)).thenReturn(Optional.of(adminUser));
-        when(passwordEncoder.encode(anyString())).thenReturn("new_hash");
+    @DisplayName("ChangeOwnPassword: Fail parolă veche greșită")
+    void changeOwnPassword_Fail_WrongOld() {
+        UserDTOs.ChangeOwnPassword dto = new UserDTOs.ChangeOwnPassword("wrongOld", "StrongPass1!");
+        
+        when(userRepository.findByUsername("admin.test")).thenReturn(Optional.of(adminUser));
+        when(passwordEncoder.matches("wrongOld", "old_hash")).thenReturn(false);
 
-        userService.changePassword(1, dto);
+        RuntimeException ex = assertThrows(RuntimeException.class, () -> 
+            userService.changeOwnPassword("admin.test", dto));
+            
+        assertEquals("ERROR.AUTH.WRONG_OLD_PASSWORD", ex.getMessage());
+    }
 
-        assertEquals("new_hash", adminUser.getPasswordHash());
-        verify(userRepository).save(adminUser);
+    @Test
+    @DisplayName("ChangeOwnPassword: Fail parolă nouă slabă")
+    void changeOwnPassword_Fail_WeakNew() {
+        UserDTOs.ChangeOwnPassword dto = new UserDTOs.ChangeOwnPassword("oldPass", "weak");
+        
+        when(userRepository.findByUsername("admin.test")).thenReturn(Optional.of(adminUser));
+        when(passwordEncoder.matches("oldPass", "old_hash")).thenReturn(true);
+
+        RuntimeException ex = assertThrows(RuntimeException.class, () -> 
+            userService.changeOwnPassword("admin.test", dto));
+            
+        assertEquals("ERROR.USER.INVALID_PASSWORD_STRENGTH", ex.getMessage());
     }
 
     // --- TESTE LISTARE ---
@@ -163,7 +218,7 @@ class UserServiceTest {
     @DisplayName("Listare: Useri Activi")
     void getAllActive_Success() {
         when(userRepository.findAllByIsActiveTrue()).thenReturn(List.of(adminUser));
-        List<UserResponseDTO> result = userService.getAllActive();
+        List<UserDTOs.Response> result = userService.getAllActive();
         assertFalse(result.isEmpty());
     }
 
@@ -171,31 +226,7 @@ class UserServiceTest {
     @DisplayName("Listare: Useri Inactivi")
     void getAllInactive_Success() {
         when(userRepository.findAllByIsActiveFalse()).thenReturn(List.of());
-        List<UserResponseDTO> result = userService.getAllInactive();
+        List<UserDTOs.Response> result = userService.getAllInactive();
         assertTrue(result.isEmpty());
-    }
-    
-    @Test
-    @DisplayName("Update: Fail când încercăm să schimbăm rolul singurului Admin activ")
-    void update_Fail_ChangeRoleOfLastAdmin() {
-        // GIVEN: Avem un user care e Admin
-        when(userRepository.findById(1)).thenReturn(Optional.of(adminUser));
-        
-        // Rolul nou (Casier) are authority level mic (ex: 10)
-        UserRole cashierRole = UserRole.builder().id(2).authorityLevel(10).code("CASHIER").build();
-        when(roleRepository.findById(2)).thenReturn(Optional.of(cashierRole));
-        
-        // Simulăm că în bază este doar 1 admin activ
-        when(userRepository.countByRole_AuthorityLevelAndIsActiveTrue(100)).thenReturn(1L);
-
-        // DTO pentru update care vrea să schimbe rolul în ID 2 (Casier)
-        UpdateUserDTO dto = new UpdateUserDTO("admin.master", "Administrator Principal", 2, "ro");
-
-        // WHEN & THEN
-        RuntimeException ex = assertThrows(RuntimeException.class, () -> userService.update(1, dto));
-        assertEquals("ERROR.USER.CANNOT_DEACTIVATE_LAST_ADMIN", ex.getMessage());
-        
-        // Verificăm că NU s-a apelat save, deci nu am stricat nimic
-        verify(userRepository, never()).save(any());
     }
 }

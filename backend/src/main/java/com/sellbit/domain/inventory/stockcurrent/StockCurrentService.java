@@ -13,8 +13,15 @@ import com.sellbit.domain.catalog.product.Product;
 import com.sellbit.domain.catalog.product.ProductRepository;
 import com.sellbit.domain.catalog.productcomposite.ProductComponent;
 import com.sellbit.domain.catalog.productcomposite.ProductComponentRepository;
+import com.sellbit.domain.inventory.purchase.PurchaseService;
+import com.sellbit.domain.inventory.stockadjustment.StockAdjustment;
+import com.sellbit.domain.inventory.stockadjustment.StockAdjustmentRepository;
 import com.sellbit.domain.inventory.warehouse.Warehouse;
 import com.sellbit.domain.inventory.warehouse.WarehouseRepository;
+import com.sellbit.domain.lookup.adjustmentreason.AdjustmentReason;
+import com.sellbit.domain.lookup.adjustmentreason.AdjustmentReasonRepository;
+import com.sellbit.domain.security.user.UserRepository;
+import com.sellbit.domain.security.user.User;
 
 import lombok.RequiredArgsConstructor;
 
@@ -27,6 +34,10 @@ public class StockCurrentService {
     private final ProductRepository productRepository;
     private final WarehouseRepository warehouseRepository;
     private final ProductComponentRepository productComponentRepository;
+    private final StockAdjustmentRepository adjustmentRepository;
+    private final AdjustmentReasonRepository reasonRepository;
+    private final UserRepository userRepository;
+    private final PurchaseService purchaseService;
 
     @Transactional(readOnly = true)
     public List<StockCurrentDTOs.Response> getStockByWarehouse(Integer warehouseId) {
@@ -44,22 +55,50 @@ public class StockCurrentService {
      */
     @Transactional
     public void setPhysicalStock(StockCurrentDTOs.UpdateQuantity request) {
-        Product product = productRepository.findById(request.productId())
-                .orElseThrow(() -> new RuntimeException("ERROR.PRODUCT.NOT_FOUND"));
+        // 1. Date comune (le luăm o singură dată)
+        Warehouse warehouse = warehouseRepository.findById(request.warehouseId())
+                .orElseThrow(() -> new RuntimeException("ERROR.WAREHOUSE.NOT_FOUND"));
 
-        if (!Boolean.TRUE.equals(product.getTrackStock())) {
-            return;
+        AdjustmentReason reason = reasonRepository.findByCode("INVENTORY_COUNT")
+                .orElseThrow(() -> new RuntimeException("ERROR.REASON.NOT_FOUND"));
+
+        User adminUser = userRepository.findByRoleCodeAndIsActiveTrue("ADMIN")
+                .stream().findFirst()
+                .orElseThrow(() -> new RuntimeException("ERROR.USER.ADMIN_NOT_FOUND"));
+
+        // 2. Iterăm prin lista de produse din DTO
+        for (StockCurrentDTOs.UpdateItem item : request.items()) {
+
+            Product product = productRepository.findById(item.productId())
+                    .orElseThrow(() -> new RuntimeException("ERROR.PRODUCT.NOT_FOUND"));
+
+            StockCurrent stock = getOrCreateStockForUpdate(warehouse.getId(), product);
+
+            BigDecimal oldQty = stock.getQuantity();
+            BigDecimal difference = item.newQuantity().subtract(oldQty);
+
+            if (difference.compareTo(BigDecimal.ZERO) == 0)
+                continue;
+
+            stock.setQuantity(item.newQuantity());
+            stockCurrentRepository.save(stock);
+
+            adjustmentRepository.save(StockAdjustment.builder()
+                    .product(stock.getProduct())
+                    .warehouse(stock.getWarehouse())
+                    .user(adminUser)
+                    .reason(reason)
+                    .quantityChange(difference)
+                    .note("Inventar: " + request.reason())
+                    .build());
+
+            if (difference.compareTo(BigDecimal.ZERO) < 0) {
+                purchaseService.deductFromBatchesFIFO(warehouse.getId(), product.getId(), difference.abs());
+            } else {
+                purchaseService.createVirtualReturnBatch(warehouse.getId(), product.getId(), adminUser.getId(),
+                        difference, "INVENTORY_PLUS: " + request.reason());
+            }
         }
-
-        // Folosim varianta cu LOCK pentru consistență
-        StockCurrent stock = getOrCreateStockForUpdate(request.warehouseId(), product);
-
-        if (request.newQuantity().compareTo(BigDecimal.ZERO) < 0) {
-            throw new RuntimeException("ERROR.STOCK.NEGATIVE_NOT_ALLOWED");
-        }
-
-        stock.setQuantity(request.newQuantity());
-        stockCurrentRepository.save(stock);
     }
 
     /**
@@ -96,9 +135,11 @@ public class StockCurrentService {
      * Modificată pentru a suporta rețetare (produse compuse).
      */
     @Transactional
-    public void syncStockFromReceiptChange(Integer warehouseId, Integer productId, BigDecimal oldQty, BigDecimal newQty) {
+    public void syncStockFromReceiptChange(Integer warehouseId, Integer productId, BigDecimal oldQty,
+            BigDecimal newQty) {
         BigDecimal diff = newQty.subtract(oldQty);
-        if (diff.compareTo(BigDecimal.ZERO) == 0) return;
+        if (diff.compareTo(BigDecimal.ZERO) == 0)
+            return;
 
         // Căutăm dacă produsul are componente active (rețetă)
         List<ProductComponent> components = productComponentRepository.findByParentProductIdAndIsActiveTrue(productId);
@@ -115,7 +156,7 @@ public class StockCurrentService {
             updateStockRelative(warehouseId, productId, diff.negate());
         }
     }
-    
+
     @Transactional(readOnly = true)
     public BigDecimal getQuantity(Integer warehouseId, Integer productId) {
         return stockCurrentRepository.findById(new StockCurrentId(warehouseId, productId))
@@ -131,7 +172,7 @@ public class StockCurrentService {
                 .orElseGet(() -> {
                     Warehouse warehouse = warehouseRepository.findById(warehouseId)
                             .orElseThrow(() -> new RuntimeException("ERROR.WAREHOUSE.NOT_FOUND"));
-                    
+
                     return StockCurrent.builder()
                             .id(new StockCurrentId(warehouseId, product.getId()))
                             .warehouse(warehouse)
@@ -149,7 +190,6 @@ public class StockCurrentService {
                 stock.getProduct().getBarcode(),
                 stock.getProduct().getUnit().getLabel(),
                 stock.getQuantity(),
-                stock.getUpdatedAt()
-        );
+                stock.getUpdatedAt());
     }
 }

@@ -86,7 +86,22 @@ class ProductServiceTest {
 
     @Test
     void createProduct_ShouldSaveSuccessfully() {
-        ProductDTO dto = new ProductDTO(null, "Prod", "123", 10, 1, 1, 1, new BigDecimal("10"), true, true, null, null);
+        // Corecție: 13 parametri conform record ProductDTO
+        ProductDTO dto = new ProductDTO(
+                null, 
+                "Prod", 
+                "123", 
+                10, 
+                1, 
+                1, 
+                1, 
+                new BigDecimal("10"), 
+                new BigDecimal("5"), // purchasePrice
+                true, 
+                true, 
+                null, 
+                null
+        );
         
         when(productRepository.existsByBarcode("123")).thenReturn(false);
         when(categoryRepository.findById(10)).thenReturn(Optional.of(new Category()));
@@ -114,7 +129,22 @@ class ProductServiceTest {
         existing.setUnit(new UnitOfMeasure());
         existing.setProductType(new ProductType());
 
-        ProductDTO dto = new ProductDTO(1, "New", "new", 10, 1, 1, null, new BigDecimal("20"), true, true, null, null);
+        // Corecție: 13 parametri conform record ProductDTO
+        ProductDTO dto = new ProductDTO(
+                1, 
+                "New", 
+                "new", 
+                10, 
+                1, 
+                1, 
+                null, 
+                new BigDecimal("20"), 
+                new BigDecimal("10"), // purchasePrice
+                true, 
+                true, 
+                null, 
+                null
+        );
 
         when(productRepository.findById(1)).thenReturn(Optional.of(existing));
         when(productRepository.existsByBarcode("new")).thenReturn(false);

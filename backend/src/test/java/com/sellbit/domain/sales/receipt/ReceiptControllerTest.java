@@ -9,6 +9,7 @@ import org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfi
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -35,6 +36,9 @@ class ReceiptControllerTest {
     // Mock-uri necesare pentru pornirea contextului (satisfac JwtAuthenticationFilter)
     @MockitoBean private JwtUtils jwtUtils;
     @MockitoBean private UserDetailsService userDetailsService;
+    
+    @MockitoBean
+    private PasswordEncoder passwordEncoder;   
 
     // --- 1. CREATE ---
     @Test

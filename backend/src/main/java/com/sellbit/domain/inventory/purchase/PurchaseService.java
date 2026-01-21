@@ -13,9 +13,7 @@ import com.sellbit.domain.catalog.product.Product;
 import com.sellbit.domain.catalog.product.ProductRepository;
 import com.sellbit.domain.catalog.productcomposite.ProductComponent;
 import com.sellbit.domain.catalog.productcomposite.ProductComponentRepository;
-import com.sellbit.domain.catering.cateringmenu.CateringMenu;
-import com.sellbit.domain.catering.cateringmenu.CateringMenuRepository;
-import com.sellbit.domain.inventory.stockcurrent.StockCurrentService;
+import com.sellbit.domain.inventory.stockcurrent.StockCurrentRepository;
 import com.sellbit.domain.inventory.warehouse.Warehouse;
 import com.sellbit.domain.inventory.warehouse.WarehouseRepository;
 import com.sellbit.domain.security.user.User;
@@ -31,9 +29,8 @@ public class PurchaseService {
     private final ProductRepository productRepository;
     private final WarehouseRepository warehouseRepository;
     private final UserRepository userRepository;
-    private final StockCurrentService stockCurrentService;
-    private final ProductComponentRepository productComponentRepository;
-    private final CateringMenuRepository cateringMenuRepository;
+    private final StockCurrentRepository stockCurrentRepository;
+    private final ProductComponentRepository productComponentRepository;    
     
     @Transactional(readOnly = true)
     public List<PurchaseDTOs.Response> getPurchasesByWarehouse(Integer warehouseId) {
@@ -68,12 +65,13 @@ public class PurchaseService {
             Warehouse warehouse = warehouseRepository.findById(item.warehouseId())
                     .orElseThrow(() -> new RuntimeException("ERROR.WAREHOUSE.NOT_FOUND"));
 
+            // 1. Salvăm achiziția (codul tău vechi)
             Purchase purchase = Purchase.builder()
                     .product(product)
                     .warehouse(warehouse)
                     .user(user)
                     .quantity(item.quantity())
-                    .remainingQuantity(item.quantity()) // non-null
+                    .remainingQuantity(item.quantity())
                     .purchasePrice(item.purchasePrice())
                     .expirationDate(item.expirationDate())
                     .note(item.note())
@@ -81,7 +79,24 @@ public class PurchaseService {
                     .build();
 
             purchaseRepository.save(purchase);
-            stockCurrentService.updateStockRelative(warehouse.getId(), product.getId(), item.quantity());
+
+            // 2. Actualizăm stocul DIRECT (Aici am eliminat apelul către StockCurrentService)
+            if (Boolean.TRUE.equals(product.getTrackStock())) {
+                // Căutăm stocul existent sau creăm unul nou (fără să apelăm service-ul vecin)
+                var stockId = new com.sellbit.domain.inventory.stockcurrent.StockCurrentId(warehouse.getId(), product.getId());
+                
+                var stock = stockCurrentRepository.findById(stockId) // Folosim repo-ul injectat la Pasul 1
+                        .orElse(com.sellbit.domain.inventory.stockcurrent.StockCurrent.builder()
+                                .id(stockId)
+                                .warehouse(warehouse)
+                                .product(product)
+                                .quantity(java.math.BigDecimal.ZERO)
+                                .build());
+
+                // Adunăm cantitatea
+                stock.setQuantity(stock.getQuantity().add(item.quantity()));
+                stockCurrentRepository.save(stock);
+            }
         }
     }
 
@@ -171,48 +186,45 @@ public class PurchaseService {
      * Dacă produsul este compus, prețul de achiziție este SUMA prețurilor componentelor.
      */
     @Transactional(readOnly = true)
-    public BigDecimal getCurrentFIFOPurchasePrice(Integer warehouseId, Integer productId) {
-        Product product = productRepository.findById(productId)
-                .orElseThrow(() -> new RuntimeException("ERROR.PRODUCT.NOT_FOUND"));
+public BigDecimal getCurrentFIFOPurchasePrice(Integer warehouseId, Integer productId) {
+    Product product = productRepository.findById(productId)
+            .orElseThrow(() -> new RuntimeException("ERROR.PRODUCT.NOT_FOUND"));
 
-        // 1. Verificăm dacă are rețetă (Meniu/Catering compus)
-        List<ProductComponent> components = productComponentRepository.findByParentProductIdAndIsActiveTrue(productId);
-
-        if (!components.isEmpty()) {
-            BigDecimal totalCost = BigDecimal.ZERO;
-            for (ProductComponent comp : components) {
-                BigDecimal unitCost = getCurrentFIFOPurchasePrice(warehouseId, comp.getChildProduct().getId());
-                totalCost = totalCost.add(comp.getQuantity().multiply(unitCost));
-            }
-            return totalCost.setScale(2, java.math.RoundingMode.HALF_UP);
+    // 1. Rețetă (Meniuri compuse) - SUMA componentelor
+    List<ProductComponent> components = productComponentRepository.findByParentProductIdAndIsActiveTrue(productId);
+    if (!components.isEmpty()) {
+        BigDecimal totalCost = BigDecimal.ZERO;
+        for (ProductComponent comp : components) {
+            BigDecimal unitCost = getCurrentFIFOPurchasePrice(warehouseId, comp.getChildProduct().getId());
+            totalCost = totalCost.add(comp.getQuantity().multiply(unitCost));
         }
-
-        // 2. Dacă NU are componente, verificăm codul tipului de produs
-        // Aici accesăm câmpul .getCode() din entitatea ProductType
-        if (product.getProductType() != null && "CATERING".equals(product.getProductType().getCode())) {
-            return cateringMenuRepository.findByProductIdAndIsActiveTrue(productId)
-                    .map(CateringMenu::getPurchasePrice)
-                    .orElse(BigDecimal.ZERO);
-        }
-
-        // 3. Produse fizice cu stoc (Suc, Apă)
-        if (Boolean.TRUE.equals(product.getTrackStock())) {
-            return purchaseRepository.findActiveBatchesFIFO(warehouseId, productId)
-                    .stream()
-                    .findFirst()
-                    .map(Purchase::getPurchasePrice)
-                    .orElseGet(() -> 
-                        purchaseRepository.findAllBatchesFIFO(warehouseId, productId)
-                                .stream()
-                                .reduce((first, second) -> second)
-                                .map(Purchase::getPurchasePrice)
-                                .orElse(BigDecimal.ZERO)
-                    );
-        }
-
-        // 4. Servicii (Joacă) sau orice altceva fără trackStock -> Cost 0
-        return BigDecimal.ZERO;
+        return totalCost.setScale(2, java.math.RoundingMode.HALF_UP);
     }
+
+    // 2. CATERING - Preț fix din fișa produsului
+    if (product.getProductType() != null && "CATERING".equals(product.getProductType().getCode())) {
+        return product.getPurchasePrice() != null ? product.getPurchasePrice() : BigDecimal.ZERO;
+    }
+
+    // 3. Produse cu STOC (Suc, Apă) - FIFO
+    if (Boolean.TRUE.equals(product.getTrackStock())) {
+        return purchaseRepository.findActiveBatchesFIFO(warehouseId, productId)
+                .stream()
+                .findFirst()
+                .map(Purchase::getPurchasePrice)
+                .orElseGet(() -> 
+                    purchaseRepository.findAllBatchesFIFO(warehouseId, productId)
+                            .stream()
+                            .reduce((first, second) -> second)
+                            .map(Purchase::getPurchasePrice)
+                            .orElse(BigDecimal.ZERO)
+                );
+    }
+
+    // 4. SERVICII (Joacă) sau orice altceva fără trackStock
+    // Returnăm 0 pentru ca profitul să fie egal cu prețul de vânzare net
+    return BigDecimal.ZERO;
+}
 
     private PurchaseDTOs.Response mapToResponse(Purchase p) {
         return new PurchaseDTOs.Response(

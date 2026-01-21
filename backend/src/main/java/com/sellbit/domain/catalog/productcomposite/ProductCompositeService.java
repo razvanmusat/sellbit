@@ -73,26 +73,32 @@ public class ProductCompositeService {
     }
 
     // --- METODE HELPER PRIVATE ---
-
     private void saveNewComponentList(Product parent, List<ProductCompositeDTOs.ComponentItemRequest> componentRequests) {
-        if (componentRequests == null || componentRequests.isEmpty()) return;
+    if (componentRequests == null || componentRequests.isEmpty()) return;
 
-        List<ProductComponent> newComponents = componentRequests.stream()
-                .map(req -> {
-                    Product child = productRepository.findById(req.childProductId())
-                            .orElseThrow(() -> new RuntimeException("ERROR.CHILD_PRODUCT.NOT_FOUND"));
-                    
-                    return ProductComponent.builder()
-                            .parentProduct(parent)
-                            .childProduct(child)
-                            .quantity(req.quantity())
-                            .isActive(true)
-                            .build();
-                })
-                .collect(Collectors.toList());
+    List<ProductComponent> newComponents = componentRequests.stream()
+            .map(req -> {
+                // 1. Verificăm dacă produsul adăugat ca și componentă există
+                Product child = productRepository.findById(req.childProductId())
+                        .orElseThrow(() -> new RuntimeException("ERROR.CHILD_PRODUCT.NOT_FOUND"));
 
-        componentRepository.saveAll(newComponents);
-    }
+                // 2. Validare: prevenim referința circulară (să nu se adauge pe el însuși)
+                if (req.childProductId().equals(parent.getId())) {
+                    throw new RuntimeException("ERROR.COMPOSITE.SELF_REFERENCE");
+                }
+
+                // 3. Construim obiectul pentru salvare
+                return ProductComponent.builder()
+                        .parentProduct(parent)
+                        .childProduct(child)
+                        .quantity(req.quantity())
+                        .isActive(true)
+                        .build();
+            })
+            .collect(Collectors.toList());
+
+    componentRepository.saveAll(newComponents);
+    }    
 
     private ProductCompositeDTOs.CompositionResponse mapToResponse(ProductComponent comp) {
         return new ProductCompositeDTOs.CompositionResponse(

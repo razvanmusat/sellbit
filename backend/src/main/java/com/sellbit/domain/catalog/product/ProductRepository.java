@@ -10,7 +10,7 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface ProductRepository extends JpaRepository<Product, Integer> {
-// --- PENTRU ADMIN (Vede tot) ---
+	// --- PENTRU ADMIN (Vede tot) ---
 
 	// Produsele dintr-o categorie, ordonate alfabetic
 	List<Product> findByCategoryIdOrderByNameAsc(Integer categoryId);
@@ -32,8 +32,13 @@ public interface ProductRepository extends JpaRepository<Product, Integer> {
 
 	@Query("SELECT p FROM Product p WHERE p.productType.code = :typeCode AND p.isActive = true")
 	List<Product> findByProductTypeCode(@Param("typeCode") String typeCode);
-	
+
 	// --- VALIDĂRI ---
 	boolean existsByBarcode(String barcode);
 
+	// Găsește produse de un anumit tip care au prețul de achiziție setat
+	List<Product> findByProductTypeCodeAndPurchasePriceIsNotNull(String typeCode);
+
+	@Query("SELECT p FROM Product p WHERE p.productType.code = 'CATERING' AND p.isActive = true")
+	List<Product> findAllCateringProducts();
 }

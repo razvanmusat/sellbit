@@ -37,7 +37,9 @@ INSERT INTO cash_movement_types (code, label, is_active, created_at, updated_at)
 INSERT INTO payment_methods (code, label, is_active, created_at, updated_at) VALUES
 ('CASH', 'Numerar', true, NOW(), NOW()),
 ('CARD', 'Card Bancar', true, NOW(), NOW()),
-('VOUCHER', 'Voucher', true, NOW(), NOW());
+('VOUCHER', 'Voucher', true, NOW(), NOW()),
+('BANK_TRANSFER', 'Transfer Bancar', true, NOW(), NOW()),
+('ADVANCE', 'Avans Petrecere', true, NOW(), NOW());
 
 -------------------------------------------------------------------------------
 -- 5. STATUSURI BON (Receipt Statuses)
@@ -56,8 +58,9 @@ INSERT INTO receipt_statuses (code, label, is_active, created_at, updated_at) VA
 INSERT INTO product_types (code, label, is_active, created_at, updated_at) VALUES
 ('REGULAR', 'Produs Standard', true, NOW(), NOW()),
 ('SERVICE', 'Serviciu', true, NOW(), NOW()),
-('CATERING', 'Produs Catering', true, NOW(), NOW());
-
+('CATERING', 'Produs Catering', true, NOW(), NOW()),
+('MENU', 'Meniu Configurat', true, NOW(), NOW()),
+('ADVANCE', 'Avans Petrecere', true, NOW(), NOW());
 -------------------------------------------------------------------------------
 -- 7. UNITĂȚI DE MĂSURĂ (Units of Measure)
 -------------------------------------------------------------------------------

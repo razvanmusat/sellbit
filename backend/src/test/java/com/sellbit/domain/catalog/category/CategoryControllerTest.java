@@ -11,6 +11,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -34,28 +35,56 @@ class CategoryControllerTest {
     void setUp() {
         objectMapper.registerModule(new JavaTimeModule());
 
-        // Setup standalone: Încarcă doar controller-ul, ignorând complet filtrele de securitate/JWT
+        // Setup standalone: Ignorăm securitatea pentru testarea unitară a controller-ului
         CategoryController categoryController = new CategoryController(categoryService);
         mockMvc = MockMvcBuilders.standaloneSetup(categoryController).build();
         
-        categoryDTO = new CategoryDTO(1, "CAT01", "Electronice", null, true, null, null);
+        // Actualizat pentru noul constructor CategoryDTO (cu hasChildren)
+        categoryDTO = new CategoryDTO(
+                1, 
+                "CAT01", 
+                "Electronice", 
+                null, 
+                true, 
+                false, // hasChildren
+                LocalDateTime.now(), 
+                LocalDateTime.now()
+        );
     }
 
+    /**
+     * Testează GET /api/catalog/categories (Navigare POS/General)
+     */
     @Test
     void getCategories_WithParentId_ShouldReturnList() throws Exception {
-        when(categoryService.getCategoriesByParent(10)).thenReturn(List.of(categoryDTO));
+        // În controller am schimbat apelul către getActiveCategoriesByParent
+        when(categoryService.getActiveCategoriesByParent(10)).thenReturn(List.of(categoryDTO));
 
         mockMvc.perform(get("/api/catalog/categories").param("parentId", "10"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].label").value("Electronice"));
+                .andExpect(jsonPath("$[0].label").value("Electronice"))
+                .andExpect(jsonPath("$[0].hasChildren").value(false));
     }
 
     @Test
     void getCategories_WithoutParentId_ShouldReturnRoots() throws Exception {
-        when(categoryService.getCategoriesByParent(null)).thenReturn(List.of(categoryDTO));
+        when(categoryService.getActiveCategoriesByParent(null)).thenReturn(List.of(categoryDTO));
 
         mockMvc.perform(get("/api/catalog/categories"))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1));
+    }
+
+    /**
+     * Testează GET /api/catalog/categories/admin/tree (Navigare Admin)
+     */
+    @Test
+    void getCategoriesForAdmin_ShouldReturnFullTree() throws Exception {
+        when(categoryService.getCategoriesByParent(null)).thenReturn(List.of(categoryDTO));
+
+        mockMvc.perform(get("/api/catalog/categories/admin/tree"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].code").value("CAT01"));
     }
 
     @Test

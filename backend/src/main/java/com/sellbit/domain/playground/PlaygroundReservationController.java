@@ -4,6 +4,8 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PostAuthorize;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -18,32 +20,36 @@ public class PlaygroundReservationController {
 
     private final PlaygroundReservationService reservationService;
 
-    @PostMapping
+    @PostAuthorize("hasAnyAuthority('50', '100')")
+    @PostMapping // Creare rezervare nouă
     public ResponseEntity<PlaygroundReservationDTOs.ReservationResponse> create(
             @RequestBody @Valid PlaygroundReservationDTOs.CreateReservationRequest req) {
         return ResponseEntity.ok(reservationService.createReservation(req));
     }
 
-    @PutMapping("/{id}")
+    @PostAuthorize("hasAnyAuthority('50', '100')")
+    @PutMapping("/{id}") // UPDATE: Modificare oră, adăugare avans, schimbare notă.
     public ResponseEntity<PlaygroundReservationDTOs.ReservationResponse> update(
-            @PathVariable Integer id, 
+            @PathVariable Integer id,
             @RequestBody @Valid PlaygroundReservationDTOs.CreateReservationRequest req) {
         return ResponseEntity.ok(reservationService.updateReservation(id, req));
     }
 
-    @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyAuthority('50', '100')")
+    @DeleteMapping("/{id}") // Anulare rezervare (Clientul nu mai vine, etc...).
     public ResponseEntity<Void> delete(@PathVariable Integer id) {
         reservationService.deleteReservation(id);
         return ResponseEntity.noContent().build();
     }
 
-    @GetMapping
+    @PreAuthorize("hasAnyAuthority('50', '100')")
+    @GetMapping // VIEW: Calendarul zilnic.
     public ResponseEntity<List<PlaygroundReservationDTOs.ReservationResponse>> getByDay(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
-        
+
         LocalDateTime startOfDay = date.atStartOfDay();
         LocalDateTime endOfDay = date.atTime(LocalTime.MAX);
-        
+
         return ResponseEntity.ok(reservationService.getReservationsForDay(startOfDay, endOfDay));
     }
 }

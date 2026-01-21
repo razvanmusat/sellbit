@@ -1,6 +1,7 @@
 package com.sellbit.domain.catalog.product;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -35,12 +36,24 @@ class ProductControllerTest {
 
     @BeforeEach
     void setUp() {
-        // Setup standalone: testăm Controller-ul izolat. 
-        // Nu are nevoie de Security, filtre sau JwtUtils pentru că nu pornește contextul Spring.
+        objectMapper.registerModule(new JavaTimeModule());
         mockMvc = MockMvcBuilders.standaloneSetup(productController).build();
         
-        productDTO = new ProductDTO(1, "Produs Test", "123", 10, 1, 1, null, 
-                new BigDecimal("50.0"), true, true, null, null);
+        productDTO = new ProductDTO(
+                1, 
+                "Produs Test", 
+                "123", 
+                10, 
+                1, 
+                1, 
+                null, 
+                new BigDecimal("50.0"), 
+                new BigDecimal("20.0"), 
+                true, 
+                true, 
+                null, 
+                null
+        );
     }
 
     @Test
