@@ -23,8 +23,8 @@ public class CateringOrderController {
 
     @PreAuthorize("hasAnyAuthority('50', '100')")
     @PostMapping //Casierul introduce o comandă nouă de catering
-    public ResponseEntity<CateringOrderDTOs.OrderResponse> create(
-            @Valid @RequestBody CateringOrderDTOs.CreateOrderRequest request) {
+    public ResponseEntity<List<CateringOrderDTOs.OrderResponse>> create(
+            @Valid @RequestBody List<CateringOrderDTOs.CreateOrderRequest> request) {
         return ResponseEntity.ok(orderService.createOrder(request));
     }
 

@@ -38,16 +38,24 @@ class AuthControllerTest {
     }
 
     @Test
-    @DisplayName("POST /login - Succes: Returnează token")
+    @DisplayName("POST /login - Succes: Returnează obiect complet AuthResponse")
     void login_Success() throws Exception {
         AuthRequest request = new AuthRequest("user.test", "Password123!");
-        when(authService.login(any(AuthRequest.class))).thenReturn("fake-jwt-token");
+        
+        // Mock-uim răspunsul complet
+        AuthResponse mockResponse = new AuthResponse(
+            "fake-jwt-token", 1, "user.test", "Test User", "ADMIN", "Administrator", 100
+        );
+        
+        when(authService.login(any(AuthRequest.class))).thenReturn(mockResponse);
 
         mockMvc.perform(post("/api/security/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.token").value("fake-jwt-token"));
+                .andExpect(jsonPath("$.token").value("fake-jwt-token"))
+                .andExpect(jsonPath("$.roleCode").value("ADMIN"))
+                .andExpect(jsonPath("$.authorityLevel").value(100));
     }
 
     @Test

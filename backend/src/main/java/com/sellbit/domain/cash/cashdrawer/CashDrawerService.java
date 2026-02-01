@@ -40,13 +40,23 @@ public class CashDrawerService {
      */
     @Transactional
     public void updateBalance(Integer warehouseId, BigDecimal amount) {
+        // 1. Luăm sertarul cu LOCK (pentru a preveni probleme de concurență)
         CashDrawer drawer = cashDrawerRepository.findByWarehouseIdForUpdate(warehouseId)
                 .orElseGet(() -> getOrCreateDrawer(warehouseId));
         
-        // 2. Modificăm soldul
-        drawer.setCurrentBalance(drawer.getCurrentBalance().add(amount));
+        // 2. Calculăm noul sold PREZUMTIV
+        BigDecimal newBalance = drawer.getCurrentBalance().add(amount);
+
+        // 3. VALIDARE CRITICĂ: Nu poți avea bani negativi în sertar
+        // Dacă newBalance < 0, aruncăm excepție
+        if (newBalance.compareTo(BigDecimal.ZERO) < 0) {
+            throw new RuntimeException("ERROR.CASH_DRAWER.INSUFFICIENT_FUNDS");
+        }
+
+        // 4. Dacă e ok, setăm noul sold
+        drawer.setCurrentBalance(newBalance);
         
-        // 3. Salvăm
+        // 5. Salvăm
         cashDrawerRepository.save(drawer);
     }
 }

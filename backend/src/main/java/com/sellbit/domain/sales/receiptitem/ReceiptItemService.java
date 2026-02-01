@@ -4,12 +4,14 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.ArrayList;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.sellbit.domain.catalog.product.Product;
 import com.sellbit.domain.catalog.product.ProductRepository;
+import com.sellbit.domain.catalog.productcomposite.ProductComponentRepository;
 import com.sellbit.domain.inventory.purchase.PurchaseService;
 import com.sellbit.domain.inventory.stockcurrent.StockCurrentService;
 import com.sellbit.domain.sales.receipt.Receipt;
@@ -17,6 +19,8 @@ import com.sellbit.domain.sales.receipt.ReceiptDTOs;
 import com.sellbit.domain.sales.receipt.ReceiptRepository;
 import com.sellbit.domain.sales.receipt.ReceiptService;
 import com.sellbit.domain.sales.receiptitem.ReceiptItemDTO.ReceiptItemResponse;
+import com.sellbit.domain.catalog.productcomposite.ProductComponent;
+import com.sellbit.domain.config.InsufficientStockException;
 
 import lombok.RequiredArgsConstructor;
 
@@ -30,6 +34,7 @@ public class ReceiptItemService {
     private final StockCurrentService stockCurrentService;
     private final ReceiptService receiptService;
     private final PurchaseService purchaseService;
+    private final ProductComponentRepository productComponentRepository;
 
     /**
      * Adaugă sau actualizează un produs și returnează totalurile noi ale bonului.
@@ -52,6 +57,10 @@ public class ReceiptItemService {
                 .orElse(null);
 
         BigDecimal oldQty = (item != null) ? item.getQuantity() : BigDecimal.ZERO;
+        BigDecimal delta = quantity.subtract(oldQty);
+        if (delta.compareTo(BigDecimal.ZERO) > 0) {
+            validateStockAvailability(receipt.getWarehouse().getId(), product, delta);
+        }
 
         BigDecimal currentPurchasePrice = purchaseService.getCurrentFIFOPurchasePrice(
                 receipt.getWarehouse().getId(),
@@ -81,6 +90,9 @@ public class ReceiptItemService {
 
         receiptService.updateReceiptTotals(receiptId);
 
+        // REZOLVARE: Sortăm itemii după ID înainte de a trimite răspunsul,
+        // pentru a asigura o ordine stabilă în frontend.
+        receipt.getItems().sort(java.util.Comparator.comparing(ReceiptItem::getId));
         return receiptService.mapToResponse(receipt);
     }
 
@@ -98,6 +110,8 @@ public class ReceiptItemService {
             throw new RuntimeException("ERROR.RECEIPT.NOT_OPEN");
         }
 
+        receipt.getItems().remove(item);
+
         stockCurrentService.syncStockFromReceiptChange(
                 receipt.getWarehouse().getId(),
                 item.getProduct().getId(),
@@ -109,6 +123,9 @@ public class ReceiptItemService {
         // Sincronizăm header-ul după ștergere
         receiptService.updateReceiptTotals(receipt.getId());
 
+        // REZOLVARE: Sortăm itemii după ID înainte de a trimite răspunsul,
+        // pentru a asigura o ordine stabilă în frontend.
+        receipt.getItems().sort(java.util.Comparator.comparing(ReceiptItem::getId));
         return receiptService.mapToResponse(receipt);
     }
 
@@ -131,7 +148,7 @@ public class ReceiptItemService {
      */
     @Transactional(readOnly = true)
     public List<ReceiptItemResponse> getItemsByReceipt(Integer receiptId) {
-        return itemRepository.findByReceiptId(receiptId).stream()
+        return itemRepository.findByReceiptIdOrderByIdAsc(receiptId).stream()
                 .map(this::mapToItemResponse)
                 .toList();
     }
@@ -140,6 +157,44 @@ public class ReceiptItemService {
     public List<ReceiptItemDTO.QuantityReportResponse> getProductsQuantityReport(LocalDateTime start, LocalDateTime end,
             List<Integer> productIds) {
         return itemRepository.getProductsQuantityReport(start, end, productIds);
+    }
+
+    // --- METODE NOI PENTRU VERIFICARE STOC ---
+
+    private void validateStockAvailability(Integer warehouseId, Product product, BigDecimal requiredQty) {
+        List<String> missingProducts = new ArrayList<>();
+
+        // 1. Verificăm dacă e meniu (are componente)
+        List<ProductComponent> components = productComponentRepository
+                .findByParentProductIdAndIsActiveTrue(product.getId());
+
+        if (components.isEmpty()) {
+            // Produs simplu
+            checkSingleProductStock(warehouseId, product, requiredQty, missingProducts);
+        } else {
+            // Produs compus (Meniu) -> verificăm fiecare ingredient
+            for (ProductComponent comp : components) {
+                BigDecimal componentRequiredQty = requiredQty.multiply(comp.getQuantity());
+                checkSingleProductStock(warehouseId, comp.getChildProduct(), componentRequiredQty, missingProducts);
+            }
+        }
+
+        // Dacă am găsit lipsuri, aruncăm excepția creată la Pasul 1
+        if (!missingProducts.isEmpty()) {
+            throw new InsufficientStockException(missingProducts);
+        }
+    }
+
+    private void checkSingleProductStock(Integer warehouseId, Product product, BigDecimal qtyToCheck,
+            List<String> missingList) {
+        if (!Boolean.TRUE.equals(product.getTrackStock()))
+            return;
+
+        BigDecimal currentStock = stockCurrentService.getQuantity(warehouseId, product.getId());
+
+        if (currentStock.compareTo(qtyToCheck) < 0) {
+            missingList.add(product.getName());
+        }
     }
 
     public ReceiptItemResponse mapToItemResponse(ReceiptItem item) {

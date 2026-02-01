@@ -21,6 +21,19 @@ public class ReceiptDTOs {
         }
 
         /**
+         * DTO pentru un produs de pe bon.
+         */
+        public record ItemResponse(
+                        Integer receiptItemId,
+                        Integer productId,
+                        String name,
+                        BigDecimal quantity,
+                        BigDecimal price, // Prețul unitar
+                        BigDecimal lineTotal // Prețul total pe linie
+        ) {
+        }
+
+        /**
          * Folosit pentru a trimite datele bonului către React.
          */
         public record Response(
@@ -31,11 +44,13 @@ public class ReceiptDTOs {
                         BigDecimal totalNet,
                         BigDecimal totalVat,
                         String warehouseName,
+                        Integer warehouseId,
                         String userName,
                         LocalDateTime createdAt,
                         LocalDateTime closedAt,
                         String note,
-                        Integer originalReceiptId) {
+                        Integer originalReceiptId,
+                        List<ItemResponse> items) {
         }
 
         /**
@@ -72,6 +87,7 @@ public class ReceiptDTOs {
                         @NotBlank(message = "ERROR.PAYMENT_METHOD.REQUIRED") String paymentMethodCode, // "CASH",
                                                                                                        // "CARD",
                                                                                                        // "BANK_TRANSFER"
-                        @NotNull(message = "ERROR.USER.REQUIRED") Integer userId) {
+                        @NotNull(message = "ERROR.USER.REQUIRED") Integer userId,
+                        String note) {
         }
 }

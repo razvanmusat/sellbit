@@ -23,8 +23,13 @@ public interface ProductRepository extends JpaRepository<Product, Integer> {
 	// Doar produsele active dintr-o categorie
 	List<Product> findByCategoryIdAndIsActiveTrueOrderByNameAsc(Integer categoryId);
 
-	// Căutare după nume doar în produsele active
-	List<Product> findByNameContainingIgnoreCaseAndIsActiveTrueOrderByNameAsc(String name);
+	// Căutare după nume doar în produsele active (Exlude AVANSUL)
+	@Query("SELECT p FROM Product p " +
+           "WHERE p.isActive = true " +
+           "AND LOWER(p.name) LIKE LOWER(CONCAT('%', :name, '%')) " +
+           "AND p.productType.code <> 'ADVANCE' " + // <--- Aici e "șopârla": excludem AVANSUL direct
+           "ORDER BY p.name ASC")
+    List<Product> findByNameContainingIgnoreCaseAndIsActiveTrueOrderByNameAsc(@Param("name") String name);
 
 	// Căutare exactă cod bare - aici returnăm tot,
 	// dar Service-ul va decide ce face dacă e inactiv

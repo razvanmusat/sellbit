@@ -7,7 +7,6 @@ import java.util.List;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -33,7 +32,7 @@ public class ReceiptController {
         return ResponseEntity.ok(receiptService.createReceipt(request));
     }
 
-    @PreAuthorize("hasAnyAuthority('50', '100')")
+    @PreAuthorize("hasAuthority('100')")
     @GetMapping("/reports/profit") // RAPORTARE: Obține profitul net într-un interval de timp.
     public ResponseEntity<BigDecimal> getProfit(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
@@ -91,13 +90,6 @@ public class ReceiptController {
     }
 
     @PreAuthorize("hasAnyAuthority('50', '100')")
-    @DeleteMapping("/{receiptId}/payments/{paymentId}/voucher") // POS: Șterge plata cu voucher.
-    public ResponseEntity<Void> removeVoucher(@PathVariable Integer receiptId, @PathVariable Integer paymentId) {
-        receiptService.removeVoucherPayment(receiptId, paymentId);
-        return ResponseEntity.ok().build();
-    }
-
-    @PreAuthorize("hasAnyAuthority('50', '100')")
     @PostMapping("/advance") // POS: Incasare Avans direct în gestiune.
     public ResponseEntity<Void> registerAdvance(@RequestBody @Valid ReceiptDTOs.AdvancePaymentRequest request) {
 
@@ -105,7 +97,8 @@ public class ReceiptController {
                 request.warehouseId(),
                 request.amount(),
                 request.paymentMethodCode(),
-                request.userId());
+                request.userId(),
+                request.note());
 
         return ResponseEntity.ok().build();
     }

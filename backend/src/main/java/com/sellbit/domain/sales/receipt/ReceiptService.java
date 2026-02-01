@@ -129,6 +129,10 @@ public class ReceiptService {
                         throw new RuntimeException("ERROR.RECEIPT.NOT_OPEN");
                 }
 
+                if (receipt.getPayments() != null && !receipt.getPayments().isEmpty()) {                        
+                        throw new RuntimeException("ERROR.RECEIPT.HAS_PAYMENTS_PLEASE_REFUND_FIRST");
+                }
+
                 CancelReason reason = cancelReasonRepository.findById(reasonId)
                                 .orElseThrow(() -> new RuntimeException("ERROR.CANCEL_REASON.NOT_FOUND"));
 
@@ -151,7 +155,8 @@ public class ReceiptService {
                 receiptRepository.save(receipt);
         }
 
-        // Această metodă finalizează vânzarea, verifică plățile și descarcă gestiunea(FIFO).        
+        // Această metodă finalizează vânzarea, verifică plățile și descarcă
+        // gestiunea(FIFO).
         @Transactional
         public void closeReceipt(Integer receiptId) {
                 // 1. Căutăm bonul
@@ -233,6 +238,16 @@ public class ReceiptService {
 
         // Mapper pentru Response DTO.
         public ReceiptDTOs.Response mapToResponse(Receipt receipt) {
+                List<ReceiptDTOs.ItemResponse> itemDTOs = receipt.getItems().stream()
+                                .map(item -> new ReceiptDTOs.ItemResponse(
+                                                item.getId(),
+                                                item.getProduct().getId(),
+                                                item.getProduct().getName(),
+                                                item.getQuantity(),
+                                                item.getUnitPrice(),
+                                                item.getLineTotal()))
+                                .collect(Collectors.toList());
+
                 return new ReceiptDTOs.Response(
                                 receipt.getId(),
                                 receipt.getStatus().getLabel(),
@@ -241,11 +256,13 @@ public class ReceiptService {
                                 receipt.getTotalNet(),
                                 receipt.getTotalVat(),
                                 receipt.getWarehouse().getName(),
+                                receipt.getWarehouse().getId(),
                                 receipt.getUser() != null ? receipt.getUser().getFullName() : "N/A",
                                 receipt.getCreatedAt(),
                                 receipt.getClosedAt(),
                                 receipt.getNote(),
-                                receipt.getOriginalReceipt() != null ? receipt.getOriginalReceipt().getId() : null);
+                                receipt.getOriginalReceipt() != null ? receipt.getOriginalReceipt().getId() : null,
+                                itemDTOs);
         }
 
         // Creează un bon de stornare (parțială sau totală).
@@ -416,27 +433,11 @@ public class ReceiptService {
                 );
         }
 
-        @Transactional
-        public void removeVoucherPayment(Integer receiptId, Integer paymentId) {
-                // 1. Verificăm dacă plata există și aparține acestui bon
-                ReceiptPayment payment = paymentRepository.findById(paymentId)
-                                .orElseThrow(() -> new RuntimeException("ERROR.PAYMENT.NOT_FOUND"));
-
-                if (!payment.getReceipt().getId().equals(receiptId)) {
-                        throw new RuntimeException("ERROR.PAYMENT.MISMATCH");
-                }
-
-                // 2. Ștergem pata din bon
-                paymentRepository.delete(payment);
-
-                // 3. Reactivam voucherul
-                voucherService.cancelVoucherUsage(receiptId);
-        }
-        
-        //Înregistrează un AVANS rapid (Bon Închis + Produs Avans + Plată + CashMovement).
+        // Înregistrează un AVANS rapid (Bon Închis + Produs Avans + Plată +
+        // CashMovement).
         @Transactional
         public void registerAdvancePayment(Integer warehouseId, BigDecimal amount, String paymentMethodCode,
-                        Integer userId) {
+                        Integer userId, String note) {
                 // 1. Validări
                 if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
                         throw new RuntimeException("ERROR.ADVANCE.INVALID_AMOUNT");
@@ -483,6 +484,7 @@ public class ReceiptService {
                                 .user(user)
                                 .status(closedStatus)
                                 .tableName("AVANS") // Marker vizual
+                                .note(note)
                                 .totalAmount(amount)
                                 .totalNet(netAmount)
                                 .totalVat(vatAmount)
@@ -523,12 +525,16 @@ public class ReceiptService {
 
                 // 7. Mișcare Numerar (Dacă e CASH)
                 if ("CASH".equals(paymentMethodCode)) {
+                        String movementNote = "Incasare Avans (Bon #" + receipt.getId() + ")";
+                        if (note != null && !note.isBlank()) {
+                                movementNote += ": " + note;
+                        }
                         cashMovementService.createMovement(
                                         warehouse.getId(),
                                         "SALE",
                                         amount,
                                         userId,
-                                        "Incasare Avans (Bon #" + receipt.getId() + ")");
+                                        movementNote);
                 }
         }
 

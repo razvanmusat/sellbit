@@ -11,8 +11,8 @@ public class CateringOrderDTOs {
         @NotNull(message = "ERROR.CATERING_ORDER.MENU_REQUIRED")
         Integer productId,
 
-        Integer reservationId, // Nullable pentru bar
-
+        Integer reservationId, // Nullable pentru bar        
+        
         @NotNull(message = "ERROR.CATERING_ORDER.QUANTITY_REQUIRED")
         @Min(value = 1, message = "ERROR.CATERING_ORDER.MIN_QUANTITY_1")
         Integer quantity,
@@ -26,6 +26,9 @@ public class CateringOrderDTOs {
         Integer productId,
         String productName,
         Integer reservationId,
+        String reservationName, 
+        String reservationNote,
+        LocalDateTime reservationStartAt,
         Integer quantity,
         LocalDate orderDate,
         Boolean isPaid,

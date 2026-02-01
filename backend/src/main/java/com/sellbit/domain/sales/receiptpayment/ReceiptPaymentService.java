@@ -83,7 +83,7 @@ public class ReceiptPaymentService {
                     "SALE",
                     amountToRecord,
                     userId,
-                    "Încasare bon nr. " + receipt.getId());
+                    "Încasare bon nr. " + receipt.getId() + " Masa: " + receipt.getTableName());
         }
     }
 
@@ -108,7 +108,7 @@ public class ReceiptPaymentService {
                     "REFUND",
                     payment.getAmount(), // Suma devine negativă pentru a scădea din sold
                     userId,
-                    "Anulare plată bon nr. " + receipt.getId());
+                    "Anulare plată bon nr. " + receipt.getId() + " Masa: " + receipt.getTableName());
         }
 
         if ("VOUCHER".equals(payment.getPaymentMethod().getCode())) {

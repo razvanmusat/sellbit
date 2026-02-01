@@ -14,8 +14,8 @@ import com.sellbit.domain.sales.receiptitem.ReceiptItemDTO.QuantityReportRespons
 @Repository
 public interface ReceiptItemRepository extends JpaRepository<ReceiptItem, Integer> {
 
-    // Găsește toate liniile unui bon specific
-    List<ReceiptItem> findByReceiptId(Integer receiptId);
+    // Găsește toate liniile unui bon specific, ordonate crescător după ID.
+    List<ReceiptItem> findByReceiptIdOrderByIdAsc(Integer receiptId);
 
     @Query("SELECT COALESCE(SUM(ri.netTotal - (COALESCE(ri.purchaseUnitPrice, 0) * ri.quantity)), 0) " +
             "FROM ReceiptItem ri " +

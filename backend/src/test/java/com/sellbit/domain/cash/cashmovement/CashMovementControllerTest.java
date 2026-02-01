@@ -1,6 +1,8 @@
 package com.sellbit.domain.cash.cashmovement;
 
+import com.sellbit.domain.lookup.cashmovementtype.CashMovementType;
 import com.sellbit.domain.security.auth.JwtUtils;
+import com.sellbit.domain.security.user.User;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -11,6 +13,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.*;
@@ -38,7 +41,6 @@ class CashMovementControllerTest {
     @MockitoBean
     private PasswordEncoder passwordEncoder;
 
-    // Mock-uri obligatorii pentru a trece de filtrul de securitate
     @MockitoBean
     private JwtUtils jwtUtils;
 
@@ -61,7 +63,7 @@ class CashMovementControllerTest {
     @DisplayName("POST /api/cash/movements - Fail: Tip mișcare inexistent (400 conform Handler)")
     void createMovement_Fail() throws Exception {
         doThrow(new RuntimeException("ERROR.MOVEMENT_TYPE.NOT_FOUND"))
-                .when(cashMovementService).createMovement(anyInt(), anyString(), any(), anyInt(), any());
+                .when(cashMovementService).createMovement(anyInt(), anyString(), any(BigDecimal.class), anyInt(), any());
 
         mockMvc.perform(post("/api/cash/movements")
                 .param("warehouseId", "1")
@@ -75,12 +77,42 @@ class CashMovementControllerTest {
     @Test
     @DisplayName("GET /api/cash/movements/warehouse/{id} - Succes")
     void getHistory_Success() throws Exception {
-        CashMovement movement = CashMovement.builder().amount(new BigDecimal("100.00")).build();
-        when(cashMovementRepository.findByWarehouseIdOrderByCreatedAtDesc(1))
+        CashMovementType movementType = new CashMovementType();
+        movementType.setCode("CASH_OUT");
+        movementType.setLabel("Ieșire");
+
+        User user = User.builder()
+                .fullName("John Doe")
+                .build();
+
+        CashMovement movement = CashMovement.builder()
+                .id(1)
+                .amount(new BigDecimal("100.00"))
+                .createdAt(LocalDateTime.now())
+                .movementType(movementType)
+                .user(user)
+                .build();
+
+        when(cashMovementRepository.findByWarehouseIdAndCreatedAtBetweenOrderByCreatedAtDesc(eq(1), any(LocalDateTime.class), any(LocalDateTime.class)))
                 .thenReturn(List.of(movement));
 
         mockMvc.perform(get("/api/cash/movements/warehouse/1"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].amount").value(100.00));
+                .andExpect(jsonPath("$[0].amount").value(100.00))
+                .andExpect(jsonPath("$[0].typeCode").value("CASH_OUT"))
+                .andExpect(jsonPath("$[0].typeLabel").value("Ieșire"))
+                .andExpect(jsonPath("$[0].userName").value("John Doe")); // Corectat din userFullName in userName conform DTO
+    }
+
+    @Test
+    @DisplayName("GET /api/cash/movements/warehouse/{id} - Filtrare cu parametri de dată")
+    void getHistory_WithDateParams() throws Exception {
+        when(cashMovementRepository.findByWarehouseIdAndCreatedAtBetweenOrderByCreatedAtDesc(anyInt(), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(List.of());
+
+        mockMvc.perform(get("/api/cash/movements/warehouse/1")
+                .param("from", "2026-01-01")
+                .param("to", "2026-01-31"))
+                .andExpect(status().isOk());
     }
 }

@@ -86,4 +86,21 @@ public class GlobalExceptionHandler {
                 .status(HttpStatus.FORBIDDEN)
                 .body(new ErrorResponse("ERROR.AUTH.FORBIDDEN"));
     }
+
+    
+    //Tratează cazul de stoc insuficient și trimite lista produselor.    
+    @ExceptionHandler(InsufficientStockException.class)
+    public ResponseEntity<Map<String, Object>> handleInsufficientStock(InsufficientStockException ex) {
+        Map<String, Object> response = new HashMap<>();
+        
+        // Mesajul de eroare (codul)
+        response.put("message", ex.getMessage());
+        
+        // Lista cu numele produselor care lipsesc
+        response.put("params", ex.getProductNames());
+        
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(response);
+    }
 }

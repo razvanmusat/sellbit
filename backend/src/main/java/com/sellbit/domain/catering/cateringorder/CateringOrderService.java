@@ -21,52 +21,64 @@ public class CateringOrderService {
 
     private final CateringOrderRepository orderRepository;
     private final PlaygroundReservationRepository reservationRepository;
-    private final ProductRepository productRepository;
-    
+    private final ProductRepository productRepository;    
+
     @Transactional
-    public CateringOrderDTOs.OrderResponse createOrder(CateringOrderDTOs.CreateOrderRequest req) {
-        // Folosesc menuId() conform record-ului CreateOrderRequest trimis de tine
-        Product product = productRepository.findById(req.productId())
-                .orElseThrow(() -> new RuntimeException("ERROR.CATERING_ORDER.PRODUCT_NOT_FOUND"));
+    public List<CateringOrderDTOs.OrderResponse> createOrder(List<CateringOrderDTOs.CreateOrderRequest> requests) {
+        return requests.stream().map(req -> {
+            // 1. Găsim produsul
+            Product product = productRepository.findById(req.productId())
+                    .orElseThrow(() -> new RuntimeException("ERROR.CATERING_ORDER.PRODUCT_NOT_FOUND"));
 
-        LocalDate finalOrderDate = (req.reservationId() == null) ? LocalDate.now() : req.orderDate();
+            // 2. Stabilim data (Azi dacă e fără rezervare, sau data trimisă dacă e cu
+            // rezervare)
+            LocalDate finalOrderDate = req.orderDate() != null
+                    ? req.orderDate()
+                    : LocalDate.now();
 
-        PlaygroundReservation res = null;
-        if (req.reservationId() != null) {
-            res = reservationRepository.getReferenceById(req.reservationId());
-        }
-        
-        CateringOrder order = CateringOrder.builder()
-                .product(product)
-                .reservationId(res)
-                .quantity(req.quantity())
-                .orderDate(finalOrderDate)
-                .isPaid(false)
-                .build();
+            if (finalOrderDate.isBefore(LocalDate.now())) {
+                throw new RuntimeException("ERROR.CATERING_ORDER.CREATE_FORBIDDEN_PAST_DATE");
+            }
 
-        return mapToResponse(orderRepository.save(order));
+            // 3. Găsim rezervarea (dacă există)
+            PlaygroundReservation res = null;
+            if (req.reservationId() != null) {
+                res = reservationRepository.getReferenceById(req.reservationId());
+            }
+
+            // 4. Construim entitatea
+            CateringOrder order = CateringOrder.builder()
+                    .product(product)
+                    .reservationId(res)
+                    .quantity(req.quantity())
+                    .orderDate(finalOrderDate)
+                    .isPaid(false)
+                    .build();
+
+            // 5. Salvăm și returnăm DTO-ul
+            return mapToResponse(orderRepository.save(order));
+        }).toList();
     }
 
     @Transactional(readOnly = true)
     public List<ProductDTO> getAvailableCateringProducts() {
-    return productRepository.findAllCateringProducts().stream()
-            .map(p -> new ProductDTO(
-                p.getId(),
-                p.getName(),
-                p.getBarcode(),
-                p.getCategory().getId(),
-                p.getProductType().getId(),
-                p.getUnit().getId(),
-                p.getVatRate() != null ? p.getVatRate().getId() : null,
-                p.getSalePrice(),
-                p.getPurchasePrice(),
-                p.getTrackStock(),
-                p.getIsActive(),
-                p.getCreatedAt(),
-                p.getUpdatedAt()
-            ))
-            .toList();
-}
+        return productRepository.findAllCateringProducts().stream()
+                .map(p -> new ProductDTO(
+                        p.getId(),
+                        p.getName(),
+                        p.getBarcode(),
+                        p.getCategory().getId(),
+                        p.getProductType().getId(),
+                        p.getUnit().getId(),
+                        p.getVatRate() != null ? p.getVatRate().getId() : null,
+                        p.getSalePrice(),
+                        p.getPurchasePrice(),
+                        p.getTrackStock(),
+                        p.getIsActive(),
+                        p.getCreatedAt(),
+                        p.getUpdatedAt()))
+                .toList();
+    }
 
     @Transactional
     public CateringOrderDTOs.OrderResponse updateOrder(Integer id, CateringOrderDTOs.CreateOrderRequest req) {
@@ -83,8 +95,14 @@ public class CateringOrderService {
 
         order.setProduct(product);
         order.setQuantity(req.quantity());
-        
+
         return mapToResponse(orderRepository.save(order));
+    }
+
+    // --- METODĂ PENTRU SINCRONIZARE DATĂ ---
+    @Transactional
+    public void moveOrdersToDate(Integer reservationId, LocalDate newDate) {        
+        orderRepository.moveOrdersToDateJPQL(reservationId, newDate);
     }
 
     @Transactional
@@ -92,18 +110,20 @@ public class CateringOrderService {
         orderRepository.markAsPaidBulk(req.orderIds(), LocalDateTime.now());
     }
 
+    @Transactional(readOnly = true)
     public List<CateringOrderDTOs.OrderResponse> getDailyOrders(LocalDate date) {
         return orderRepository.findByOrderDateOrderByCreatedAtAsc(date).stream()
                 .map(this::mapToResponse)
                 .toList();
     }
 
+    @Transactional(readOnly = true)
     public List<CateringOrderDTOs.OrderResponse> getUnpaidOrders(LocalDate start, LocalDate end) {
         return orderRepository.findByIsPaidFalseAndOrderDateBetweenOrderByOrderDateAsc(start, end).stream()
                 .map(this::mapToResponse)
                 .toList();
     }
-    
+
     @Transactional
     public void deleteOrder(Integer id) {
         CateringOrder order = orderRepository.findById(id)
@@ -114,20 +134,23 @@ public class CateringOrderService {
         }
 
         orderRepository.delete(order);
-    }    
+    }
 
     private CateringOrderDTOs.OrderResponse mapToResponse(CateringOrder o) {
-        // Mapare conform record OrderResponse: id, productId, productName, reservationId, quantity, orderDate, isPaid, paidAt, createdAt
+        // Mapare conform record OrderResponse: id, productId, productName,
+        // reservationId, quantity, orderDate, isPaid, paidAt, createdAt
         return new CateringOrderDTOs.OrderResponse(
                 o.getId(),
                 o.getProduct().getId(),
                 o.getProduct().getName(),
                 o.getReservationId() != null ? o.getReservationId().getId() : null,
+                o.getReservationId() != null ? o.getReservationId().getParentName() : null,
+                o.getReservationId() != null ? o.getReservationId().getNote() : null,
+                o.getReservationId() != null ? o.getReservationId().getStartAt() : null,
                 o.getQuantity(),
                 o.getOrderDate(),
                 o.getIsPaid(),
                 o.getPaidAt(),
-                o.getCreatedAt()
-        );
+                o.getCreatedAt());
     }
 }

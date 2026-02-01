@@ -1,11 +1,13 @@
 package com.sellbit.domain.playground;
 
+import com.sellbit.domain.catering.cateringorder.CateringOrderService;
 import com.sellbit.domain.utils.Utils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -15,6 +17,7 @@ import java.util.stream.Collectors;
 public class PlaygroundReservationService {
 
     private final PlaygroundReservationRepository reservationRepository;
+    private final CateringOrderService cateringOrderService;
 
     @Transactional
     public PlaygroundReservationDTOs.ReservationResponse createReservation(
@@ -24,22 +27,21 @@ public class PlaygroundReservationService {
         validateReservationTimes(req.startAt(), req.endAt());
 
         // 2. Validare Telefon
-        if (!Utils.isValidPhoneNumber(req.parentPhone())) {
-            throw new RuntimeException("ERROR.RESERVATION.PHONE_INVALID_FORMAT");
-        }
+        validatePhoneNumber(req.parentPhone());
 
         // 3. Validare Suprapunere (Folosim metoda helper 2 - null pt excludeId)
         checkOverlap(req.startAt(), req.endAt(), null);
 
+        String formattedName = Utils.formatFullName(req.parentName());
         // 4. Construire entitate
         PlaygroundReservation reservation = PlaygroundReservation.builder()
                 .startAt(req.startAt())
                 .endAt(req.endAt())
-                .parentName(req.parentName())
+                .parentName(formattedName)
                 .parentPhone(req.parentPhone())
                 .advanceAmount(req.advanceAmount())
-                .digitalInvitation(req.digitalInvitation() != null && req.digitalInvitation())
-                .theme(req.theme())
+                .digitalInvitation(Boolean.TRUE.equals(req.digitalInvitation()))
+                .theme(Utils.formatFullName(req.theme()))
                 .note(req.note())
                 .build();
 
@@ -62,9 +64,7 @@ public class PlaygroundReservationService {
         validateReservationTimes(req.startAt(), req.endAt());
 
         // 2. Validare Telefon
-        if (!Utils.isValidPhoneNumber(req.parentPhone())) {
-            throw new RuntimeException("ERROR.RESERVATION.PHONE_INVALID_FORMAT");
-        }
+        validatePhoneNumber(req.parentPhone());
 
         // 3. Validare Overlap (Helper 2 - trimitem ID-ul curent pentru excludere)
         checkOverlap(req.startAt(), req.endAt(), id);
@@ -72,6 +72,7 @@ public class PlaygroundReservationService {
         // 4. Logică Avans (Helper 3)
         boolean hadNoAdvance = !hasPositiveAdvance(reservation.getAdvanceAmount());
         boolean hasNewAdvance = hasPositiveAdvance(req.advanceAmount());
+        boolean dateChanged = !reservation.getStartAt().toLocalDate().isEqual(req.startAt().toLocalDate());
 
         if (hadNoAdvance && hasNewAdvance) {
             reservation.setAdvancePaidAt(LocalDateTime.now());
@@ -80,22 +81,34 @@ public class PlaygroundReservationService {
         // 5. Actualizare câmpuri
         reservation.setStartAt(req.startAt());
         reservation.setEndAt(req.endAt());
-        reservation.setParentName(req.parentName());
+        reservation.setParentName(Utils.formatFullName(req.parentName()));
         reservation.setParentPhone(req.parentPhone());
         reservation.setAdvanceAmount(req.advanceAmount());
-        reservation.setDigitalInvitation(req.digitalInvitation() != null && req.digitalInvitation());
-        reservation.setTheme(req.theme());
+        reservation.setDigitalInvitation(Boolean.TRUE.equals(req.digitalInvitation()));
+        reservation.setTheme(Utils.formatFullName(req.theme()));
         reservation.setNote(req.note());
 
-        return mapToResponse(reservationRepository.save(reservation));
+        PlaygroundReservation savedReservation = reservationRepository.save(reservation);
+        if (dateChanged) {
+            cateringOrderService.moveOrdersToDate(id, req.startAt().toLocalDate());
+        }
+
+        return mapToResponse(savedReservation);
     }
 
     @Transactional
     public void deleteReservation(Integer id) {
-        if (!reservationRepository.existsById(id)) {
-            throw new RuntimeException("ERROR.RESERVATION.NOT_FOUND");
+        
+        PlaygroundReservation reservation = reservationRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("ERROR.RESERVATION.NOT_FOUND"));
+
+        LocalDate reservationDate = reservation.getStartAt().toLocalDate();
+        LocalDate today = LocalDate.now();
+
+        if (reservationDate.isBefore(today)) {
+            throw new RuntimeException("ERROR.RESERVATION.CANNOT_DELETE_PAST");
         }
-        reservationRepository.deleteById(id);
+        reservationRepository.delete(reservation);
     }
 
     @Transactional(readOnly = true)
@@ -114,6 +127,13 @@ public class PlaygroundReservationService {
         }
         if (!start.isBefore(end)) {
             throw new RuntimeException("ERROR.RESERVATION.START_MUST_BE_BEFORE_END");
+        }
+
+        LocalDate reservationDate = start.toLocalDate();
+        LocalDate today = LocalDate.now();
+
+        if (reservationDate.isBefore(today)) {
+            throw new RuntimeException("ERROR.RESERVATION.DATE_IN_PAST");
         }
     }
 
@@ -137,6 +157,16 @@ public class PlaygroundReservationService {
     // 3. Verificare avans pozitiv
     private boolean hasPositiveAdvance(BigDecimal amount) {
         return amount != null && amount.compareTo(BigDecimal.ZERO) > 0;
+    }
+
+    private void validatePhoneNumber(String phone) {        
+
+        // Dacă nu e număr internațional (00), verificăm formatul local
+        if (!phone.startsWith("00")) {
+            if (!Utils.isValidPhoneNumber(phone)) {
+                throw new RuntimeException("ERROR.RESERVATION.PHONE_INVALID_FORMAT");
+            }
+        }
     }
 
     private PlaygroundReservationDTOs.ReservationResponse mapToResponse(PlaygroundReservation r) {

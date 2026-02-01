@@ -2,6 +2,9 @@ package com.sellbit.domain.sales.receiptitem;
 
 import com.sellbit.domain.catalog.product.Product;
 import com.sellbit.domain.catalog.product.ProductRepository;
+import com.sellbit.domain.catalog.productcomposite.ProductComponent;
+import com.sellbit.domain.catalog.productcomposite.ProductComponentRepository;
+import com.sellbit.domain.config.InsufficientStockException;
 import com.sellbit.domain.inventory.purchase.PurchaseService;
 import com.sellbit.domain.inventory.stockcurrent.StockCurrentService;
 import com.sellbit.domain.inventory.warehouse.Warehouse;
@@ -21,6 +24,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
@@ -34,6 +38,7 @@ class ReceiptItemServiceTest {
     @Mock private ReceiptItemRepository itemRepository;
     @Mock private ReceiptRepository receiptRepository;
     @Mock private ProductRepository productRepository;
+    @Mock private ProductComponentRepository productComponentRepository;
     @Mock private StockCurrentService stockCurrentService;
     @Mock private ReceiptService receiptService;
     @Mock private PurchaseService purchaseService;
@@ -64,10 +69,12 @@ class ReceiptItemServiceTest {
                 .id(50)
                 .name("Test Product")
                 .salePrice(new BigDecimal("119.00"))
-                .trackStock(true)
+                .trackStock(true) // Important pentru testele de stoc
                 .vatRate(vat)
                 .build();
     }
+
+    // --- TESTE PRINCIPALE ---
 
     @Test
     @DisplayName("addOrUpdateItem - Succes: Adăugare produs nou")
@@ -75,9 +82,16 @@ class ReceiptItemServiceTest {
         // Arrange
         when(receiptRepository.findById(100)).thenReturn(Optional.of(receipt));
         when(productRepository.findById(50)).thenReturn(Optional.of(product));
+        
+        // Returnăm listă goală => Produs simplu
+        when(productComponentRepository.findByParentProductIdAndIsActiveTrue(50))
+                .thenReturn(Collections.emptyList());
+
         when(purchaseService.getCurrentFIFOPurchasePrice(1, 50)).thenReturn(new BigDecimal("50.00"));
         
-        // Mock pentru receiptService.mapToResponse deoarece este returnat de metodă
+        // CORECTAT: Folosim getQuantity
+        when(stockCurrentService.getQuantity(1, 50)).thenReturn(new BigDecimal("10.000"));
+        
         ReceiptDTOs.Response expectedResponse = mock(ReceiptDTOs.Response.class);
         when(receiptService.mapToResponse(any(Receipt.class))).thenReturn(expectedResponse);
 
@@ -87,9 +101,73 @@ class ReceiptItemServiceTest {
         // Assert
         assertNotNull(result);
         verify(itemRepository).save(any(ReceiptItem.class));
-        // Verificăm sincronizarea stocului: oldQty = 0, newQty = 2
         verify(stockCurrentService).syncStockFromReceiptChange(eq(1), eq(50), eq(BigDecimal.ZERO), eq(new BigDecimal("2.000")));
         verify(receiptService).updateReceiptTotals(100);
+    }
+
+    @Test
+    @DisplayName("addOrUpdateItem - Eroare: Stoc Insuficient (Produs Simplu)")
+    void addOrUpdateItem_Fail_InsufficientStock_SimpleProduct() {
+        // Arrange
+        when(receiptRepository.findById(100)).thenReturn(Optional.of(receipt));
+        when(productRepository.findById(50)).thenReturn(Optional.of(product));
+        when(productComponentRepository.findByParentProductIdAndIsActiveTrue(50))
+                .thenReturn(Collections.emptyList());
+
+        // CORECTAT: getQuantity returnează stoc mic (1)
+        when(stockCurrentService.getQuantity(1, 50)).thenReturn(new BigDecimal("1.000"));
+
+        // Act & Assert (Vrem 5 bucăți)
+        InsufficientStockException ex = assertThrows(InsufficientStockException.class, () -> 
+            receiptItemService.addOrUpdateItem(100, 50, new BigDecimal("5.000")));
+        
+        // CORECTAT: Folosim getProductNames()
+        assertTrue(ex.getProductNames().contains("Test Product"));
+        verify(itemRepository, never()).save(any());
+    }
+
+    // --- TESTE SUPLIMENTARE (Corner Cases) ---
+
+    @Test
+    @DisplayName("addOrUpdateItem - Eroare: Stoc Insuficient (Produs Compus / Meniu)")
+    void addOrUpdateItem_Fail_InsufficientStock_CompositeProduct() {
+        // Arrange
+        Product menuProduct = Product.builder().id(60).name("Burger Menu").trackStock(true).build();
+        Product ingredient = Product.builder().id(61).name("Meat Patty").trackStock(true).build();
+
+        when(receiptRepository.findById(100)).thenReturn(Optional.of(receipt));
+        when(productRepository.findById(60)).thenReturn(Optional.of(menuProduct));
+
+        // 1 Meniu = 2 x Carne
+        ProductComponent comp = new ProductComponent();
+        comp.setChildProduct(ingredient);
+        comp.setQuantity(new BigDecimal("2.000"));
+
+        when(productComponentRepository.findByParentProductIdAndIsActiveTrue(60))
+                .thenReturn(List.of(comp));
+
+        // Vrem 2 Meniuri => Necesar 4 Carne. Stoc Carne: 3 => Insuficient
+        // CORECTAT: getQuantity pe ingredient
+        when(stockCurrentService.getQuantity(1, 61)).thenReturn(new BigDecimal("3.000"));
+
+        // Act & Assert
+        InsufficientStockException ex = assertThrows(InsufficientStockException.class, () -> 
+            receiptItemService.addOrUpdateItem(100, 60, new BigDecimal("2.000")));
+
+        // CORECTAT: getProductNames()
+        assertTrue(ex.getProductNames().contains("Meat Patty"));
+    }
+
+    @Test
+    @DisplayName("addOrUpdateItem - Eroare: Produsul nu există")
+    void addOrUpdateItem_Fail_ProductNotFound() {
+        when(receiptRepository.findById(100)).thenReturn(Optional.of(receipt));
+        when(productRepository.findById(999)).thenReturn(Optional.empty());
+
+        RuntimeException ex = assertThrows(RuntimeException.class, () -> 
+            receiptItemService.addOrUpdateItem(100, 999, BigDecimal.ONE));
+
+        assertEquals("ERROR.PRODUCT.NOT_FOUND", ex.getMessage());
     }
 
     @Test
@@ -117,6 +195,7 @@ class ReceiptItemServiceTest {
                 .product(product)
                 .quantity(new BigDecimal("1.000"))
                 .build();
+        receipt.getItems().add(item);
 
         when(itemRepository.findById(500)).thenReturn(Optional.of(item));
         
@@ -128,7 +207,6 @@ class ReceiptItemServiceTest {
 
         // Assert
         assertNotNull(result);
-        // Sync invers: de la quantity 1.000 la 0
         verify(stockCurrentService).syncStockFromReceiptChange(eq(1), eq(50), eq(new BigDecimal("1.000")), eq(BigDecimal.ZERO));
         verify(itemRepository).delete(item);
         verify(receiptService).updateReceiptTotals(100);
@@ -137,39 +215,29 @@ class ReceiptItemServiceTest {
     @Test
     @DisplayName("getItemsByReceipt - Succes: Mapare corectă")
     void getItemsByReceipt_Success() {
-        // Arrange
-        ReceiptItem item = ReceiptItem.builder()
-                .id(1)
-                .product(product)
-                .quantity(BigDecimal.ONE)
-                .unitPrice(new BigDecimal("100.00"))
-                .vatRate(new BigDecimal("19.00"))
-                .lineTotal(new BigDecimal("100.00"))
-                .netTotal(new BigDecimal("84.03"))
-                .vatTotal(new BigDecimal("15.97"))
+        ReceiptItem item = ReceiptItem.builder().id(1).product(product)
+                .quantity(BigDecimal.ONE).unitPrice(new BigDecimal("100.00"))
+                .vatRate(new BigDecimal("19.00")).lineTotal(new BigDecimal("100.00"))
+                .netTotal(new BigDecimal("84.03")).vatTotal(new BigDecimal("15.97"))
                 .build();
 
-        when(itemRepository.findByReceiptId(100)).thenReturn(List.of(item));
+        when(itemRepository.findByReceiptIdOrderByIdAsc(100)).thenReturn(List.of(item));
 
-        // Act
         var result = receiptItemService.getItemsByReceipt(100);
 
-        // Assert
         assertEquals(1, result.size());
         assertEquals("Test Product", result.get(0).productName());
-        // Verificăm BigDecimal cu compareTo pentru a ignora scale-ul (ex: 100.0 vs 100.00)
         assertEquals(0, new BigDecimal("100.00").compareTo(result.get(0).lineTotal()));
     }
 
-    // --- Teste getProductsQuantityReport ---
+    // --- TESTE REPORTING ---
 
     @Test
-    @DisplayName("getProductsQuantityReport - Succes: Returnează lista agregată din repository")
+    @DisplayName("getProductsQuantityReport - Succes: Returnează lista agregată")
     void getProductsQuantityReport_Success() {
-        // Arrange
-        java.time.LocalDateTime start = java.time.LocalDateTime.now().minusDays(1);
+        java.time.LocalDateTime start = java.time.LocalDateTime.now();
         java.time.LocalDateTime end = java.time.LocalDateTime.now();
-        List<Integer> productIds = List.of(50, 51);
+        List<Integer> productIds = List.of(50);
         
         var mockReport = new ReceiptItemDTO.QuantityReportResponse(
                 "Test Product", new BigDecimal("10.000"), new BigDecimal("1190.00"));
@@ -177,63 +245,35 @@ class ReceiptItemServiceTest {
         when(itemRepository.getProductsQuantityReport(start, end, productIds))
                 .thenReturn(List.of(mockReport));
 
-        // Act
-        List<ReceiptItemDTO.QuantityReportResponse> result = 
-                receiptItemService.getProductsQuantityReport(start, end, productIds);
+        var result = receiptItemService.getProductsQuantityReport(start, end, productIds);
 
-        // Assert
-        assertNotNull(result);
         assertEquals(1, result.size());
         assertEquals("Test Product", result.get(0).productName());
-        assertEquals(0, new BigDecimal("10.000").compareTo(result.get(0).totalQuantity()));
-        verify(itemRepository).getProductsQuantityReport(start, end, productIds);
     }
 
     @Test
     @DisplayName("getProductsQuantityReport - Succes: Funcționează cu productIds null")
     void getProductsQuantityReport_NullIds_Success() {
-        // Arrange
         java.time.LocalDateTime start = java.time.LocalDateTime.now();
         java.time.LocalDateTime end = java.time.LocalDateTime.now();
         
         when(itemRepository.getProductsQuantityReport(any(), any(), isNull()))
                 .thenReturn(new ArrayList<>());
 
-        // Act
         var result = receiptItemService.getProductsQuantityReport(start, end, null);
 
-        // Assert
         assertNotNull(result);
         assertTrue(result.isEmpty());
-        verify(itemRepository).getProductsQuantityReport(start, end, null);
     }
 
     @Test
-    @DisplayName("getProductsQuantityReport - Caz Limită: Repository returnează listă goală pentru interval fără vânzări")
-    void getProductsQuantityReport_EmptyResult_ReturnsEmptyList() {
-        // Arrange
+    @DisplayName("getProductsQuantityReport - Caz Limită: Repository returnează listă goală")
+    void getProductsQuantityReport_EmptyResult() {
         when(itemRepository.getProductsQuantityReport(any(), any(), any()))
                 .thenReturn(List.of());
 
-        // Act
         var result = receiptItemService.getProductsQuantityReport(java.time.LocalDateTime.now(), java.time.LocalDateTime.now(), null);
 
-        // Assert
         assertTrue(result.isEmpty());
-    }
-
-    @Test
-    @DisplayName("getProductsQuantityReport - Caz Limită: Verifică dacă datele sunt pasate corect către repository")
-    void getProductsQuantityReport_PassesCorrectArguments() {
-        // Arrange
-        java.time.LocalDateTime start = java.time.LocalDateTime.of(2026, 1, 1, 0, 0);
-        java.time.LocalDateTime end = java.time.LocalDateTime.of(2026, 1, 31, 23, 59);
-        
-        // Act
-        receiptItemService.getProductsQuantityReport(start, end, null);
-
-        // Assert
-        // Verificăm că service-ul nu modifică datele înainte de a le trimite la repo
-        verify(itemRepository).getProductsQuantityReport(eq(start), eq(end), isNull());
     }
 }

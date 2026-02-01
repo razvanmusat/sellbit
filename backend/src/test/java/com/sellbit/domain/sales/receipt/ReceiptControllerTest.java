@@ -45,10 +45,15 @@ class ReceiptControllerTest {
     @DisplayName("POST /api/sales/receipts - Succes: Creare bon")
     void create_Success() throws Exception {
         var req = new ReceiptDTOs.CreateRequest(1, "Masa 5", 1, "Nota test");
+        
+        // Updated: Response now includes warehouseId (1) after warehouseName
         var res = new ReceiptDTOs.Response(
                 1, "Deschis", "Masa 5", 
                 BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, 
-                "Central", "Admin", LocalDateTime.now(), null, "Nota test", null
+                "Central", 
+                1, // <--- warehouseId ADAUGAT AICI
+                "Admin", LocalDateTime.now(), null, "Nota test", null,
+                List.of() // Empty items list
         );
 
         when(receiptService.createReceipt(any())).thenReturn(res);
@@ -58,6 +63,7 @@ class ReceiptControllerTest {
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(1))
+                .andExpect(jsonPath("$.warehouseId").value(1)) // Verificăm și ID-ul
                 .andExpect(jsonPath("$.statusLabel").value("Deschis"))
                 .andExpect(jsonPath("$.tableName").value("Masa 5"));
     }
@@ -118,10 +124,14 @@ class ReceiptControllerTest {
         var itemReq = new ReceiptDTOs.RefundItemRequest(1, new BigDecimal("1.00"));
         var refundReq = new ReceiptDTOs.RefundRequest(1, List.of(itemReq), 1);
         
+        // Updated: Response includes warehouseId (1)
         var response = new ReceiptDTOs.Response(
                 101, "Inchis", "REFUND: 100", 
                 new BigDecimal("-50.00"), new BigDecimal("-42.00"), new BigDecimal("-8.00"), 
-                "Central", "Admin", LocalDateTime.now(), LocalDateTime.now(), null, 100
+                "Central", 
+                1, // <--- warehouseId
+                "Admin", LocalDateTime.now(), LocalDateTime.now(), null, 100,
+                List.of()
         );
 
         when(receiptService.createPartialRefund(eq(100), any())).thenReturn(response);
@@ -131,6 +141,7 @@ class ReceiptControllerTest {
                         .content(objectMapper.writeValueAsString(refundReq)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalAmount").value(-50.00))
+                .andExpect(jsonPath("$.warehouseId").value(1))
                 .andExpect(jsonPath("$.statusLabel").value("Inchis"))
                 .andExpect(jsonPath("$.originalReceiptId").value(100));
     }
@@ -161,10 +172,14 @@ class ReceiptControllerTest {
     @Test
     @DisplayName("GET /api/sales/receipts/active - Succes: Returnează lista de mese active")
     void getActive_Success() throws Exception {
+        // Updated: Response includes warehouseId (1)
         var response = new ReceiptDTOs.Response(
                 1, "Deschis", "Masa 10", 
                 BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, 
-                "Central", "Admin", LocalDateTime.now(), null, null, null
+                "Central", 
+                1, // <--- warehouseId
+                "Admin", LocalDateTime.now(), null, null, null,
+                List.of()
         );
 
         when(receiptService.getActiveReceipts(1)).thenReturn(List.of(response));
@@ -173,6 +188,7 @@ class ReceiptControllerTest {
                         .param("warehouseId", "1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].tableName").value("Masa 10"))
+                .andExpect(jsonPath("$[0].warehouseId").value(1))
                 .andExpect(jsonPath("$.length()").value(1));
     }
 
@@ -187,10 +203,14 @@ class ReceiptControllerTest {
     @Test
     @DisplayName("GET /api/sales/receipts/report - Succes: Returnează istoricul filtrat")
     void getReport_Success() throws Exception {
+        // Updated: Response includes warehouseId (1)
         var response = new ReceiptDTOs.Response(
                 100, "Inchis", "Masa 5", 
                 new BigDecimal("150.00"), new BigDecimal("126.00"), new BigDecimal("24.00"), 
-                "Central", "Admin", LocalDateTime.now().minusDays(1), LocalDateTime.now(), null, null
+                "Central", 
+                1, // <--- warehouseId
+                "Admin", LocalDateTime.now().minusDays(1), LocalDateTime.now(), null, null,
+                List.of()
         );
 
         when(receiptService.getReceiptsReport(eq(1), eq("CLOSED"), any(), any()))
@@ -203,6 +223,7 @@ class ReceiptControllerTest {
                         .param("end", "2026-01-05T23:59:59"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].id").value(100))
+                .andExpect(jsonPath("$[0].warehouseId").value(1))
                 .andExpect(jsonPath("$[0].totalAmount").value(150.00));
     }
 
@@ -248,22 +269,32 @@ class ReceiptControllerTest {
                 .andExpect(status().isBadRequest()); 
     }
 
-    // --- 10. REMOVE VOUCHER PAYMENT ---
+    // --- 11. ADVANCE PAYMENT (INCASARE AVANS) ---
     @Test
-    @DisplayName("DELETE /api/sales/receipts/{rId}/payments/{pId}/voucher - Succes")
-    void removeVoucher_Success() throws Exception {
-        doNothing().when(receiptService).removeVoucherPayment(100, 50);
+    @DisplayName("POST /api/sales/receipts/advance - Succes: Înregistrare avans")
+    void registerAdvance_Success() throws Exception {
+        var req = new ReceiptDTOs.AdvancePaymentRequest(1, new BigDecimal("100.00"), "CASH", 1, "Avans client");
 
-        mockMvc.perform(delete("/api/sales/receipts/100/payments/50/voucher"))
+        // Controllerul apeleaza metoda void a serviciului cu 5 argumente
+        doNothing().when(receiptService).registerAdvancePayment(anyInt(), any(), anyString(), anyInt(), anyString());
+
+        mockMvc.perform(post("/api/sales/receipts/advance")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk());
-
-        verify(receiptService).removeVoucherPayment(100, 50);
+        
+        verify(receiptService).registerAdvancePayment(1, new BigDecimal("100.00"), "CASH", 1, "Avans client");
     }
 
     @Test
-    @DisplayName("DELETE /api/sales/receipts/{rId}/payments/{pId}/voucher - Eroare: ID-uri invalide")
-    void removeVoucher_Fail_InvalidType() throws Exception {
-        mockMvc.perform(delete("/api/sales/receipts/abc/payments/def/voucher"))
+    @DisplayName("POST /api/sales/receipts/advance - Eroare: Validare")
+    void registerAdvance_Fail_Validation() throws Exception {
+        // Lipseste amount si paymentMethodCode
+        var req = new ReceiptDTOs.AdvancePaymentRequest(1, null, null, 1, null);
+
+        mockMvc.perform(post("/api/sales/receipts/advance")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isBadRequest());
     }
 }

@@ -33,7 +33,6 @@ class CateringOrderServiceTest {
 
     @BeforeEach
     void setUp() {
-        // Folosesc Builder-ul entității Product (presupunând că ai Lombok @Builder pe ea, conform structurii tale)
         product = Product.builder()
                 .id(50)
                 .name("Pizza Test")
@@ -41,10 +40,10 @@ class CateringOrderServiceTest {
     }
 
     @Test
-    @DisplayName("createOrder: Succes bar (fără rezervare, forțează data azi)")
+    @DisplayName("createOrder: Succes bar (forțează data azi dacă orderDate e null)")
     void createOrder_BarOrder_Success() {
-        // CreateOrderRequest(Integer productId, Integer reservationId, Integer quantity, LocalDate orderDate)
-        var req = new CateringOrderDTOs.CreateOrderRequest(50, null, 2, LocalDate.now().plusDays(5));
+        // Corecție: Trimitem null la orderDate pentru a testa fallback-ul la LocalDate.now()
+        var req = new CateringOrderDTOs.CreateOrderRequest(50, null, 2, null);
 
         when(productRepository.findById(50)).thenReturn(Optional.of(product));
         when(orderRepository.save(any(CateringOrder.class))).thenAnswer(i -> {
@@ -53,11 +52,26 @@ class CateringOrderServiceTest {
             return o;
         });
 
-        var result = orderService.createOrder(req);
+        var result = orderService.createOrder(List.of(req)).get(0);
 
+        // Acum aserțiunea va trece pentru că Service-ul va pune data de azi
         assertEquals(LocalDate.now(), result.orderDate());
         assertEquals(50, result.productId());
         assertEquals("Pizza Test", result.productName());
+    }
+
+    @Test
+    @DisplayName("createOrder: Succes cu dată specificată")
+    void createOrder_WithSpecificDate_Success() {
+        LocalDate futureDate = LocalDate.now().plusDays(5);
+        var req = new CateringOrderDTOs.CreateOrderRequest(50, null, 2, futureDate);
+
+        when(productRepository.findById(50)).thenReturn(Optional.of(product));
+        when(orderRepository.save(any(CateringOrder.class))).thenAnswer(i -> i.getArgument(0));
+
+        var result = orderService.createOrder(List.of(req)).get(0);
+
+        assertEquals(futureDate, result.orderDate());
     }
 
     @Test
@@ -67,6 +81,7 @@ class CateringOrderServiceTest {
                 .id(1)
                 .product(product)
                 .orderDate(LocalDate.now().plusDays(1))
+                .quantity(5)
                 .build();
         
         var req = new CateringOrderDTOs.CreateOrderRequest(50, null, 15, LocalDate.now().plusDays(1));
@@ -95,6 +110,20 @@ class CateringOrderServiceTest {
 
         RuntimeException ex = assertThrows(RuntimeException.class, () -> orderService.updateOrder(1, req));
         assertEquals("ERROR.CATERING_ORDER.EDIT_FORBIDDEN_PAST_DATE", ex.getMessage());
+    }
+
+    @Test
+    @DisplayName("deleteOrder: Eroare la ștergerea unei comenzi din trecut")
+    void deleteOrder_PastDate_ThrowsException() {
+        var pastOrder = CateringOrder.builder()
+                .id(1)
+                .orderDate(LocalDate.now().minusDays(1))
+                .build();
+
+        when(orderRepository.findById(1)).thenReturn(Optional.of(pastOrder));
+
+        RuntimeException ex = assertThrows(RuntimeException.class, () -> orderService.deleteOrder(1));
+        assertEquals("ERROR.CATERING_ORDER.DELETE_FORBIDDEN_PAST_DATE", ex.getMessage());
     }
 
     @Test

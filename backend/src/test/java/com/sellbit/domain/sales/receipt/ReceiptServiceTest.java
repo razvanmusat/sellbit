@@ -451,29 +451,6 @@ class ReceiptServiceTest {
         assertThrows(RuntimeException.class, () -> receiptService.createPartialRefund(100, req));
     }
 
-    // --- 12. removeVoucherPayment (Metodă Nouă) ---
-    @Test
-    @DisplayName("removeVoucherPayment - Succes")
-    void removeVoucherPayment_Success() {
-        ReceiptPayment payment = ReceiptPayment.builder().id(1).receipt(receipt).build();
-        when(paymentRepository.findById(1)).thenReturn(Optional.of(payment));
-
-        receiptService.removeVoucherPayment(100, 1);
-
-        verify(paymentRepository).delete(payment);
-        verify(voucherService).cancelVoucherUsage(100);
-    }
-
-    @Test
-    @DisplayName("removeVoucherPayment - Eroare: Plata aparține altui bon")
-    void removeVoucherPayment_Fail_Mismatch() {
-        Receipt other = Receipt.builder().id(999).build();
-        ReceiptPayment payment = ReceiptPayment.builder().id(1).receipt(other).build();
-        when(paymentRepository.findById(1)).thenReturn(Optional.of(payment));
-
-        assertThrows(RuntimeException.class, () -> receiptService.removeVoucherPayment(100, 1));
-    }
-
     // --- 13. getBillNoteData (Metodă Nouă - Print) ---
     @Test
     @DisplayName("getBillNoteData - Succes: Calculează restul de plată")
@@ -532,7 +509,7 @@ class ReceiptServiceTest {
             return r;
         });
 
-        receiptService.registerAdvancePayment(warehouseId, amount, pmCode, userId);
+        receiptService.registerAdvancePayment(warehouseId, amount, pmCode, userId, "Advance payment");
 
         verify(receiptRepository).save(argThat(r -> 
             r.getStatus().getCode().equals("CLOSED") &&
@@ -553,7 +530,7 @@ class ReceiptServiceTest {
         when(productRepository.findByProductTypeCode("ADVANCE")).thenReturn(List.of()); 
 
         assertThrows(RuntimeException.class, () -> 
-            receiptService.registerAdvancePayment(1, BigDecimal.TEN, "CASH", 1)
+            receiptService.registerAdvancePayment(1, BigDecimal.TEN, "CASH", 1, "Advance payment")
         );
     }
 }
