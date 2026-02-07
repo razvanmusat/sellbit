@@ -1,0 +1,158 @@
+import React from 'react';
+import { 
+  Box, Paper, Table, TableBody, TableCell, TableContainer, 
+  TableHead, TableRow, Typography, Button, 
+  CircularProgress, Alert
+} from '@mui/material';
+import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import 'dayjs/locale/ro'; 
+import dayjs from 'dayjs';
+
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import AssignmentReturnIcon from '@mui/icons-material/AssignmentReturn';
+import PersonIcon from '@mui/icons-material/Person';
+
+// Modală
+import RefundModal from '../components/RefundModal';
+
+// Hook-ul nou creat
+import { useRefundPage } from '../hooks/useRefundPage';
+
+const RefundPage = ({ warehouseId }) => {
+  const {
+    receipts,
+    loading,
+    error,
+    selectedDate,
+    setSelectedDate,
+    modalOpen,
+    selectedReceipt,
+    handleOpenModal,
+    handleCloseModal,
+    handleRefundSuccess
+  } = useRefundPage(warehouseId);
+
+  // --- STILURI IDENTICE ---
+  const compactCellStyle = { padding: '4px 8px', width: '1%', whiteSpace: 'nowrap' };
+  const fluidCellStyle = { padding: '4px 8px', width: 'auto' };
+
+  return (
+    <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="ro">
+      <Box sx={{ p: { xs: 1, sm: 2 } }}>
+        
+        {/* ZONA FILTRE SIMPLIFICATĂ (Doar Data) */}
+        <Paper 
+            elevation={0} 
+            sx={{ 
+                p: 2, 
+                mb: 3, 
+                bgcolor: '#f5f5f5', 
+                border: '1px solid #e0e0e0',
+            }}
+        >
+            <Box display="flex" alignItems="center" gap={2}>
+                <Box display="flex" alignItems="center" gap={1} sx={{ mr: 1 }}>
+                    <AssignmentReturnIcon color="action" />
+                    <Typography variant="subtitle2" sx={{ display: { xs: 'none', sm: 'block' }, color: 'text.secondary' }}>
+                        Retururi din data:
+                    </Typography>
+                </Box>
+
+                <DatePicker 
+                  label="Selectează Ziua" 
+                  value={selectedDate} 
+                  onChange={(newValue) => newValue && setSelectedDate(newValue)} 
+                  format="DD/MM/YYYY"
+                  slotProps={{ 
+                      textField: { 
+                          size: 'small', 
+                          sx: { bgcolor: 'white', width: 180 } 
+                      } 
+                  }}
+                />
+                
+                {loading && <CircularProgress size={24} sx={{ ml: 2 }} />}
+            </Box>
+        </Paper>
+
+        {error && <Alert severity="info" sx={{ mb: 2 }}>{error}</Alert>}
+        
+        {!loading && !error && receipts.length === 0 && (
+            <Alert severity="warning">Nu există bonuri închise în data de {selectedDate.format('DD/MM/YYYY')}.</Alert>
+        )}
+
+        {/* TABEL REZULTATE */}
+        {receipts.length > 0 && (
+            <TableContainer component={Paper} elevation={1} sx={{ overflowX: 'auto' }}>
+              <Table size="small">
+                <TableHead sx={{ bgcolor: '#eeeeee' }}>
+                  <TableRow>
+                    <TableCell align="center" sx={compactCellStyle}>Data & Ora</TableCell>
+                    <TableCell align="right" sx={compactCellStyle}>Sumă</TableCell>
+                    <TableCell align="left" sx={fluidCellStyle}>Explicație</TableCell>
+                    <TableCell align="left" sx={fluidCellStyle}>Notițe</TableCell>
+                    <TableCell align="center" sx={compactCellStyle}>Acțiuni</TableCell>
+                    <TableCell align="center" sx={compactCellStyle}>Utilizator</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {receipts.map((row) => (
+                    <TableRow key={row.id} hover>
+                      <TableCell align="center" sx={compactCellStyle}>
+                        {row.closedAt ? dayjs(row.closedAt).format('DD/MM/YYYY HH:mm') : '-'}
+                      </TableCell>
+
+                      <TableCell align="right" sx={compactCellStyle}>
+                        <Typography fontWeight="bold" color="success.main" variant="body2">
+                            {typeof row.totalAmount === 'number' ? row.totalAmount.toFixed(2) : row.totalAmount} RON
+                        </Typography>
+                      </TableCell>
+
+                      <TableCell align="left" sx={fluidCellStyle}>
+                         <Typography variant="body2" sx={{ whiteSpace: 'nowrap' }}>
+                             Bon nr. {row.id} {row.tableName || '-'}
+                         </Typography>
+                      </TableCell>
+
+                      <TableCell align="left" sx={{ ...fluidCellStyle, color: 'text.secondary', fontStyle: 'italic' }}>
+                         {row.note || '-'}
+                      </TableCell>
+
+                      <TableCell align="center" sx={compactCellStyle}>
+                        <Button 
+                            variant="outlined" size="small" 
+                            startIcon={<VisibilityIcon />}
+                            onClick={() => handleOpenModal(row)}
+                            sx={{ textTransform: 'none', py: 0 }}
+                        >
+                            Vizualizează
+                        </Button>
+                      </TableCell>
+
+                      <TableCell align="left" sx={compactCellStyle}>
+                         <Box display="flex" alignItems="center" gap={0.5}>
+                            <PersonIcon fontSize="small" color="disabled" />
+                            <Typography variant="body2">{row.userName}</Typography>
+                         </Box>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+        )}
+
+        <RefundModal 
+            open={modalOpen} 
+            onClose={handleCloseModal}
+            receipt={selectedReceipt}
+            onRefundSuccess={handleRefundSuccess}
+        />
+
+      </Box>
+    </LocalizationProvider>
+  );
+};
+
+export default RefundPage;

@@ -28,6 +28,12 @@ public class CategoryController {
         return ResponseEntity.ok(categoryService.getActiveCategoriesByParent(parentId));
     }
 
+    @PreAuthorize("hasAnyAuthority('50', '100')")
+    @GetMapping("/{id}")
+    public ResponseEntity<CategoryDTO> getById(@PathVariable Integer id) {
+        return ResponseEntity.ok(categoryService.getCategoryById(id));
+    }
+
     /**
      * Obține categoriile în funcție de părinte pentru interfața de Admin.
      * Include și categoriile inactive.

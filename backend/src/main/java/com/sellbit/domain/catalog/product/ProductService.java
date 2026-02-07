@@ -2,6 +2,7 @@ package com.sellbit.domain.catalog.product;
 
 import com.sellbit.domain.catalog.category.Category;
 import com.sellbit.domain.catalog.category.CategoryRepository;
+import com.sellbit.domain.lookup.producttype.ProductType;
 import com.sellbit.domain.lookup.producttype.ProductTypeRepository;
 import com.sellbit.domain.lookup.unitofmeasure.UnitOfMeasureRepository;
 import com.sellbit.domain.lookup.vatrate.VatRateRepository;
@@ -9,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -115,34 +117,51 @@ public class ProductService {
     private void mapDtoToEntity(ProductDTO dto, Product product) {
         product.setName(dto.name());
         product.setBarcode(dto.barcode());
-        product.setSalePrice(dto.salePrice());
-        product.setPurchasePrice(dto.purchasePrice());
-        if (dto.trackStock() != null)
-            product.setTrackStock(dto.trackStock());
+        product.setSalePrice(dto.salePrice());        
 
-        // Validare Categorie: Trebuie să existe și să fie "frunză" (să nu aibă
-        // subcategorii)
+        // 1. Căutăm Tipul Produsului (l-am mutat la început ca să putem decide stocul)
+        ProductType type = productTypeRepository.findById(dto.productTypeId())
+                .orElseThrow(() -> new RuntimeException("ERROR.PRODUCT_TYPE.NOT_FOUND"));
+        
+        product.setProductType(type);
+
+        if ("CATERING".equalsIgnoreCase(type.getCode())) {
+            if (dto.purchasePrice() == null || dto.purchasePrice().compareTo(BigDecimal.ZERO) <= 0) {
+                throw new RuntimeException("ERROR.CATERING.PRICE_REQUIRED");
+            }
+        }
+        
+        product.setPurchasePrice(dto.purchasePrice());
+
+        // 2. LOGICĂ AUTOMATĂ TRACK STOCK
+        // Dacă tipul este REGULAR -> trackStock = true
+        // Orice altceva (SERVICE, CATERING, MENU, ADVANCE) -> trackStock = false
+        if ("REGULAR".equalsIgnoreCase(type.getCode())) {
+            product.setTrackStock(true);
+        } else {
+            product.setTrackStock(false);
+        }
+
+        // 3. Validare Categorie
         Category category = categoryRepository.findById(dto.categoryId())
                 .orElseThrow(() -> new RuntimeException("ERROR.CATEGORY.NOT_FOUND"));
 
         if (categoryRepository.existsByParent_Id(category.getId())) {
             throw new RuntimeException("ERROR.CATEGORY.NOT_LEAF");
         }
-
         product.setCategory(category);
 
+        // 4. Validare Unitate de Măsură
         product.setUnit(unitOfMeasureRepository.findById(dto.unitId())
                 .orElseThrow(() -> new RuntimeException("ERROR.UNIT.NOT_FOUND")));
 
-        product.setProductType(productTypeRepository.findById(dto.productTypeId())
-                .orElseThrow(() -> new RuntimeException("ERROR.PRODUCT_TYPE.NOT_FOUND")));
-
-        if (dto.vatRateId() != null) {
-            product.setVatRate(vatRateRepository.findById(dto.vatRateId())
-                    .orElseThrow(() -> new RuntimeException("ERROR.VAT.NOT_FOUND")));
-        } else {
-            product.setVatRate(null);
+        // 5. Validare TVA (Acum este OBLIGATORIE)
+        if (dto.vatRateId() == null) {
+            throw new RuntimeException("ERROR.VAT.REQUIRED");
         }
+        
+        product.setVatRate(vatRateRepository.findById(dto.vatRateId())
+                .orElseThrow(() -> new RuntimeException("ERROR.VAT.NOT_FOUND")));
     }
 
     private ProductDTO convertToDTO(Product product) {

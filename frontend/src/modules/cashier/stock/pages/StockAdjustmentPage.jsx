@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { 
   Box, Typography, Paper, TextField, Button, 
   MenuItem, Divider, IconButton, Stack, Snackbar, Alert, Container 
@@ -7,69 +7,29 @@ import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import SaveIcon from '@mui/icons-material/Save';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
-import { useSelector } from 'react-redux';
 
 import ProductSearch from '../../sales/components/common/ProductSearch';
-import { StockAdjustmentService } from '../api/StockAdjustmentService';
-import { SearchProductService } from '../../sales/api/SearchProductService';
-import { getFriendlyErrorMessage } from '../../../../shared/utils/errorHandler';
+import { useStockAdjustmentPage } from '../hooks/useStockAdjustmentPage'; // Importăm noul hook
 
 const StockAdjustmentPage = ({ warehouseId }) => {
-  const { user } = useSelector((state) => state.auth);
-  const { warehouses } = useSelector((state) => state.cashier);
-  
-  const [notification, setNotification] = useState({ open: false, message: '', severity: 'info' });
-  const [reasons, setReasons] = useState([]);
-  const [selectedProduct, setSelectedProduct] = useState(null);
-  const [quantityToDeduct, setQuantityToDeduct] = useState(1);
-  const [reasonId, setReasonId] = useState('');
-  const [note, setNote] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  const currentWarehouseName = warehouses?.find(w => w.id === Number(warehouseId))?.name || "Gestiune";
-
-  useEffect(() => {
-    const loadReasons = async () => {
-      try {
-        const data = await StockAdjustmentService.getActiveReasons();
-        setReasons(data);
-      } catch (err) {
-        setNotification({ open: true, message: getFriendlyErrorMessage(err), severity: 'error' });
-      }
-    };
-    loadReasons();
-  }, []);
-
-  const handleProductSelect = async (productId) => {
-    try {
-      const results = await SearchProductService.searchProductsByName(""); 
-      const fullProduct = results.find(p => p.id === productId);
-      setSelectedProduct(fullProduct || { id: productId, name: `Produs #${productId}` });
-    } catch (err) {
-      setSelectedProduct({ id: productId, name: `Produs #${productId}` });
-    }
-  };
-
-  const handleSave = async () => {
-    if (!reasonId) {
-      setNotification({ open: true, message: "Selectează motivul scăderii!", severity: 'warning' });
-      return;
-    }
-
-    setLoading(true);
-    try {
-      await StockAdjustmentService.createAdjustment({
-        warehouseId, productId: selectedProduct.id, userId: user.id,
-        reasonId, quantityChange: quantityToDeduct * -1, note
-      });
-      setNotification({ open: true, message: "Ajustare salvată cu succes.", severity: 'success' });
-      setSelectedProduct(null); setNote(''); setQuantityToDeduct(1); setReasonId('');
-    } catch (err) {
-      setNotification({ open: true, message: getFriendlyErrorMessage(err), severity: 'error' });
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Destructurăm logica
+  const {
+    currentWarehouseName,
+    reasons,
+    selectedProduct,
+    quantityToDeduct,
+    reasonId,
+    note,
+    loading,
+    notification,
+    setQuantityToDeduct,
+    setReasonId,
+    setNote,
+    handleProductSelect,
+    handleSave,
+    handleCloseNotification,
+    handleClearProduct
+  } = useStockAdjustmentPage(warehouseId);
 
   return (
     <Container maxWidth="md" sx={{ py: 1 }}>
@@ -80,7 +40,11 @@ const StockAdjustmentPage = ({ warehouseId }) => {
         <Divider sx={{ mb: 2 }} />
 
         {!selectedProduct ? (
-          <ProductSearch warehouseId={warehouseId} onProductSelect={handleProductSelect} onlyTrackStock={true} />
+          <ProductSearch 
+            warehouseId={warehouseId} 
+            onProductSelect={handleProductSelect} 
+            onlyTrackStock={true} 
+          />
         ) : (
           <Stack spacing={3}>
             {/* 1. PRODUS */}
@@ -89,7 +53,7 @@ const StockAdjustmentPage = ({ warehouseId }) => {
                 <Box component="span" sx={{ color: 'text.secondary', mr: 1 }}>Produs:</Box>
                 <strong>{selectedProduct.name}</strong>
               </Typography>
-              <IconButton onClick={() => setSelectedProduct(null)} color="error" size="small">
+              <IconButton onClick={handleClearProduct} color="error" size="small">
                 <DeleteOutlineIcon />
               </IconButton>
             </Box>
@@ -142,7 +106,7 @@ const StockAdjustmentPage = ({ warehouseId }) => {
 
       <Snackbar 
         open={notification.open} autoHideDuration={3000} 
-        onClose={() => setNotification({ ...notification, open: false })}
+        onClose={handleCloseNotification}
         anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
       >
         <Alert severity={notification.severity} variant="filled" sx={{ width: '100%', fontWeight: 'bold' }}>

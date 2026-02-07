@@ -21,32 +21,31 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(ReceiptItemController.class)
-@AutoConfigureMockMvc(addFilters = false) // Ignorăm securitatea (filtrelor) pentru testare unitară
+@AutoConfigureMockMvc(addFilters = false)
 class ReceiptItemControllerTest {
 
-    @Autowired 
+    @Autowired
     private MockMvc mockMvc;
 
-    @MockitoBean 
+    @MockitoBean
     private ReceiptItemService receiptItemService;
 
-    // Mock-uri obligatorii pentru a permite contextului de Spring să pornească (dependințe JwtAuthenticationFilter)
-    @MockitoBean 
-    private JwtUtils jwtUtils;
-
-    @MockitoBean 
-    private UserDetailsService userDetailsService;
-
+    // Mock-uri pentru securitate
     @MockitoBean
-    private PasswordEncoder passwordEncoder;   
+    private JwtUtils jwtUtils;
+    @MockitoBean
+    private UserDetailsService userDetailsService;
+    @MockitoBean
+    private PasswordEncoder passwordEncoder;
 
     // --- POST /api/sales/receipt-items/sync ---
 
     @Test
     @DisplayName("POST /sync - Succes: Adăugare produs")
     void syncItem_Success() throws Exception {
+        // Returnăm null sau un obiect dummy, controller-ul verifică doar status 200 aici
         when(receiptItemService.addOrUpdateItem(anyInt(), anyInt(), any(BigDecimal.class)))
-                .thenReturn(null); 
+                .thenReturn(null);
 
         mockMvc.perform(post("/api/sales/receipt-items/sync")
                 .param("receiptId", "100")
@@ -84,32 +83,69 @@ class ReceiptItemControllerTest {
     // --- GET /api/sales/receipt-items/receipt/{receiptId} ---
 
     @Test
-    @DisplayName("GET /receipt/{receiptId} - Succes")
+    @DisplayName("GET /receipt/{receiptId} - Succes: Returnează itemele cu structura nouă")
     void getItems_Success() throws Exception {
+        // ACTUALIZAT: Constructorul include acum remainingQuantity
         var response = new ReceiptItemDTO.ReceiptItemResponse(
-                1, 50, "Produs", BigDecimal.ONE, BigDecimal.TEN, 
-                BigDecimal.ZERO, BigDecimal.TEN, BigDecimal.TEN, BigDecimal.ZERO
+                1,                      // id
+                50,                     // productId
+                "Produs Standard",      // productName
+                new BigDecimal("5.00"), // quantity (original)
+                new BigDecimal("5.00"), // remainingQuantity (identic pt bon deschis)
+                new BigDecimal("10.00"),// unitPrice
+                new BigDecimal("19.00"),// vatRate
+                new BigDecimal("50.00"),// lineTotal
+                new BigDecimal("42.02"),// netTotal
+                new BigDecimal("7.98")  // vatTotal
         );
 
         when(receiptItemService.getItemsByReceipt(100)).thenReturn(List.of(response));
 
         mockMvc.perform(get("/api/sales/receipt-items/receipt/100"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].productName").value("Produs"))
+                .andExpect(jsonPath("$[0].productName").value("Produs Standard"))
+                .andExpect(jsonPath("$[0].quantity").value(5.00))
+                .andExpect(jsonPath("$[0].remainingQuantity").value(5.00)) // Verificăm noul câmp
                 .andExpect(jsonPath("$.length()").value(1));
+    }
+
+    @Test
+    @DisplayName("GET /receipt/{receiptId} - Succes: Verificare Retur Parțial (Remaining < Quantity)")
+    void getItems_PartialRefund_Success() throws Exception {
+        // SCENARIU NOU: Produs partial stornat
+        var response = new ReceiptItemDTO.ReceiptItemResponse(
+                2,
+                51,
+                "Produs Stornat Partial",
+                new BigDecimal("10.00"), // S-au cumpărat 10
+                new BigDecimal("4.00"),  // Mai sunt disponibile doar 4 (6 returnate)
+                new BigDecimal("10.00"),
+                BigDecimal.ZERO,
+                new BigDecimal("100.00"),
+                new BigDecimal("100.00"),
+                BigDecimal.ZERO
+        );
+
+        when(receiptItemService.getItemsByReceipt(101)).thenReturn(List.of(response));
+
+        mockMvc.perform(get("/api/sales/receipt-items/receipt/101"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].productName").value("Produs Stornat Partial"))
+                .andExpect(jsonPath("$[0].quantity").value(10.00))
+                .andExpect(jsonPath("$[0].remainingQuantity").value(4.00)); // Validăm că frontend-ul primește 4
     }
 
     @Test
     @DisplayName("GET /receipt/{receiptId} - Eroare: Cale invalidă")
     void getItems_Fail_WrongPath() throws Exception {
-        mockMvc.perform(get("/api/sales/receipt-items/receipt/")) // Lipsește ID-ul în URL
+        mockMvc.perform(get("/api/sales/receipt-items/receipt/"))
                 .andExpect(status().isNotFound());
     }
 
     // --- GET /api/sales/receipt-items/report/quantity ---
 
     @Test
-    @DisplayName("GET /report/quantity - Succes: Returnează lista de produse")
+    @DisplayName("GET /report/quantity - Succes: Returnează raport cantitativ")
     void getQuantityReport_Success() throws Exception {
         var reportLine = new ReceiptItemDTO.QuantityReportResponse(
                 "Produs Test", new BigDecimal("10.00"), new BigDecimal("100.00"));
@@ -127,7 +163,7 @@ class ReceiptItemControllerTest {
     }
 
     @Test
-    @DisplayName("GET /report/quantity - Succes: Filtrare după multiple ID-uri")
+    @DisplayName("GET /report/quantity - Succes: Filtrare după ID-uri")
     void getQuantityReport_WithIds_Success() throws Exception {
         when(receiptItemService.getProductsQuantityReport(any(), any(), any()))
                 .thenReturn(List.of());
@@ -135,21 +171,21 @@ class ReceiptItemControllerTest {
         mockMvc.perform(get("/api/sales/receipt-items/report/quantity")
                 .param("start", "2026-01-01T00:00:00")
                 .param("end", "2026-01-31T23:59:59")
-                .param("productIds", "17,18,19")) // Testăm că acceptă listă de ID-uri
+                .param("productIds", "17,18,19"))
                 .andExpect(status().isOk());
     }
 
     @Test
-    @DisplayName("GET /report/quantity - Fail: Dată formatată greșit")
+    @DisplayName("GET /report/quantity - Fail: Format dată invalid")
     void getQuantityReport_Fail_InvalidDate() throws Exception {
         mockMvc.perform(get("/api/sales/receipt-items/report/quantity")
-                .param("start", "2026/01/01") // Format non-ISO
+                .param("start", "2026/01/01")
                 .param("end", "2026-01-31T23:59:59"))
                 .andExpect(status().isBadRequest());
     }
 
     @Test
-    @DisplayName("GET /report/quantity - Fail: Lipsă parametru obligatoriu 'end'")
+    @DisplayName("GET /report/quantity - Fail: Lipsă parametru end")
     void getQuantityReport_Fail_MissingEnd() throws Exception {
         mockMvc.perform(get("/api/sales/receipt-items/report/quantity")
                 .param("start", "2026-01-01T00:00:00"))

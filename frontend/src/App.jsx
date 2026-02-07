@@ -1,11 +1,11 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
-import { Typography } from '@mui/material';
+import { Typography, Box } from '@mui/material';
 import dayjs from 'dayjs';
 import 'dayjs/locale/ro';
 
-// --- PAGINI ---
+// --- PAGINI LOGIN & CASIER ---
 import LoginPage from './modules/auth/pages/LoginPage';
 import Home from './modules/cashier/sales/pages/Home'; 
 import SellPage from './modules/cashier/sales/pages/SellPage';
@@ -19,8 +19,18 @@ import ReservationsMainPage from './modules/cashier/reservations/pages/Reservati
 // Import Catering
 import CateringMainPage from './modules/cashier/catering/pages/CateringMainPage';
 
-// 👇 IMPORT NOU STOC (Pagina Reală)
+// Import Stoc
 import StockMainPage from './modules/cashier/stock/pages/StockMainPage';
+
+// Import Catalog Full-Screen pentru Vânzare
+import SalesCatalogPage from './modules/cashier/sales/pages/SalesCatalogPage';
+
+// --- IMPORTURI ADMIN ---
+import AdminLayout from './modules/admin/layout/AdminLayout';
+
+// 👇👇👇 AICI ERA GREȘEALA. AM SCHIMBAT IMPORTUL:
+// NU importam taburile simple, ci PAGINA PRINCIPALA care le contine
+import CatalogMainPage from './modules/admin/catalog/pages/CatalogMainPage'; 
 
 // --- COMPONENTE DE SISTEM ---
 import ProtectedRoute from './modules/auth/components/ProtectedRoute';
@@ -28,12 +38,23 @@ import MainLayout from './shared/components/layout/MainLayout';
 
 dayjs.locale('ro');
 
-// --- PAGINI PLACEHOLDER RĂMASE (Doar Admin mai e placeholder momentan) ---
+// --- PLACEHOLDERS ADMIN (Pagini temporare) ---
 const AdminDashboard = () => <Typography variant="h4" sx={{p:2}}>Panou de Administrare</Typography>;
+
+// Componentă generică pentru paginile "În lucru"
+const PlaceholderPage = ({ title }) => (
+  <Box sx={{ p: 3, display: 'flex', flexDirection: 'column', alignItems: 'center', mt: 4, opacity: 0.6 }}>
+    <Typography variant="h4" gutterBottom>{title}</Typography>
+    <Typography variant="body1">Modul în curs de dezvoltare...</Typography>
+  </Box>
+);
 
 function App() {
   const { token, user } = useSelector((state) => state.auth);
   const isAuthenticated = token && user;
+  
+  // Verificăm nivelul de autoritate curent
+  const userAuthority = user ? user.authorityLevel : 0;
 
   return (
     <Routes>
@@ -47,6 +68,17 @@ function App() {
         element={isAuthenticated ? <Navigate to="/home" replace /> : <LoginPage />} 
       />
 
+      {/* CATALOG VÂNZARE (FULL SCREEN) */}
+      <Route 
+        path="/sales/catalog" 
+        element={
+          <ProtectedRoute authorityLevel={50}> 
+             <SalesCatalogPage />
+          </ProtectedRoute>
+        } 
+      />
+
+      {/* --- ZONA CASIER (MainLayout) --- */}
       <Route 
         path="/home" 
         element={
@@ -70,21 +102,41 @@ function App() {
         {/* 4. Catering */}
         <Route path="catering" element={<CateringMainPage />} />
         
-        {/* 5. Stoc (Ruta Actualizată) */}
+        {/* 5. Stoc */}
         <Route path="stock" element={<StockMainPage />} />
       </Route>
 
+      {/* --- ZONA ADMIN (AdminLayout) --- */}
       <Route 
         path="/admin"
         element={
-          <ProtectedRoute authorityLevel={100}>
-            <MainLayout />
-          </ProtectedRoute>
+          isAuthenticated && userAuthority < 100 ? (
+            <Navigate to="/home" replace />
+          ) : (
+            <ProtectedRoute authorityLevel={100}>
+               <AdminLayout />
+            </ProtectedRoute>
+          )
         } 
       >
+        {/* 1. Dashboard */}
         <Route path="dashboard" element={<AdminDashboard />} />
+        
+        {/* 2. CATALOG (Implementat Real) */}
+        {/* 👇👇👇 AICI AM SCHIMBAT COMPONENTA RANDATA */}
+        <Route path="catalog" element={<CatalogMainPage />} />
+
+        {/* 3. Restul Tab-urilor (Placeholders pentru moment) */}
+        <Route path="catering" element={<PlaceholderPage title="Catering Admin" />} />
+        <Route path="inventory" element={<PlaceholderPage title="Gestiune Stoc & Inventar" />} />
+        <Route path="warehouses" element={<PlaceholderPage title="Configurare Gestiuni" />} />
+        <Route path="sales" element={<PlaceholderPage title="Rapoarte Vânzări" />} />
+        <Route path="users" element={<PlaceholderPage title="Administrare Utilizatori" />} />
+        <Route path="company" element={<PlaceholderPage title="Date Companie" />} />
+        <Route path="vouchers" element={<PlaceholderPage title="Vouchere & Campanii" />} />
       </Route>
 
+      {/* CATCH ALL */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

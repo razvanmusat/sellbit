@@ -68,7 +68,7 @@ class ReceiptServiceTest {
     @Mock private CustomerVoucherRepository customerVoucherRepository;
     @Mock private StoreRepository storeRepository;
     @Mock private PaymentMethodRepository paymentMethodRepository;
-    @Mock private ProductRepository productRepository; // ADAUGAT: Necesar pentru Avans
+    @Mock private ProductRepository productRepository; 
 
     @InjectMocks
     private ReceiptService receiptService;
@@ -115,7 +115,10 @@ class ReceiptServiceTest {
 
         var res = receiptService.createReceipt(req);
         assertNotNull(res);
-        assertEquals("Masa 1", res.tableName());
+        
+        // --- FIX AICI: Verificăm string-ul procesat de mapToResponse ("Masa: ...") ---
+        assertEquals("Masa: Masa 1", res.tableName());
+        
         verify(receiptRepository).save(any());
     }
 
@@ -137,6 +140,7 @@ class ReceiptServiceTest {
 
         var alerts = receiptService.getUnclosedAlerts();
         assertFalse(alerts.isEmpty());
+        // Aici rămâne "Masa 10" curat, pentru că metoda nu trece prin mapToResponse
         assertEquals("Masa 10", alerts.get(0).tableName());
     }
 
@@ -172,51 +176,35 @@ class ReceiptServiceTest {
     @Test
     @DisplayName("closeReceipt - Succes: Închide bonul și procesează plățile")
     void closeReceipt_Success() {
-        // 1. Setup Statuses folosind Builder
-        ReceiptStatus openStatus = ReceiptStatus.builder()
-                .code("OPEN")
-                .label("Deschis")
-                .build();
-        
-        ReceiptStatus closedStatus = ReceiptStatus.builder()
-                .code("CLOSED")
-                .label("Închis")
-                .build();
+        // 1. Setup Statuses
+        ReceiptStatus openStatus = ReceiptStatus.builder().code("OPEN").label("Deschis").build();
+        ReceiptStatus closedStatus = ReceiptStatus.builder().code("CLOSED").label("Închis").build();
 
         // 2. Setup Metoda de Plată
         PaymentMethod cashMethod = new PaymentMethod();
         cashMethod.setCode("CASH");
+        cashMethod.setLabel("Numerar");
 
         // 3. Setup Plata
         ReceiptPayment payment = new ReceiptPayment();
         payment.setAmount(new BigDecimal("100.00"));
         payment.setPaymentMethod(cashMethod);
 
-        // 4. Setup Warehouse și User
-        Warehouse warehouse = new Warehouse();
-        warehouse.setId(1);
-        
-        User user = new User();
-        user.setId(1);
-
-        // 5. Setup Bonul (Receipt)
+        // 4. Setup Bonul
         Receipt receipt = new Receipt();
         receipt.setId(100);
         receipt.setStatus(openStatus);
         receipt.setWarehouse(warehouse);
-        receipt.setUser(user);
+        receipt.setUser(new User());
         receipt.setTotalAmount(new BigDecimal("100.00"));
-        receipt.setPayments(new java.util.ArrayList<>(List.of(payment)));
-        receipt.setItems(new java.util.ArrayList<>()); 
+        receipt.setPayments(new ArrayList<>(List.of(payment)));
+        receipt.setItems(new ArrayList<>()); 
 
-        // 6. Mockito Expectations
         when(receiptRepository.findById(100)).thenReturn(Optional.of(receipt));
         when(statusRepository.findByCode("CLOSED")).thenReturn(Optional.of(closedStatus));
 
-        // 7. Execuție
         receiptService.closeReceipt(100);
 
-        // 8. Verificări
         assertEquals("CLOSED", receipt.getStatus().getCode());
         verify(receiptRepository).save(receipt);
     }
@@ -231,7 +219,6 @@ class ReceiptServiceTest {
         assertEquals("ERROR.RECEIPT.INCOMPLETE_PAYMENT", ex.getMessage());
     }
 
-    // NOU: Validare Catering
     @Test
     @DisplayName("closeReceipt - Eroare: Catering fără preț achiziție")
     void closeReceipt_Fail_CateringPrice() {
@@ -287,7 +274,7 @@ class ReceiptServiceTest {
         originalItem.getProduct().setId(10);
         receipt.getItems().add(originalItem);
         
-        PaymentMethod cash = PaymentMethod.builder().id(1).code("CASH").build();
+        PaymentMethod cash = PaymentMethod.builder().id(1).code("CASH").label("Numerar").build();
         when(paymentMethodRepository.findById(1)).thenReturn(Optional.of(cash));
         receipt.getPayments().add(ReceiptPayment.builder().paymentMethod(cash).amount(new BigDecimal("100.00")).build());
 
@@ -339,7 +326,10 @@ class ReceiptServiceTest {
 
         assertFalse(result.isEmpty());
         assertEquals(1, result.size());
-        assertEquals("Masa 10", result.get(0).tableName());
+        
+        // --- FIX AICI: Numele este "Masa: Masa 10" din cauza mapToResponse ---
+        assertEquals("Masa: Masa 10", result.get(0).tableName());
+        
         verify(receiptRepository).findByWarehouseIdAndStatus_Code(warehouseId, "OPEN");
     }
 
@@ -426,7 +416,7 @@ class ReceiptServiceTest {
         item.getProduct().setId(1);
         receipt.setItems(List.of(item));
 
-        PaymentMethod card = PaymentMethod.builder().code("CARD").build();
+        PaymentMethod card = PaymentMethod.builder().code("CARD").label("Card").build();
         when(paymentMethodRepository.findById(1)).thenReturn(Optional.of(card));
         receipt.getPayments().add(ReceiptPayment.builder().paymentMethod(card).amount(BigDecimal.TEN).build());
 

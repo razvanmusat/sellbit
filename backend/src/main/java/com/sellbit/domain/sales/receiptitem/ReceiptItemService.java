@@ -4,7 +4,9 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.ArrayList;
+import java.util.HashMap;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -147,10 +149,69 @@ public class ReceiptItemService {
      * Returnează lista de produse de pe un bon, mapată la DTO.
      */
     @Transactional(readOnly = true)
-    public List<ReceiptItemResponse> getItemsByReceipt(Integer receiptId) {
-        return itemRepository.findByReceiptIdOrderByIdAsc(receiptId).stream()
-                .map(this::mapToItemResponse)
-                .toList();
+    public List<ReceiptItemDTO.ReceiptItemResponse> getItemsByReceipt(Integer receiptId) {
+        System.out.println("--- DEBUG RETUR START ---");
+        System.out.println("1. Cautam iteme pentru bonul ID: " + receiptId);
+
+        // 1. Itemele originale
+        List<ReceiptItem> originalItems = itemRepository.findByReceiptIdOrderByIdAsc(receiptId);
+        System.out.println("2. Iteme originale gasite: " + originalItems.size());
+
+        // 2. Bonurile de retur
+        // ATENȚIE: Aici folosim metoda din Repository. Verifică să o ai scrisă corect!
+        List<Receipt> refundReceipts = receiptRepository.findRefundsForReceipt(receiptId, "CLOSED");
+        
+        System.out.println("3. Bonuri de RETUR gasite in baza de date: " + (refundReceipts != null ? refundReceipts.size() : "NULL"));
+
+        // 3. Calcul mapă
+        Map<Integer, BigDecimal> refundedQtyMap = new HashMap<>();
+
+        if (refundReceipts != null) {
+            for (Receipt refund : refundReceipts) {
+                System.out.println("   -> Analizam bon retur ID: " + refund.getId());
+                if (refund.getItems() == null) continue;
+                
+                for (ReceiptItem refundItem : refund.getItems()) {
+                    System.out.println("      -> Item Retur: " + refundItem.getProduct().getName() + " | Qty: " + refundItem.getQuantity());
+                    
+                    if (refundItem.getQuantity() != null && refundItem.getProduct() != null) {
+                        BigDecimal qty = refundItem.getQuantity().abs();
+                        refundedQtyMap.merge(refundItem.getProduct().getId(), qty, BigDecimal::add);
+                    }
+                }
+            }
+        }
+        
+        System.out.println("4. Mapa finala de cantitati returnate: " + refundedQtyMap);
+
+        // 4. Construire răspuns
+        List<ReceiptItemDTO.ReceiptItemResponse> result = originalItems.stream().map(item -> {
+            BigDecimal alreadyRefunded = refundedQtyMap.getOrDefault(item.getProduct().getId(), BigDecimal.ZERO);
+            BigDecimal remaining = item.getQuantity().subtract(alreadyRefunded);
+
+            if (remaining.compareTo(BigDecimal.ZERO) < 0) remaining = BigDecimal.ZERO;
+
+            System.out.println("   CALCUL PRODUS: " + item.getProduct().getName());
+            System.out.println("     Original: " + item.getQuantity());
+            System.out.println("     Deja Returnat: " + alreadyRefunded);
+            System.out.println("     Ramas: " + remaining);
+
+            return new ReceiptItemDTO.ReceiptItemResponse(
+                    item.getId(),
+                    item.getProduct().getId(),
+                    item.getProduct().getName(),
+                    item.getQuantity(),
+                    remaining,
+                    item.getUnitPrice(),
+                    item.getVatRate(),
+                    item.getLineTotal(),
+                    item.getNetTotal(),
+                    item.getVatTotal()
+            );
+        }).toList();
+        
+        System.out.println("--- DEBUG RETUR END ---");
+        return result;
     }
 
     @Transactional(readOnly = true)
@@ -203,6 +264,7 @@ public class ReceiptItemService {
                 item.getProduct().getId(),
                 item.getProduct().getName(),
                 item.getQuantity(),
+                item.getQuantity(), // La bon deschis, remaining = quantity
                 item.getUnitPrice(),
                 item.getVatRate(),
                 item.getLineTotal(),

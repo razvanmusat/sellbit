@@ -76,6 +76,39 @@ const ERROR_MESSAGES = {
     "ERROR.CATERING_ORDER.EDIT_FORBIDDEN_PAST_DATE": "Nu poți modifica o comandă din trecut.",
     "ERROR.CATERING_ORDER.DELETE_FORBIDDEN_PAST_DATE": "Nu poți șterge o comandă din trecut.",
 
+    // --- CATEGORIES (ADMIN) ---
+    "ERROR.CATEGORY.DUPLICATE_CODE": "Codul categoriei există deja. Alege alt cod.",
+    "ERROR.CATEGORY.PARENT_NOT_FOUND": "Categoria părinte selectată nu există.",
+    "ERROR.CATEGORY.NOT_FOUND": "Categoria nu a fost găsită.",
+    "ERROR.CATEGORY.PARENT_IMMUTABLE": "Nu poți muta o categorie existentă sub un alt părinte.",
+    "ERROR.CATEGORY.NOT_LEAF": "Nu poți adăuga produse aici! Această categorie are subcategorii.",
+
+    // --- PRODUCTS (ADMIN) ---
+    "ERROR.PRODUCT.DUPLICATE_BARCODE": "Acest cod de bare este deja folosit la alt produs.",
+    "ERROR.PRODUCT.INACTIVE": "Produsul este inactiv și nu poate fi procesat.",
+    "ERROR.PRODUCT.NOT_FOUND": "Produsul nu a fost găsit.",
+    "ERROR.UNIT.NOT_FOUND": "Unitatea de măsură selectată este invalidă.",
+    "ERROR.PRODUCT_TYPE.NOT_FOUND": "Tipul de produs selectat este invalid.",
+    "ERROR.VAT.NOT_FOUND": "Cota TVA selectată este invalidă.",
+
+    // --- PRODUCTS VALIDATION ---
+    "ERROR.PRODUCT.NAME_REQUIRED": "Numele produsului este obligatoriu.",
+    "ERROR.CATEGORY.REQUIRED": "Categoria este obligatorie.",
+    "ERROR.PRODUCT_TYPE.REQUIRED": "Tipul produsului este obligatoriu.",
+    "ERROR.UNIT.REQUIRED": "Unitatea de măsură este obligatorie.",
+    "ERROR.VAT.REQUIRED": "Cota TVA este obligatorie.",
+    "ERROR.PRICE.REQUIRED": "Prețul de vânzare este obligatoriu.",
+    "ERROR.PRICE.INVALID": "Prețul trebuie să fie pozitiv.",
+    "ERROR.CATERING.PRICE_REQUIRED": "Pentru produsele Catering, prețul de achiziție (costul) este obligatoriu și trebuie să fie mai mare ca 0.",
+    
+    // --- COMPOSITE / RETETAR ---
+    "ERROR.PARENT_PRODUCT.REQUIRED": "Produsul părinte (meniul) lipsește.",
+    "ERROR.COMPONENTS.EMPTY": "Rețeta trebuie să conțină cel puțin un ingredient.",
+    "ERROR.CHILD_PRODUCT.REQUIRED": "Ingredientul este obligatoriu.",
+    "ERROR.QUANTITY.TOO_LOW": "Cantitatea ingredientului trebuie să fie pozitivă.",
+    "ERROR.CHILD_PRODUCT.NOT_FOUND": "Unul dintre ingrediente nu mai există în sistem.",
+    "ERROR.COMPOSITE.SELF_REFERENCE": "Eroare logică: Un produs nu poate fi propriul său ingredient.",
+
     // --- GENERICE ---
     "INTERNAL_SERVER_ERROR": "A apărut o eroare internă la server.",
     "DEFAULT": "A apărut o eroare neașteptată. Încearcă din nou."

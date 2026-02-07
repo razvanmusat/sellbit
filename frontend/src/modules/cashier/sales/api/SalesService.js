@@ -57,4 +57,10 @@ export class SalesService {
   static async registerAdvancePayment(request) {
     await client('sales/receipts/advance', { body: request });
   }
+
+  // @GetMapping("/report")
+  static async getReceiptsReport(warehouseId, status, start, end) {
+    const endpoint = `sales/receipts/report?warehouseId=${warehouseId}&status=${status}&start=${start}&end=${end}`;
+    return await client(endpoint);
+  }
 }

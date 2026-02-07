@@ -2,35 +2,31 @@ import React, { useState, useEffect } from 'react';
 import { AppBar, Toolbar, Typography, Box, Button, IconButton, Tooltip } from '@mui/material';
 import LogoutIcon from '@mui/icons-material/Logout';
 import SettingsSuggestIcon from '@mui/icons-material/SettingsSuggest';
-import { useNavigate } from 'react-router-dom';
+import StorefrontIcon from '@mui/icons-material/Storefront'; 
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux'; 
 import { logout } from '../../../modules/auth/state/authSlice';
 
 const BottomBar = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const dispatch = useDispatch();
   
-  // Extragem userul din Redux (presupunând că state.auth.user este populat la login)
   const { user } = useSelector((state) => state.auth);
-  
-  // Fallback pentru siguranță (în caz că userul e null momentan)
   const currentUser = user || { fullName: 'Utilizator', authorityLevel: 0 };
-  
-  // Afișăm butonul doar dacă authorityLevel este 100 (Admin)
-  const showAdminButton = currentUser.authorityLevel === 100;
+  const hasAdminRights = currentUser.authorityLevel === 100;
+
+  const isAdminMode = location.pathname.startsWith('/admin');
   
   const [time, setTime] = useState(new Date());
 
-  // Logica Ceas Digital
   useEffect(() => {
     const timer = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
   const handleLogout = () => {
-    // Ștergem datele de autentificare din Redux și (implicit) din localStorage
     dispatch(logout());
-    // Redirecționăm către pagina de login
     navigate('/login');
   };
 
@@ -39,58 +35,55 @@ const BottomBar = () => {
       position="static" 
       color="default" 
       elevation={0}
-      sx={{ top: 'auto', bottom: 0, borderTop: 1, borderColor: 'divider', bgcolor: 'background.paper' }}
+      sx={{ 
+        top: 'auto', 
+        bottom: 0, 
+        borderTop: 1, 
+        borderColor: 'divider', 
+        bgcolor: 'background.paper',
+        // Prevenim orice layout shift
+        height: '56px', 
+        justifyContent: 'center'
+      }}
     >
-      <Toolbar variant="dense" sx={{ justifyContent: 'space-between', py: 0.5 }}>
+      <Toolbar variant="dense" sx={{ justifyContent: 'space-between', minHeight: '48px !important' }}>
         
-        {/* Stanga: Bun venit + Nume */}
-        <Box sx={{ flex: 1, display: 'flex', flexDirection: { xs: 'column', md: 'row' }, alignItems: { xs: 'flex-start', md: 'center' }, mr: 1, overflow: 'hidden' }}>
-          <Typography 
-            variant="caption" 
-            color="text.secondary"
-            sx={{ mr: { md: 0.5 }, lineHeight: 1.2 }}
-          >
-            Bun venit,
+        {/* STÂNGA: Info User (Flex 1) */}
+        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'row', alignItems: 'center', overflow: 'hidden' }}>
+          <Typography variant="caption" color="text.secondary" sx={{ mr: 1, display: { xs: 'none', sm: 'block' } }}>
+            {isAdminMode ? 'Mod Administrare: ' : 'Bun venit, '}
           </Typography>
-          <Typography 
-            variant="body2" 
-            color="text.primary"
-            fontWeight="bold"
-            noWrap
-            sx={{ lineHeight: 1.2 }}
-          >
+          <Typography variant="body2" color="text.primary" fontWeight="bold" noWrap>
             {currentUser.fullName}
           </Typography>
         </Box>
 
-        {/* Centru: Rotita Admin (Centrată și mai mare) */}
-        <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-          {showAdminButton && (
-            <Tooltip title="Administrare">
-              <IconButton color="primary" onClick={() => navigate('/admin/dashboard')}>
-                <SettingsSuggestIcon />
-              </IconButton>
-            </Tooltip>
+        {/* CENTRU: Buton Switch (Flex 0 - lățime fixă ca să nu miște restul) */}
+        <Box sx={{ display: 'flex', justifyContent: 'center', width: 60 }}>
+          {hasAdminRights && (
+             isAdminMode ? (
+                <Tooltip title="Înapoi la Vânzare">
+                  <IconButton onClick={() => navigate('/home/sell')} sx={{ color: '#2e7d32' }}>
+                    <StorefrontIcon fontSize="medium" /> {/* Aceeași mărime ca Settings */}
+                  </IconButton>
+                </Tooltip>
+             ) : (
+                <Tooltip title="Panou Administrare">
+                  <IconButton color="primary" onClick={() => navigate('/admin/dashboard')}>
+                    <SettingsSuggestIcon fontSize="medium" />
+                  </IconButton>
+                </Tooltip>
+             )
           )}
         </Box>
 
-        {/* Dreapta: Ceas, Logout */}
-        <Box sx={{ flex: 1, display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: { xs: 1, sm: 2 } }}>
-          
-          {/* Ceas */}
-          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-             <Typography variant="body2" fontWeight="bold" sx={{ lineHeight: 1 }}>
-                {time.toLocaleTimeString('ro-RO', { hour12: false })}
-             </Typography>
-          </Box>
+        {/* DREAPTA: Ceas & Logout (Flex 1) */}
+        <Box sx={{ flex: 1, display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 1 }}>
+           <Typography variant="body2" fontWeight="bold" sx={{ minWidth: 45, textAlign: 'right' }}>
+             {time.toLocaleTimeString('ro-RO', { hour12: false, hour: '2-digit', minute:'2-digit' })}
+           </Typography>
 
-          <Button 
-            color="error" 
-            onClick={handleLogout}
-            size="small"
-            sx={{ minWidth: 'auto' }}
-          >
-            <Box component="span" sx={{ display: { xs: 'none', md: 'inline' }, mr: 1 }}>Deconectare</Box>
+          <Button color="error" onClick={handleLogout} sx={{ minWidth: 'auto', p: 1 }}>
             <LogoutIcon fontSize="small" />
           </Button>
         </Box>

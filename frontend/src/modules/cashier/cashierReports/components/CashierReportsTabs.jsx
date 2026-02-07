@@ -5,54 +5,53 @@ import AssessmentIcon from '@mui/icons-material/Assessment';
 import HistoryIcon from '@mui/icons-material/History';
 import TouchAppIcon from '@mui/icons-material/TouchApp'; 
 import AdsClickIcon from '@mui/icons-material/AdsClick'; 
-import { useSearchParams } from 'react-router-dom';
+import AssignmentReturnIcon from '@mui/icons-material/AssignmentReturn';
 
-// REDUX
+import { useSearchParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchCashierWarehouses } from '../store/cashierSlice';
 
-// Componente
 import WarehouseTabs from '../../sales/components/common/WarehouseTabs';
 import CashDrawerPage from '../pages/CashDrawerPage';
 import CashMovementHistory from '../pages/CashMovementHistory';
+import RefundPage from '../pages/RefundPage';
+import SellReports from '../pages/SellReports';
 
 const CashierReportsTabs = () => {
   const dispatch = useDispatch();
   const [searchParams, setSearchParams] = useSearchParams();
   const currentTab = searchParams.get('tab');
 
-  // --- 1. DATE DIN REDUX (CACHE) ---
-  // Luăm lista de gestiuni din Redux. 
-  // Dacă am mai fost aici, lista e deja plină -> ZERO FLICKER.
   const { warehouses, loading } = useSelector((state) => state.cashier);
-
-  // --- 2. STARE LOCALĂ (RESET AUTOMAT) ---
-  // De fiecare dată când intri pe pagină, astea pornesc de la FALSE.
   const [activeTab, setActiveTab] = useState(currentTab || false); 
   const [selectedWarehouseId, setSelectedWarehouseId] = useState(false);
 
-  // --- 3. FETCH LA MONTARE ---
+  // Cheie unică pentru a forța re-randarea completă (Refresh)
+  const [refreshKey, setRefreshKey] = useState(0);
+
   useEffect(() => {
-    // Declanșăm acțiunea. Thunk-ul din Redux e deștept:
-    // Dacă are date, nu face nimic. Dacă n-are, le descarcă.
     dispatch(fetchCashierWarehouses());
   }, [dispatch]);
 
-  // Sincronizare URL (doar dacă dai refresh cu link direct)
   useEffect(() => {
     if (currentTab) {
       setActiveTab(currentTab);
+      // Refresh la intrarea pe pagină sau schimbare URL
+      setRefreshKey(prev => prev + 1);
     } else {
-      // Dacă nu e nimic în URL, ne asigurăm că e resetat
       setActiveTab(false);
       setSelectedWarehouseId(false);
     }
   }, [currentTab]);
 
+  // Funcție dedicată pentru click (merge și pe tab-ul activ)
+  const handleForceRefresh = () => {
+      setRefreshKey(prev => prev + 1);
+  };
 
-  // --- HANDLERS ---
   const handleWarehouseChange = (event, newValue) => {
     setSelectedWarehouseId(newValue);
+    handleForceRefresh();
   };
 
   const handleTabChange = (event, newValue) => {
@@ -60,12 +59,15 @@ const CashierReportsTabs = () => {
     if (newValue) {
         setSearchParams({ tab: newValue });
     }
+    // Nota: onChange nu se apelează dacă dai click pe tab-ul deja activ
+    // De aceea folosim onClick direct pe <Tab> mai jos
   };
 
-  // Loading apare doar prima dată în viața aplicației, când Redux e gol
   if (loading && warehouses.length === 0) {
     return <Box p={4} display="flex" justifyContent="center"><CircularProgress /></Box>;
   }
+
+  const selectedWarehouse = warehouses.find(w => w.id === selectedWarehouseId);
 
   return (
     <Box sx={{ p: { xs: 0, sm: 2 }, height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -89,53 +91,79 @@ const CashierReportsTabs = () => {
           textColor="primary"
           indicatorColor="primary"
         >
-          <Tab label="Sertar Bani" value="drawer" icon={<SavingsIcon />} iconPosition="start" />
-          <Tab label="Istoric Numerar" value="history" icon={<HistoryIcon />} iconPosition="start" />
-          <Tab label="Rapoarte Vânzări" value="reports" icon={<AssessmentIcon />} iconPosition="start" />
+          {/* MODIFICARE CRITICĂ: 
+             Am adăugat onClick={handleForceRefresh} pe fiecare Tab.
+             Asta capturează click-ul CHIAR DACĂ ești deja pe tab-ul respectiv.
+          */}
+          <Tab 
+            label="Sertar Bani" 
+            value="drawer" 
+            icon={<SavingsIcon />} 
+            iconPosition="start" 
+            onClick={handleForceRefresh} 
+          />
+          <Tab 
+            label="Istoric Numerar" 
+            value="history" 
+            icon={<HistoryIcon />} 
+            iconPosition="start" 
+            onClick={handleForceRefresh}
+          />
+          <Tab 
+            label="Retur / Stornare" 
+            value="refund" 
+            icon={<AssignmentReturnIcon />} 
+            iconPosition="start" 
+            onClick={handleForceRefresh}
+          />
+          <Tab 
+            label="Rapoarte Casierie" 
+            value="reports" 
+            icon={<AssessmentIcon />} 
+            iconPosition="start" 
+            onClick={handleForceRefresh}
+          />
         </Tabs>
       </Box>
 
       {/* ZONA 3: CONȚINUT */}
       <Box sx={{ flex: 1, overflow: 'auto' }}>
         
-        {/* LOGICA DE AFISARE "RESETATĂ" */}
         {!selectedWarehouseId ? (
-            <Box 
-              display="flex" flexDirection="column" justifyContent="center" alignItems="center" 
-              height="60%" gap={2}
-            >
+            <Box display="flex" flexDirection="column" justifyContent="center" alignItems="center" height="60%" gap={2}>
                 <TouchAppIcon sx={{ fontSize: 60, color: 'text.disabled' }} />
                 <Typography variant="h6" color="text.secondary">
                     1. Selectează o <b>Gestiune</b> de sus.
                 </Typography>
             </Box>
         ) : !activeTab ? (
-            <Box 
-              display="flex" flexDirection="column" justifyContent="center" alignItems="center" 
-              height="60%" gap={2}
-            >
+            <Box display="flex" flexDirection="column" justifyContent="center" alignItems="center" height="60%" gap={2}>
                 <AdsClickIcon sx={{ fontSize: 60, color: 'primary.main', opacity: 0.7 }} />
                 <Typography variant="h6" color="text.secondary">
-                    2. Acum selectează o opțiune: <b>Sertar</b>, <b>Istoric</b> sau <b>Rapoarte</b>.
+                    2. Acum selectează o opțiune: <b>Sertar</b>, <b>Retur</b> sau <b>Rapoarte</b>.
                 </Typography>
             </Box>
         ) : (
+            // Aici key={refreshKey} face magia: distruge și recreează componenta la fiecare click
             <>
                 {activeTab === 'drawer' && (
-                    <CashDrawerPage warehouseId={selectedWarehouseId} />
+                    <CashDrawerPage key={refreshKey} warehouseId={selectedWarehouseId} />
                 )}
 
                 {activeTab === 'history' && (
-                    <CashMovementHistory warehouseId={selectedWarehouseId} />
+                    <CashMovementHistory key={refreshKey} warehouseId={selectedWarehouseId} />
+                )}
+
+                {activeTab === 'refund' && (
+                    <RefundPage key={refreshKey} warehouseId={selectedWarehouseId} />
                 )}
 
                 {activeTab === 'reports' && (
-                    <Paper elevation={0} sx={{ p: 3, textAlign: 'center', border: '1px dashed #ccc' }}>
-                        <Typography variant="h5">Zona Rapoarte</Typography>
-                        <Typography variant="body2" color="text.secondary">
-                            Grafice pentru gestiunea ID: {selectedWarehouseId} (în lucru).
-                        </Typography>
-                    </Paper>
+                    <SellReports 
+                        key={refreshKey} 
+                        warehouseId={selectedWarehouseId}
+                        warehouseName={selectedWarehouse?.name || 'Gestiune'}
+                    />
                 )}
             </>
         )}

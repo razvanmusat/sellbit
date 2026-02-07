@@ -10,7 +10,8 @@ const getCookie = (name) => {
   if (parts.length === 2) return parts.pop().split(';').shift();
 };
 
-export const client = async (endpoint, { body, ...customConfig } = {}) => {
+// MODIFICARE 1: Extragem 'params' din argumente
+export const client = async (endpoint, { body, params, ...customConfig } = {}) => {
   const headers = { 'Content-Type': 'application/json' };
 
   // 1. Adăugăm Token-ul de autorizare (Bearer) dacă există.
@@ -39,8 +40,26 @@ export const client = async (endpoint, { body, ...customConfig } = {}) => {
     config.body = JSON.stringify(body);
   }
 
+  // --- MODIFICARE 2: LOGICA PENTRU QUERY PARAMS ---
+  // Construim URL-ul final. Dacă avem params, îi transformăm în string (ex: ?parentId=1)
+  let url = `${BASE_URL}/${endpoint}`;
+  
+  if (params) {
+      // Filtrăm valorile null/undefined ca să nu trimitem "undefined" la server
+      const validParams = Object.entries(params)
+          .filter(([_, v]) => v != null)
+          .reduce((acc, [k, v]) => ({ ...acc, [k]: v }), {});
+          
+      const queryString = new URLSearchParams(validParams).toString();
+      if (queryString) {
+          url += `?${queryString}`;
+      }
+  }
+  // ------------------------------------------------
+
   try {
-    const response = await fetch(`${BASE_URL}/${endpoint}`, config);
+    // MODIFICARE 3: Folosim variabila 'url' calculată mai sus, nu string-ul simplu
+    const response = await fetch(url, config);
     const text = await response.text();
 
     if (response.ok) {

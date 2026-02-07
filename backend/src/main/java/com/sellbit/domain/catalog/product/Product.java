@@ -42,7 +42,7 @@ public class Product {
 	private UnitOfMeasure unit;
 	
 	@ManyToOne(fetch = FetchType.LAZY)
-	@JoinColumn(name = "vat_rate_id")
+	@JoinColumn(name = "vat_rate_id", nullable = false)
 	private VatRate vatRate;
 	
 	// Prețul de vânzare final (include TVA).
@@ -54,7 +54,7 @@ public class Product {
     private BigDecimal purchasePrice;
 
 	@Builder.Default
-	@Column(name = "track_stock")
+	@Column(name = "track_stock", nullable = false)
 	private Boolean trackStock = true;
 	
 	@Builder.Default

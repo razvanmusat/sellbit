@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom'; 
 import PropTypes from 'prop-types';
 import { 
   Box, 
@@ -10,7 +11,6 @@ import {
   IconButton, 
   useTheme, 
   useMediaQuery, 
-  // Am șters Snackbar și Alert de aici
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import SearchIcon from '@mui/icons-material/Search';
@@ -33,15 +33,31 @@ const OpenedReceiptCard = ({
   onAddProduct, 
   onUpdateItem, 
   onRemoveItem, 
-  // Props de eroare nu mai sunt necesare aici dacă nu le afișezi inline
   onCancelReceipt 
 }) => {
   const [currentTab, setCurrentTab] = useState(0);
   const theme = useTheme();
+  const navigate = useNavigate(); 
   
   const isSmallScreen = useMediaQuery(theme.breakpoints.down('sm'));
 
+  // --- HANDLER NAVIGARE ---
   const handleTabChange = (event, newValue) => {
+    // 1. Dacă utilizatorul apasă pe tab-ul "Categorii" (index 2)
+    if (newValue === 2) {
+        // 2. Construim parametrii URL (Safe & Bulletproof)
+        const params = new URLSearchParams({
+            receiptId: receipt.id,
+            warehouseId: receipt.warehouseId,
+            tableName: receipt.tableName
+        }).toString();
+
+        // 3. Facem redirect către pagina Full Screen cu parametrii în URL
+        navigate(`/sales/catalog?${params}`);
+        return; // Nu schimbăm tab-ul local, plecăm de pe pagină
+    }
+
+    // Altfel, schimbăm tab-ul local (Search / Scan)
     setCurrentTab(newValue);
   };
 
@@ -119,7 +135,7 @@ const OpenedReceiptCard = ({
         {/* TAB 2: CATEGORII */}
         {currentTab === 2 && (
             <Typography sx={{ p: 2, textAlign: 'center', color: 'text.secondary' }}>
-                Navigare Categorii (În lucru...)
+                Se încarcă catalogul...
             </Typography>
         )}
       </Box>
@@ -128,7 +144,13 @@ const OpenedReceiptCard = ({
       <Box 
         sx={{ 
             flex: 1, 
-            overflowY: 'auto', 
+            overflowY: 'auto',
+            
+            // --- FIX PENTRU LAYOUT SHIFT ---
+            // Această proprietate rezervă spațiul barei de scroll mereu, 
+            // chiar dacă bara nu este vizibilă.
+            scrollbarGutter: 'stable', 
+            
             my: 1,
             pr: 0.5, 
             bgcolor: items.length === 0 ? 'rgba(0,0,0,0.02)' : 'transparent',
@@ -172,8 +194,6 @@ const OpenedReceiptCard = ({
         >
           {items.length === 0 ? "Adaugă produse" : "ÎNCASARE / PLĂȚI"}
         </Button>
-
-        {/* AM ȘTERS SNACKBAR-UL DE AICI. EL ESTE DEJA ÎN SellPage.js */}
       </Box>
     </Paper>
   );
@@ -186,9 +206,6 @@ OpenedReceiptCard.propTypes = {
   onAddProduct: PropTypes.func.isRequired,
   onUpdateItem: PropTypes.func.isRequired,
   onRemoveItem: PropTypes.func.isRequired,
-  // error: PropTypes.string,                 <-- Poți șterge asta dacă nu îl folosești altundeva
-  // onClearError: PropTypes.func.isRequired, <-- Și asta
-  // getFriendlyErrorMessage: PropTypes.func.isRequired, <-- Și asta
   onCancelReceipt: PropTypes.func.isRequired,
 };
 

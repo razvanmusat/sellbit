@@ -5,6 +5,7 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -129,7 +130,7 @@ public class ReceiptService {
                         throw new RuntimeException("ERROR.RECEIPT.NOT_OPEN");
                 }
 
-                if (receipt.getPayments() != null && !receipt.getPayments().isEmpty()) {                        
+                if (receipt.getPayments() != null && !receipt.getPayments().isEmpty()) {
                         throw new RuntimeException("ERROR.RECEIPT.HAS_PAYMENTS_PLEASE_REFUND_FIRST");
                 }
 
@@ -248,10 +249,45 @@ public class ReceiptService {
                                                 item.getLineTotal()))
                                 .collect(Collectors.toList());
 
+                List<ReceiptDTOs.PaymentSummary> paymentDTOs = new ArrayList<>();
+                if (receipt.getPayments() != null) {
+                        paymentDTOs = receipt.getPayments().stream()
+                                        .map(p -> {
+                                                String info = null;
+
+                                                // LOGICA: Dacă e Voucher, caută codul
+                                                if ("VOUCHER".equals(p.getPaymentMethod().getCode())) {
+                                                        // Căutăm voucherul care a fost consumat de acest bon
+                                                        info = customerVoucherRepository
+                                                                        .findByUsedReceiptId(receipt.getId())
+                                                                        .map(CustomerVoucher::getCode) // Luăm doar
+                                                                                                       // codul (ex:
+                                                                                                       // "SUMMER20")
+                                                                        .orElse(null);
+                                                }
+
+                                                // Aici poți adăuga pe viitor logică pentru Card (ex: last 4 digits)
+
+                                                return new ReceiptDTOs.PaymentSummary(
+                                                                p.getPaymentMethod().getCode(),
+                                                                p.getPaymentMethod().getLabel(),
+                                                                p.getAmount(),
+                                                                info // <--- Trimitem informația extra
+                                                );
+                                        })
+                                        .collect(Collectors.toList());
+                }
+
+                String explanation;
+                if (receipt.getOriginalReceipt() != null) {
+                        explanation = "Stornare la Bon #" + receipt.getOriginalReceipt().getId();
+                } else {
+                        explanation = "Masa: " + receipt.getTableName();
+                }
                 return new ReceiptDTOs.Response(
                                 receipt.getId(),
                                 receipt.getStatus().getLabel(),
-                                receipt.getTableName(),
+                                explanation,
                                 receipt.getTotalAmount(),
                                 receipt.getTotalNet(),
                                 receipt.getTotalVat(),
@@ -262,7 +298,8 @@ public class ReceiptService {
                                 receipt.getClosedAt(),
                                 receipt.getNote(),
                                 receipt.getOriginalReceipt() != null ? receipt.getOriginalReceipt().getId() : null,
-                                itemDTOs);
+                                itemDTOs,
+                                paymentDTOs);
         }
 
         // Creează un bon de stornare (parțială sau totală).
@@ -284,7 +321,7 @@ public class ReceiptService {
                                 .warehouse(original.getWarehouse())
                                 .status(closedStatus)
                                 .user(userRepository.getReferenceById(request.userId()))
-                                .tableName("REFUND: " + original.getId())
+                                .tableName("Retur Bon #" + original.getId())
                                 .originalReceipt(original)
                                 .totalAmount(BigDecimal.ZERO)
                                 .totalNet(BigDecimal.ZERO)
@@ -364,7 +401,17 @@ public class ReceiptService {
                                 typeCode,
                                 tAmount.abs(),
                                 request.userId(),
-                                "Retur (" + refundMethod.getLabel() + ") pt bon nr. " + original.getId());
+                                "Stornare Bon #" + original.getId() + " (" + refundMethod.getLabel() + ")");
+
+                ReceiptPayment refundPayment = ReceiptPayment.builder()
+                                .receipt(refundReceipt)
+                                .paymentMethod(refundMethod)
+                                .amount(tAmount)
+                                .paidAt(LocalDateTime.now())
+                                .build();
+
+                refundReceipt.addPayment(refundPayment);
+                paymentRepository.save(refundPayment);
 
                 return mapToResponse(receiptRepository.save(refundReceipt));
         }
@@ -483,7 +530,7 @@ public class ReceiptService {
                                 .warehouse(warehouse)
                                 .user(user)
                                 .status(closedStatus)
-                                .tableName("AVANS") // Marker vizual
+                                .tableName("Avans Petrecere") // Marker vizual
                                 .note(note)
                                 .totalAmount(amount)
                                 .totalNet(netAmount)

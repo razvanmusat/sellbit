@@ -4,10 +4,13 @@ import { Box, TextField, InputAdornment, CircularProgress } from '@mui/material'
 import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner';
 import { SearchProductService } from '../../api/SearchProductService';
 
+import { getFriendlyErrorMessage } from '../../../../../shared/utils/errorHandler';
+
 const ProductScanner = ({ onProductSelect }) => {
   const [barcode, setBarcode] = useState('');
   const [loading, setLoading] = useState(false);
-  const [notFound, setNotFound] = useState(false);
+  // 👇 Folosim un string pentru eroare, nu doar un boolean, ca să afișăm mesajul din dicționar
+  const [errorMsg, setErrorMsg] = useState('');
 
   const inputRef = useRef(null);
 
@@ -19,7 +22,7 @@ const ProductScanner = ({ onProductSelect }) => {
   // 2. Resetare text la tastare
   const handleChange = (e) => {
     setBarcode(e.target.value);
-    if (notFound) setNotFound(false);
+    if (errorMsg) setErrorMsg(''); // Resetăm eroarea când utilizatorul scrie
   };
 
   // 3. Handler Enter
@@ -34,7 +37,7 @@ const ProductScanner = ({ onProductSelect }) => {
   // 4. Procesare Scanare
   const processBarcode = async (code) => {
     setLoading(true);
-    setNotFound(false);
+    setErrorMsg('');
 
     try {
       const product = await SearchProductService.getProductByBarcode(code);
@@ -43,13 +46,15 @@ const ProductScanner = ({ onProductSelect }) => {
         onProductSelect(product.id || product); 
         setBarcode(''); 
       } else {
-        setNotFound(true);
+        // Dacă nu găsește produsul (dar serverul răspunde 200 OK cu null/empty)
+        setErrorMsg("Produsul nu a fost găsit.");
         setBarcode(''); 
       }
     } catch (err) {
       console.error(err);
-      setNotFound(true);
       setBarcode('');
+      // 👇 LEGĂM EROAREA LA DICȚIONAR
+      setErrorMsg(getFriendlyErrorMessage(err));
     } finally {
       setLoading(false);
       setTimeout(() => {
@@ -65,8 +70,8 @@ const ProductScanner = ({ onProductSelect }) => {
         fullWidth
         variant="outlined"
         
-        // FĂRĂ ROȘU: Doar schimbăm textul placeholder-ului
-        placeholder={notFound ? "Produsul nu a fost găsit. Scanează din nou..." : "Scanează cod de bare..."}
+        // Dacă avem eroare, placeholder-ul e standard, dar arătăm eroarea jos
+        placeholder="Scanează cod de bare..."
         label="Scanează cod de bare"
         
         value={barcode}
@@ -76,26 +81,31 @@ const ProductScanner = ({ onProductSelect }) => {
         autoComplete="off"
         disabled={loading}
         
-        // POZIȚIONARE TEXT (Cursor):
-        // Pe Desktop (md) -> Center (Mijloc)
-        // Pe Mobil (xs) -> Left (Stânga) - ca să încapă textul "Produsul nu a fost găsit"
+        // Dacă avem mesaj de eroare, colorăm inputul în roșu
+        error={!!errorMsg}
+        // Afișăm mesajul tradus sub input
+        helperText={errorMsg}
+
         sx={{
             '& .MuiInputBase-input': {
                 textAlign: { xs: 'left', md: 'center' }
             }
         }}
 
-        InputProps={{
-          startAdornment: (
-            <InputAdornment position="start">
-              <QrCodeScannerIcon color="primary" />
-            </InputAdornment>
-          ),
-          endAdornment: loading ? (
-            <InputAdornment position="end">
-              <CircularProgress size={20} />
-            </InputAdornment>
-          ) : null
+        // 👇 FIX: 'InputProps' -> 'slotProps.input'
+        slotProps={{
+            input: {
+                startAdornment: (
+                    <InputAdornment position="start">
+                      <QrCodeScannerIcon color={errorMsg ? "error" : "primary"} />
+                    </InputAdornment>
+                ),
+                endAdornment: loading ? (
+                    <InputAdornment position="end">
+                      <CircularProgress size={20} />
+                    </InputAdornment>
+                ) : null
+            }
         }}
       />
     </Box>

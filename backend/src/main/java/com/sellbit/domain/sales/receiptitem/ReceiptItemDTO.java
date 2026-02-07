@@ -8,6 +8,7 @@ public class ReceiptItemDTO {
 			Integer productId,
 			String productName,
 			BigDecimal quantity,
+			BigDecimal remainingQuantity,
 			BigDecimal unitPrice,
 			BigDecimal vatRate,
 			BigDecimal lineTotal,

@@ -1,67 +1,33 @@
-import React, { useState, useEffect } from 'react';
-import { Box, Tabs, Tab, Typography, Paper, CircularProgress } from '@mui/material';
-import { useSearchParams } from 'react-router-dom';
+import React from 'react';
+import { Box, Tabs, Tab, Typography, CircularProgress } from '@mui/material';
 
 // ICONS
-import EditNoteIcon from '@mui/icons-material/EditNote'; // Pt Ajustări
-import SearchIcon from '@mui/icons-material/Search'; // Pt Căutare
-import CategoryIcon from '@mui/icons-material/Category'; // Pt Catalog
+import EditNoteIcon from '@mui/icons-material/EditNote';
+import SearchIcon from '@mui/icons-material/Search';
+import CategoryIcon from '@mui/icons-material/Category';
 import TouchAppIcon from '@mui/icons-material/TouchApp'; 
 import AdsClickIcon from '@mui/icons-material/AdsClick'; 
-
-// REDUX
-import { useDispatch, useSelector } from 'react-redux';
-import { fetchCashierWarehouses } from '../../cashierReports/store/cashierSlice';
 
 // Componente Comune
 import WarehouseTabs from '../../sales/components/common/WarehouseTabs';
 
-// Componentele celor 3 Tab-uri (Create la Pasul 1)
+// Componentele celor 3 Tab-uri
 import StockAdjustmentTab from '../pages/StockAdjustmentPage';
 import StockSearchPage from '../pages/StockSearchPage';
 import StockCatalogTab from '../pages/StockCatalogPage';
 
+// Hook-ul nou
+import { useStockTabs } from '../hooks/useStockTabs';
+
 const StockTabs = () => {
-  const dispatch = useDispatch();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const currentTab = searchParams.get('tab');
-
-  // --- 1. DATE DIN REDUX (CACHE) ---
-  // Reutilizăm slice-ul cashier existent
-  const { warehouses, loading } = useSelector((state) => state.cashier);
-
-  // --- 2. STARE LOCALĂ ---
-  const [activeTab, setActiveTab] = useState(currentTab || false); 
-  const [selectedWarehouseId, setSelectedWarehouseId] = useState(false);
-
-  // --- 3. FETCH LA MONTARE ---
-  useEffect(() => {
-    dispatch(fetchCashierWarehouses());
-  }, [dispatch]);
-
-  // Sincronizare URL
-  useEffect(() => {
-    if (currentTab) {
-      setActiveTab(currentTab);
-    } else {
-      setActiveTab(false);
-      setSelectedWarehouseId(false);
-    }
-  }, [currentTab]);
-
-  // --- HANDLERS ---
-  const handleWarehouseChange = (event, newValue) => {
-    setSelectedWarehouseId(newValue);
-    // Opțional: Resetăm tab-ul când schimbă gestiunea, sau îl lăsăm activ
-    // setActiveTab(false); 
-  };
-
-  const handleTabChange = (event, newValue) => {
-    setActiveTab(newValue);
-    if (newValue) {
-        setSearchParams({ tab: newValue });
-    }
-  };
+  const {
+    warehouses,
+    loading,
+    activeTab,
+    selectedWarehouseId,
+    handleWarehouseChange,
+    handleTabChange
+  } = useStockTabs();
 
   if (loading && warehouses.length === 0) {
     return <Box p={4} display="flex" justifyContent="center"><CircularProgress /></Box>;

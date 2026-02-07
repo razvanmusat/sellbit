@@ -33,6 +33,14 @@ public class ReceiptDTOs {
         ) {
         }
 
+        public record PaymentSummary(
+                        String methodCode, // "CASH", "CARD", "VOUCHER"
+                        String methodLabel, // "Numerar", "Card Bancar"
+                        BigDecimal amount,
+                        String additionalInfo // Codul de voucher
+        ) {
+        }
+
         /**
          * Folosit pentru a trimite datele bonului către React.
          */
@@ -50,7 +58,8 @@ public class ReceiptDTOs {
                         LocalDateTime closedAt,
                         String note,
                         Integer originalReceiptId,
-                        List<ItemResponse> items) {
+                        List<ItemResponse> items,
+                        List<PaymentSummary> payments) {
         }
 
         /**

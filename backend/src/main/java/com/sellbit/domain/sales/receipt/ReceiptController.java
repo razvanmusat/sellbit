@@ -46,7 +46,7 @@ public class ReceiptController {
         return ResponseEntity.ok(receiptService.getActiveReceipts(warehouseId));
     }
 
-    @PreAuthorize("hasAnyAuthority('100')")
+    @PreAuthorize("hasAnyAuthority('50', '100')")
     @GetMapping("/report") //RAPORT: Bonurile într-un interval de timp, filtrat după gestiune si stare
     public ResponseEntity<List<ReceiptDTOs.Response>> getReport(
             @RequestParam Integer warehouseId,

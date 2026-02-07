@@ -4,6 +4,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import jakarta.persistence.EntityNotFoundException;
+
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -23,6 +25,12 @@ public class CategoryService {
         return categories.stream()
                 .map(this::convertToDTO)
                 .collect(Collectors.toList());
+    }
+
+    public CategoryDTO getCategoryById(Integer id) {
+        Category category = categoryRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Category not found with id: " + id));
+        return convertToDTO(category);
     }
 
     @Transactional(readOnly = true)

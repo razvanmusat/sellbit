@@ -1,11 +1,22 @@
 import React from 'react';
-import { Box, Typography } from '@mui/material';
+import { Box } from '@mui/material';
+
+// Importăm componenta "mamă" de navigare
+import CategoryBrowser from '../../../../shared/components/catalog/CategoryBrowser';
 
 const StockCatalogPage = ({ warehouseId }) => {
+
+  const handleProductClick = (product) => {
+    // Momentan nu facem nimic la click în modul Stock
+  };
+
   return (
-    <Box p={3} textAlign="center">
-      <Typography variant="h6">Catalog Produse</Typography>
-      <Typography variant="body2">Navigare pe categorii pentru gestiunea {warehouseId}</Typography>
+    <Box sx={{ height: '100%', p: 1 }}>
+      <CategoryBrowser 
+        mode="STOCK" 
+        warehouseId={warehouseId}
+        onProductClick={handleProductClick}
+      />
     </Box>
   );
 };

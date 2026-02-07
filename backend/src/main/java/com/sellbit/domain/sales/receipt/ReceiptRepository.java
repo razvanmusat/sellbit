@@ -27,11 +27,16 @@ public interface ReceiptRepository extends JpaRepository<Receipt, Integer> {
          * Când vrei să vezi ce s-a vândut pe Gestiunea 1 ieri:
          * findByWarehouseIdAndStatus_CodeAndClosedAtBetween(1, "CLOSED", start, end)
          */
-        List<Receipt> findByWarehouseIdAndStatus_CodeAndClosedAtBetween(
-                        Integer warehouseId,
-                        String statusCode,
-                        LocalDateTime start,
-                        LocalDateTime end);
+        @Query("SELECT r FROM Receipt r " +
+           "WHERE r.warehouse.id = :warehouseId " +
+           "AND r.status.code = :statusCode " +
+           "AND r.closedAt BETWEEN :start AND :end " +
+           "ORDER BY r.closedAt ASC")
+    List<Receipt> findByWarehouseIdAndStatus_CodeAndClosedAtBetween(
+            @Param("warehouseId") Integer warehouseId,
+            @Param("statusCode") String statusCode,
+            @Param("start") LocalDateTime start,
+            @Param("end") LocalDateTime end);
 
         /**
          * JURNAL TOTAL (Audit):
@@ -42,4 +47,8 @@ public interface ReceiptRepository extends JpaRepository<Receipt, Integer> {
                         Integer warehouseId,
                         LocalDateTime start,
                         LocalDateTime end);
+
+        @Query("SELECT r FROM Receipt r WHERE r.originalReceipt.id = :originalId AND r.status.code = :statusCode")
+        List<Receipt> findRefundsForReceipt(@Param("originalId") Integer originalId,
+                        @Param("statusCode") String statusCode);
 }
