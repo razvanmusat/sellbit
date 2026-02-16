@@ -1,0 +1,62 @@
+@media print {
+  /* 1. ASCUNDE TOT ce există pe pagină implicit */
+  body * {
+    visibility: hidden;
+  }
+
+  /* 2. Resetează fundalul și marginile paginii */
+  body, #root, .inventory-page {
+    background: white !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  /* 3. Fă vizibilă DOAR zona de print și poziționeaz-o peste tot (Top 0, Left 0) */
+  .print-area {
+    visibility: visible;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 20px;
+    background: white;
+    z-index: 9999; /* Se asigură că e deasupra la orice */
+  }
+
+  /* Asigură-te că și conținutul din interiorul zonei de print e vizibil */
+  .print-area * {
+    visibility: visible;
+  }
+
+  /* --- STILURILE TALE PENTRU TABEL (Rămân neschimbate) --- */
+  .print-header {
+    text-align: center;
+    margin-bottom: 20px;
+    border-bottom: 2px solid #000;
+    padding-bottom: 10px;
+  }
+
+  .print-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  
+  .print-table th, .print-table td {
+    border: 1px solid #ddd;
+    padding: 4px;
+    font-size: 12px; /* Opțional: mai mic pentru print */
+    color: black;
+  }
+
+  .print-category-header {
+    background-color: #eee !important;
+    -webkit-print-color-adjust: exact; /* Forțează background-ul gri la print */
+    print-color-adjust: exact;
+    font-weight: bold;
+    border: 1px solid #ccc;
+    border-bottom: none;
+  }
+}

@@ -7,6 +7,8 @@ import SearchIcon from '@mui/icons-material/Search';
 import CategoryIcon from '@mui/icons-material/Category';
 import TouchAppIcon from '@mui/icons-material/TouchApp'; 
 import AdsClickIcon from '@mui/icons-material/AdsClick'; 
+import FactCheckIcon from '@mui/icons-material/FactCheck';
+
 
 // Componente Comune
 import WarehouseTabs from '../../sales/components/common/WarehouseTabs';
@@ -15,6 +17,9 @@ import WarehouseTabs from '../../sales/components/common/WarehouseTabs';
 import StockAdjustmentTab from '../pages/StockAdjustmentPage';
 import StockSearchPage from '../pages/StockSearchPage';
 import StockCatalogTab from '../pages/StockCatalogPage';
+import StockInventoryListPage from '../pages/StockInventoryListPage';
+
+
 
 // Hook-ul nou
 import { useStockTabs } from '../hooks/useStockTabs';
@@ -73,6 +78,12 @@ const StockTabs = () => {
             icon={<CategoryIcon />} 
             iconPosition="start" 
           />
+          <Tab 
+            label="Listă Inventar" 
+            value="inventory-list" 
+            icon={<FactCheckIcon />} 
+            iconPosition="start" 
+          />
         </Tabs>
       </Box>
 
@@ -112,6 +123,12 @@ const StockTabs = () => {
 
                 {activeTab === 'catalog' && (
                     <StockCatalogTab warehouseId={selectedWarehouseId} />
+                )}
+                {activeTab === 'inventory-list' && (
+                    <StockInventoryListPage 
+                       warehouseId={selectedWarehouseId} 
+                       warehouseName={warehouses.find(w => w.id === selectedWarehouseId)?.name} 
+                     />
                 )}
             </>
         )}

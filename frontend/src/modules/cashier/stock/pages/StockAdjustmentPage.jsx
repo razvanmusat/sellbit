@@ -9,10 +9,10 @@ import SaveIcon from '@mui/icons-material/Save';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 
 import ProductSearch from '../../sales/components/common/ProductSearch';
-import { useStockAdjustmentPage } from '../hooks/useStockAdjustmentPage'; // Importăm noul hook
+import { useStockAdjustmentPage } from '../hooks/useStockAdjustmentPage';
 
 const StockAdjustmentPage = ({ warehouseId }) => {
-  // Destructurăm logica
+  
   const {
     currentWarehouseName,
     reasons,

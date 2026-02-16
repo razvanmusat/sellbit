@@ -134,41 +134,21 @@ class StockAdjustmentServiceTest {
         assertThrows(RuntimeException.class, () -> adjustmentService.getAdjustmentsByProduct(99));
     }
 
-    // --- METODA: getAdjustmentsByWarehouse ---
-
-    @Test
-    @DisplayName("getByWarehouse: Succes")
-    void getByWarehouse_Success() {
-        when(warehouseRepository.existsById(5)).thenReturn(true);
-        when(adjustmentRepository.findByWarehouseIdOrderByAdjustedAtDesc(5)).thenReturn(List.of());
-
-        List<StockAdjustmentDTOs.Response> result = adjustmentService.getAdjustmentsByWarehouse(5);
-        assertTrue(result.isEmpty());
-    }
-
-    @Test
-    @DisplayName("getByWarehouse: Eroare - Depozit Inexistent")
-    void getByWarehouse_NotFound() {
-        when(warehouseRepository.existsById(99)).thenReturn(false);
-        assertThrows(RuntimeException.class, () -> adjustmentService.getAdjustmentsByWarehouse(99));
-    }
-
     // --- METODA: getAdjustmentsByDateRange ---
-
     @Test
     @DisplayName("getByDateRange: Succes apel repository")
     void getByDateRange_Success() {
         LocalDate now = LocalDate.now();
-        adjustmentService.getAdjustmentsByDateRange(now, now);
+        adjustmentService.getAdjustmentsByDateRange(1,now, now);
         
-        verify(adjustmentRepository).findByAdjustedAtBetweenOrderByAdjustedAtDesc(any(), any());
+        verify(adjustmentRepository).findByWarehouseIdAndAdjustedAtBetweenOrderByAdjustedAtDesc(eq(1), any(), any());
     }
 
     @Test
     @DisplayName("getByDateRange: Corner Case - Rezultate goale")
     void getByDateRange_Empty() {
-        when(adjustmentRepository.findByAdjustedAtBetweenOrderByAdjustedAtDesc(any(), any())).thenReturn(List.of());
-        List<StockAdjustmentDTOs.Response> result = adjustmentService.getAdjustmentsByDateRange(LocalDate.now(), LocalDate.now());
+        when(adjustmentRepository.findByWarehouseIdAndAdjustedAtBetweenOrderByAdjustedAtDesc(eq(1), any(), any())).thenReturn(List.of());
+        List<StockAdjustmentDTOs.Response> result = adjustmentService.getAdjustmentsByDateRange(1, LocalDate.now(), LocalDate.now());
         assertTrue(result.isEmpty());
     }
 }

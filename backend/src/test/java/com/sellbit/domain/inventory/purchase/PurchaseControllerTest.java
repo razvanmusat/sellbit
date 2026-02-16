@@ -42,7 +42,6 @@ class PurchaseControllerTest {
     @MockitoBean
     private PasswordEncoder passwordEncoder;
 
-    // Mock-uri necesare pentru a satisface dependințele JwtAuthenticationFilter la pornirea contextului
     @MockitoBean
     private JwtUtils jwtUtils;
 
@@ -54,8 +53,15 @@ class PurchaseControllerTest {
     @Test
     @DisplayName("POST: Adăugare achiziții bulk - Succes (200 OK)")
     void addPurchases_Success() throws Exception {
-        PurchaseDTOs.CreateItem item = new PurchaseDTOs.CreateItem(10, 5, new BigDecimal("10.000"), new BigDecimal("50.00"), null, "Nota test");
-        PurchaseDTOs.BulkCreate request = new PurchaseDTOs.BulkCreate(1, List.of(item));
+        // CreateItem: productId, warehouseId, quantity, purchasePrice, expirationDate
+        PurchaseDTOs.CreateItem item = new PurchaseDTOs.CreateItem(
+            10, 5, new BigDecimal("10.000"), new BigDecimal("50.00"), null
+        );
+        
+        // BulkCreate: userId, globalNote, items
+        PurchaseDTOs.BulkCreate request = new PurchaseDTOs.BulkCreate(
+            1, "Nota globala factura test", List.of(item)
+        );
 
         doNothing().when(purchaseService).processBulkPurchase(any(PurchaseDTOs.BulkCreate.class));
 
@@ -68,7 +74,9 @@ class PurchaseControllerTest {
     @Test
     @DisplayName("GET: Alerte expirare - Succes și mapare JSON")
     void getExpirationAlerts_Success() throws Exception {
-        PurchaseDTOs.ExpirationAlert alert = new PurchaseDTOs.ExpirationAlert(100, "Produs Test", "Depozit", BigDecimal.ONE, null, 10);
+        PurchaseDTOs.ExpirationAlert alert = new PurchaseDTOs.ExpirationAlert(
+            100, "Produs Test", "Depozit", BigDecimal.ONE, null, 10
+        );
         when(purchaseService.getExpirationAlerts(anyInt())).thenReturn(List.of(alert));
 
         mockMvc.perform(get(BASE_URL + "/alerts/expiration")
@@ -76,21 +84,13 @@ class PurchaseControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].productName").value("Produs Test"))
                 .andExpect(jsonPath("$[0].daysUntilExpiration").value(10));
-    }
-
-    @Test
-    @DisplayName("GET: Istoric per depozit - Succes")
-    void getByWarehouse_Success() throws Exception {
-        when(purchaseService.getPurchasesByWarehouse(5)).thenReturn(List.of());
-
-        mockMvc.perform(get(BASE_URL + "/warehouse/5"))
-                .andExpect(status().isOk());
-    }
+    }    
 
     @Test
     @DisplayName("POST: Eroare Validare - Request Body Invalid (400 Bad Request)")
     void addPurchases_ValidationError() throws Exception {
-        String invalidJson = "{\"userId\": null, \"items\": []}";
+        // Testăm validarea pe structura nouă
+        String invalidJson = "{\"userId\": null, \"globalNote\": \"Test\", \"items\": []}";
 
         mockMvc.perform(post(BASE_URL + "/bulk")
                 .contentType(MediaType.APPLICATION_JSON)

@@ -69,6 +69,7 @@ public class CateringOrderService {
                         p.getBarcode(),
                         p.getCategory().getId(),
                         p.getProductType().getId(),
+                        p.getProductType().getCode(),
                         p.getUnit().getId(),
                         p.getVatRate() != null ? p.getVatRate().getId() : null,
                         p.getSalePrice(),
@@ -120,6 +121,19 @@ public class CateringOrderService {
     @Transactional(readOnly = true)
     public List<CateringOrderDTOs.OrderResponse> getUnpaidOrders(LocalDate start, LocalDate end) {
         return orderRepository.findByIsPaidFalseAndOrderDateBetweenOrderByOrderDateAsc(start, end).stream()
+                .map(this::mapToResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<CateringOrderDTOs.OrderResponse> getPaidOrders(LocalDate start, LocalDate end) {
+        // Convertim LocalDate (ziua) în interval de timp complet (început zi -> sfârșit zi)
+        // Pentru că paidAt este LocalDateTime
+        LocalDateTime startDateTime = start.atStartOfDay();
+        LocalDateTime endDateTime = end.atTime(23, 59, 59);
+
+        // Căutăm după data PLĂȚII
+        return orderRepository.findByIsPaidTrueAndPaidAtBetweenOrderByPaidAtDesc(startDateTime, endDateTime).stream()
                 .map(this::mapToResponse)
                 .toList();
     }

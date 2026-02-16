@@ -23,4 +23,10 @@ public interface StockAdjustmentRepository extends JpaRepository<StockAdjustment
     // Query pentru a vedea pierderile pe un anumit motiv (ex: tot ce e "SPARGERE")
     @Query("SELECT s FROM StockAdjustment s WHERE s.reason.id = :reasonId ORDER BY s.adjustedAt DESC")
     List<StockAdjustment> findByReasonId(@Param("reasonId") Integer reasonId);
+
+    List<StockAdjustment> findByWarehouseIdAndAdjustedAtBetweenOrderByAdjustedAtDesc(
+            Integer warehouseId, 
+            LocalDateTime start, 
+            LocalDateTime end
+    );
 }

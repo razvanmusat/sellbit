@@ -68,6 +68,14 @@ public class CateringOrderController {
     }
 
     @PreAuthorize("hasAnyAuthority('100')")
+    @GetMapping("/paid-history") // Endpoint nou pentru istoric
+    public ResponseEntity<List<CateringOrderDTOs.OrderResponse>> getPaidHistory(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate start,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate end) {
+        return ResponseEntity.ok(orderService.getPaidOrders(start, end));
+    }
+
+    @PreAuthorize("hasAnyAuthority('100')")
     @PatchMapping("/bulk-pay")//Marchează un set de comenzi ca plătite într-un singur pas.
     public ResponseEntity<Void> bulkPay(@Valid @RequestBody CateringOrderDTOs.BulkPayRequest request) {
         orderService.processBulkPayment(request);

@@ -1,254 +1,119 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { 
     Dialog, DialogTitle, DialogContent, DialogActions, DialogContentText,
-    Button, TextField, Box, Typography, Alert, Snackbar 
+    Button, TextField, Box, Typography, Alert, Snackbar, IconButton 
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import RestoreFromTrashIcon from '@mui/icons-material/RestoreFromTrash';
 import SaveIcon from '@mui/icons-material/Save';
 import LockIcon from '@mui/icons-material/Lock';
+import CloseIcon from '@mui/icons-material/Close';
 
-import { CategoryBrowserService } from '../../../../shared/api/CategoryBrowserService';
-import { getFriendlyErrorMessage } from '../../../../shared/utils/errorHandler';
-
-const SYSTEM_CODES = ['REGULAR', 'SERVICE', 'CATERING', 'MENU', 'ADVANCE'];
+import { useCategoryModal } from '../hooks/useCategoryModal';
 
 const CategoryModal = ({ open, onClose, categoryToEdit, parentId, onSuccess }) => {
-    const isEditMode = !!categoryToEdit;
+    const { state, setters, handlers } = useCategoryModal(open, onClose, categoryToEdit, parentId, onSuccess);
 
-    // --- STATE FORMULAR ---
-    const [code, setCode] = useState('');
-    const [label, setLabel] = useState('');
-    const [loading, setLoading] = useState(false);
-
-    // --- STATE CONFIRMARE (MUI DIALOG) ---
-    const [confirmOpen, setConfirmOpen] = useState(false);
-
-    // --- STATE SNACKBAR (Erori/Succes) ---
-    const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
-
-    // Verificăm dacă e categorie de sistem
-    const isSystemCategory = isEditMode && categoryToEdit && SYSTEM_CODES.includes(categoryToEdit.code);
-    
-    // Calculăm statusul curent pentru UI
-    const currentIsActive = categoryToEdit?.isActive !== undefined 
-                            ? categoryToEdit.isActive 
-                            : (categoryToEdit?.active !== undefined ? categoryToEdit.active : true);
-
-    useEffect(() => {
-        if (open) {
-            if (categoryToEdit) {
-                // Edit Mode
-                setCode(categoryToEdit.code || '');
-                setLabel(categoryToEdit.label || '');
-            } else {
-                // Create Mode
-                setCode(''); 
-                setLabel('');
-            }
-            setLoading(false);
-            setConfirmOpen(false);
-        }
-    }, [open, categoryToEdit]);
-
-    // --- HANDLERS ---
-
-    const showSnackbar = (message, severity = 'error') => {
-        setSnackbar({ open: true, message, severity });
-    };
-
-    const handleCloseSnackbar = () => {
-        setSnackbar(prev => ({ ...prev, open: false }));
-    };
-
-    const handleSave = async (e) => {
-        e.preventDefault();
-
-        if (!code || code.trim().length < 2) {
-            showSnackbar("Codul este obligatoriu (min 2 caractere).", "error");
-            return;
-        }
-        if (!label || label.trim().length < 3) {
-            showSnackbar("Denumirea este obligatorie (min 3 caractere).", "error");
-            return;
-        }
-
-        setLoading(true);
-        try {
-            if (isEditMode) {
-                await CategoryBrowserService.updateCategory(categoryToEdit.id, {
-                    id: categoryToEdit.id,
-                    code: code,
-                    label: label,
-                    parentId: categoryToEdit.parentId,
-                    isActive: currentIsActive // Păstrăm statusul curent
-                });
-                onSuccess("Categoria a fost actualizată!");
-                onClose();
-            } else {
-                await CategoryBrowserService.createCategory({
-                    code: code,
-                    label: label,
-                    parentId: parentId || null,
-                    isActive: true // Implicit activă la creare
-                });
-                onSuccess("Categoria a fost creată!");
-                onClose();
-            }
-        } catch (err) {
-            console.error("Save Error:", err);
-            showSnackbar(getFriendlyErrorMessage(err), "error");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    // 1. Deschide fereastra de confirmare MUI
-    const handleOpenConfirm = () => {
-        if (isSystemCategory) {
-            showSnackbar("Nu puteți dezactiva o categorie de sistem!", "warning");
-            return;
-        }
-        setConfirmOpen(true);
-    };
-
-    // 2. Execută acțiunea după confirmare
-    const handleConfirmToggle = async () => {
-        setConfirmOpen(false); // Închidem confirmarea
-        setLoading(true);
-
-        const targetStatus = !currentIsActive;
-
-        try {
-            await CategoryBrowserService.toggleStatus(categoryToEdit.id, targetStatus);
-            onSuccess(currentIsActive ? "Categoria a fost dezactivată." : "Categoria a fost reactivată.");
-            onClose();
-        } catch (err) {
-            console.error("Toggle Error:", err);
-            showSnackbar(getFriendlyErrorMessage(err), "error");
-            setLoading(false); // Oprim loading doar pe eroare, pe succes se închide modala oricum
-        }
-    };
+    if (!open) return null;
 
     return (
         <>
-            {/* --- MODALA PRINCIPALĂ --- */}
-            <Dialog 
-                open={open} 
-                onClose={onClose} 
-                fullWidth 
-                maxWidth="sm"
-                disableRestoreFocus={false} 
-            >
-                <DialogTitle>
-                    {isEditMode ? `Editare: ${categoryToEdit.label}` : 'Categorie Nouă'}
-                    {isEditMode && (
-                        <Typography variant="caption" display="block" color={currentIsActive ? "success.main" : "error.main"}>
-                            Status: {currentIsActive ? "ACTIV" : "INACTIV"}
-                            {isSystemCategory && " (SISTEM)"}
-                        </Typography>
-                    )}
+            <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
+                <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Box>
+                        {state.isEditMode ? `Editare: ${state.label}` : 'Categorie Nouă'}
+                        {state.isEditMode && (
+                            <Typography variant="caption" display="block" color={state.currentIsActive ? "success.main" : "error.main"}>
+                                Status: {state.currentIsActive ? "ACTIV" : "INACTIV"}
+                                {state.isSystemCategory && " (SISTEM)"}
+                            </Typography>
+                        )}
+                    </Box>
+                    <IconButton onClick={onClose} size="small"><CloseIcon /></IconButton>
                 </DialogTitle>
                 
-                <form onSubmit={handleSave}>
-                    <DialogContent>
-                        <Box display="flex" flexDirection="column" gap={2} py={1}>
-                            
-                            {isSystemCategory && (
-                                <Alert severity="info" sx={{ mb: 1 }}>
+                <form onSubmit={handlers.handleSave}>
+                    <DialogContent dividers>
+                        <Box display="flex" flexDirection="column" gap={2}>
+                            {state.isSystemCategory && (
+                                <Alert severity="info">
                                     Aceasta este o categorie de sistem. Codul nu poate fi modificat.
                                 </Alert>
                             )}
 
                             <TextField 
                                 label="Cod Categorie" 
-                                fullWidth 
-                                required
-                                disabled={isSystemCategory || loading}
-                                autoFocus={!isSystemCategory}
-                                placeholder="Ex: BAUTURI"
-                                value={code}
-                                onChange={(e) => setCode(e.target.value.toUpperCase())}
+                                fullWidth required
+                                disabled={state.isSystemCategory || state.loading}
+                                autoFocus={!state.isSystemCategory}
+                                value={state.code}
+                                onChange={(e) => setters.setCode(e.target.value.toUpperCase())}    
+                                // FIX: Folosim InputProps standard pentru TextField simplu
                                 InputProps={{
-                                    endAdornment: isSystemCategory ? <LockIcon color="action" /> : null
+                                    endAdornment: state.isSystemCategory ? <LockIcon color="action" /> : null
                                 }}
                             />
 
                             <TextField 
                                 label="Denumire (Label)" 
-                                fullWidth 
-                                required
-                                disabled={loading}
-                                autoFocus={isSystemCategory}
-                                placeholder="Ex: Băuturi Răcoritoare"
-                                value={label}
-                                onChange={(e) => setLabel(e.target.value)}
+                                fullWidth required
+                                disabled={state.loading}
+                                autoFocus={state.isSystemCategory}
+                                value={state.label}
+                                onChange={(e) => setters.setLabel(e.target.value)}
                             />
                         </Box>
                     </DialogContent>
 
                     <DialogActions sx={{ justifyContent: 'space-between', px: 3, pb: 2 }}>
-                        {isEditMode ? (
+                        {state.isEditMode ? (
                             <Button 
                                 variant="outlined" 
-                                color={currentIsActive ? "error" : "success"} 
-                                startIcon={currentIsActive ? <DeleteIcon /> : <RestoreFromTrashIcon />} 
-                                onClick={handleOpenConfirm} // Deschide confirmarea MUI
-                                type="button"
-                                disabled={isSystemCategory || loading}
+                                color={state.currentIsActive ? "error" : "success"} 
+                                startIcon={state.currentIsActive ? <DeleteIcon /> : <RestoreFromTrashIcon />} 
+                                // FIX: Am mutat logica de verificare în handler-ul din hook (handleAttemptToggle)
+                                onClick={handlers.handleAttemptToggle}
+                                disabled={state.loading}
                             >
-                                {currentIsActive ? "Dezactivează" : "Reactivează"}
+                                {state.currentIsActive ? "Dezactivează" : "Reactivează"}
                             </Button>
-                        ) : (
-                            <Box />
-                        )}
+                        ) : <Box />}
 
                         <Box>
-                            <Button onClick={onClose} sx={{ mr: 1 }} disabled={loading}>Anulează</Button>
-                            <Button 
-                                type="submit" 
-                                variant="contained" 
-                                startIcon={<SaveIcon />}
-                                disabled={loading}
-                            >
-                                {loading ? "Se salvează..." : "Salvează"}
+                            <Button onClick={onClose} sx={{ mr: 1 }} disabled={state.loading}>Anulează</Button>
+                            <Button type="submit" variant="contained" startIcon={<SaveIcon />} disabled={state.loading}>
+                                {state.loading ? "Se salvează..." : "Salvează"}
                             </Button>
                         </Box>
                     </DialogActions>
                 </form>
             </Dialog>
 
-            {/* --- CONFIRMARE MUI (Separată de alertă) --- */}
-            <Dialog
-                open={confirmOpen}
-                onClose={() => setConfirmOpen(false)}
-            >
+            {/* Confirmare Status */}
+            <Dialog open={state.confirmOpen} onClose={() => setters.setConfirmOpen(false)}>
                 <DialogTitle>Confirmare Acțiune</DialogTitle>
                 <DialogContent>
                     <DialogContentText>
-                        Sunteți sigur că doriți să {currentIsActive ? "dezactivați" : "reactivați"} categoria <strong>{label}</strong>?
-                        {currentIsActive && " Aceasta nu va mai fi vizibilă în POS."}
+                        Sunteți sigur că doriți să {state.currentIsActive ? "dezactivați" : "reactivați"} categoria <strong>{state.label}</strong>?
                     </DialogContentText>
                 </DialogContent>
                 <DialogActions>
-                    <Button onClick={() => setConfirmOpen(false)} color="primary">
-                        Nu, Anulează
-                    </Button>
-                    <Button onClick={handleConfirmToggle} color="error" variant="contained" autoFocus>
-                        Da, {currentIsActive ? "Dezactivează" : "Reactivează"}
+                    <Button onClick={() => setters.setConfirmOpen(false)}>Nu, Anulează</Button>
+                    <Button onClick={handlers.handleConfirmToggle} color="error" variant="contained" autoFocus>
+                        Da, Confirm
                     </Button>
                 </DialogActions>
             </Dialog>
 
-            {/* --- SNACKBAR LOCAL PENTRU ERORI MODALĂ --- */}
+            {/* Snackbar Local */}
             <Snackbar 
-                open={snackbar.open} 
+                open={state.snackbar.open} 
                 autoHideDuration={4000} 
-                onClose={handleCloseSnackbar}
+                onClose={handlers.closeSnackbar}
                 anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
             >
-                <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} variant="filled" sx={{ width: '100%' }}>
-                    {snackbar.message}
+                <Alert severity={state.snackbar.severity} variant="filled" sx={{ width: '100%' }}>
+                    {state.snackbar.message}
                 </Alert>
             </Snackbar>
         </>

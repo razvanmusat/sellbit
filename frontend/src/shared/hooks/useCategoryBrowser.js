@@ -5,7 +5,8 @@ import { useSelector } from 'react-redux';
 import { CategoryBrowserService } from '../api/CategoryBrowserService';
 import { SearchProductService } from '../../modules/cashier/sales/api/SearchProductService'; 
 
-export const useCategoryBrowser = (mode = 'SALES', refreshTrigger = 0) => {
+// Adăugăm parametrul 'isControlled' (default false)
+export const useCategoryBrowser = (mode = 'SALES', refreshTrigger = 0, isControlled = false) => {
     const { user } = useSelector((state) => state.auth);
     const isAdminMode = mode === 'ADMIN' && user?.authorityLevel === 100;
 
@@ -20,50 +21,35 @@ export const useCategoryBrowser = (mode = 'SALES', refreshTrigger = 0) => {
     const [error, setError] = useState(null);
 
     const fetchData = useCallback(async () => {
+        // --- FIX CRITIC: STOP FETCH DACĂ E CONTROLAT DIN EXTERIOR ---
+        if (isControlled) {
+            return; 
+        }
+        // -----------------------------------------------------------
+
         setLoading(true);
         setError(null);
         
         try {
-            // 1. Detalii Categorie Curentă & VALIDARE ARBORE GENEALOGIC
+            // 1. Detalii Categorie Curentă
             if (currentCategoryId) {
                 try {
                     const details = await CategoryBrowserService.getCategoryDetails(currentCategoryId);
                     
-                    // --- VALIDARE DE SECURITATE (POS/SALES) ---
+                    // --- VALIDARE DE SECURITATE (Doar dacă NU e Admin) ---
                     if (!isAdminMode) {
-                        // A. Verificăm categoria curentă
                         const isInactive = (details.isActive === false) || (details.active === false);
-                        if (isInactive) {
-                            throw new Error("Această categorie este dezactivată.");
-                        }
-
-                        // B. Verificăm recursiv toți părinții (Ancestry Check)
-                        // Dacă părintele e dezactivat, copilul nu trebuie să fie accesibil
-                        let parentPointer = details.parentId;
-                        while (parentPointer) {
-                            const parent = await CategoryBrowserService.getCategoryDetails(parentPointer);
-                            const isParentInactive = (parent.isActive === false) || (parent.active === false);
-                            
-                            if (isParentInactive) {
-                                throw new Error(`Categoria părinte (${parent.label}) este dezactivată.`);
-                            }
-                            // Urcăm mai sus în arbore
-                            parentPointer = parent.parentId;
-                        }
+                        if (isInactive) throw new Error("Această categorie este dezactivată.");
                     }
-                    // ------------------------------------------
-
                     setCurrentCategory(details);
                 } catch (e) {
                     console.warn("Acces interzis sau categorie inexistentă", e);
                     setError(e.message || "Categoria nu poate fi accesată.");
-                    
-                    // Curățăm tot ca să nu se vadă nimic
                     setCurrentCategory(null);
                     setSubcategories([]);
                     setProducts([]);
                     setLoading(false);
-                    return; // STOP EXECUȚIE
+                    return; 
                 }
             } else {
                 setCurrentCategory(null);
@@ -93,7 +79,7 @@ export const useCategoryBrowser = (mode = 'SALES', refreshTrigger = 0) => {
         } finally {
             setLoading(false);
         }
-    }, [currentCategoryId, isAdminMode, refreshTrigger]);
+    }, [currentCategoryId, isAdminMode, refreshTrigger, isControlled]); // Dependență nouă: isControlled
 
     useEffect(() => {
         fetchData();

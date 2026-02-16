@@ -18,6 +18,8 @@ public record ProductDTO(
     @NotNull(message = "ERROR.PRODUCT_TYPE.REQUIRED")
     Integer productTypeId,
 
+    String productTypeCode,
+
     @NotNull(message = "ERROR.UNIT.REQUIRED")
     Integer unitId,
 

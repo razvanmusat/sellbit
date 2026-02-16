@@ -17,6 +17,12 @@ public interface PurchaseRepository extends JpaRepository<Purchase, Integer> {
 
 	List<Purchase> findByPurchasedAtBetween(LocalDateTime start, LocalDateTime end);
 
+	// 1. Pentru Jurnal (Dată + Gestiune)
+    List<Purchase> findByPurchasedAtBetweenAndWarehouseId(LocalDateTime start, LocalDateTime end, Integer warehouseId);
+
+    // 2. Pentru Istoric Produs (Produs + Gestiune)
+    List<Purchase> findByProductIdAndWarehouseId(Integer productId, Integer warehouseId);
+
 	// Loturile care mai au marfă, cele mai vechi primele
 	@Query("SELECT p FROM Purchase p WHERE p.warehouse.id = :wId AND p.product.id = :pId AND p.remainingQuantity > 0 ORDER BY p.purchasedAt ASC, p.id ASC")
     List<Purchase> findActiveBatchesFIFO(Integer wId, Integer pId);

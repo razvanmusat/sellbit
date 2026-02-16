@@ -30,27 +30,34 @@ public class PurchaseService {
     private final WarehouseRepository warehouseRepository;
     private final UserRepository userRepository;
     private final StockCurrentRepository stockCurrentRepository;
-    private final ProductComponentRepository productComponentRepository;    
-    
+    private final ProductComponentRepository productComponentRepository;        
+
+    // ISTORIC PRODUS
     @Transactional(readOnly = true)
-    public List<PurchaseDTOs.Response> getPurchasesByWarehouse(Integer warehouseId) {
-        return purchaseRepository.findByWarehouseId(warehouseId).stream()
+    public List<PurchaseDTOs.Response> getPurchasesByProduct(Integer productId, Integer warehouseId) {
+        if (warehouseId == null) {
+            throw new RuntimeException("ERROR.WAREHOUSE.REQUIRED");
+        }
+
+        return purchaseRepository.findByProductIdAndWarehouseId(productId, warehouseId).stream()
                 .map(this::mapToResponse)
                 .toList();
     }
 
+    // RAPORT JURNAL
     @Transactional(readOnly = true)
-    public List<PurchaseDTOs.Response> getPurchasesByProduct(Integer productId) {
-        return purchaseRepository.findByProductId(productId).stream()
-                .map(this::mapToResponse)
-                .toList();
-    }
+    public List<PurchaseDTOs.Response> getPurchasesByDateRange(LocalDate start, LocalDate end, Integer warehouseId) {
+        if (warehouseId == null) {
+            throw new RuntimeException("ERROR.WAREHOUSE.REQUIRED");
+        }
 
-    @Transactional(readOnly = true)
-    public List<PurchaseDTOs.Response> getPurchasesByDateRange(LocalDate start, LocalDate end) {
-        return purchaseRepository.findByPurchasedAtBetween(start.atStartOfDay(), end.atTime(23, 59, 59)).stream()
-                .map(this::mapToResponse)
-                .toList();
+        return purchaseRepository.findByPurchasedAtBetweenAndWarehouseId(
+                start.atStartOfDay(), 
+                end.atTime(23, 59, 59), 
+                warehouseId
+        ).stream()
+         .map(this::mapToResponse)
+         .toList();
     }
 
     @Transactional
@@ -73,9 +80,9 @@ public class PurchaseService {
                     .quantity(item.quantity())
                     .remainingQuantity(item.quantity())
                     .purchasePrice(item.purchasePrice())
-                    .expirationDate(item.expirationDate())
-                    .note(item.note())
+                    .expirationDate(item.expirationDate())                    
                     .purchasedAt(LocalDateTime.now())
+                    .note(request.globalNote())
                     .build();
 
             purchaseRepository.save(purchase);
@@ -231,6 +238,7 @@ public BigDecimal getCurrentFIFOPurchasePrice(Integer warehouseId, Integer produ
                 p.getId(),
                 p.getProduct().getName(),
                 p.getWarehouse().getName(),
+                p.getUser().getFullName(),
                 p.getQuantity(),
                 p.getRemainingQuantity(),
                 p.getPurchasePrice(),

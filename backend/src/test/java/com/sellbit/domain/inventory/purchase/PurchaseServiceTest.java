@@ -43,7 +43,7 @@ class PurchaseServiceTest {
     @Mock
     private StockCurrentService stockCurrentService;
     @Mock
-    private ProductComponentRepository productComponentRepository; // Adăugat pentru a fixa NPE
+    private ProductComponentRepository productComponentRepository;
 
     @InjectMocks
     private PurchaseService purchaseService;
@@ -67,9 +67,12 @@ class PurchaseServiceTest {
     @Test
     @DisplayName("Succes: Procesare bulk purchase corectă și actualizare stoc")
     void processBulkPurchase_Success() {
+        // CreateItem: productId, warehouseId, quantity, purchasePrice, expirationDate
         PurchaseDTOs.CreateItem item = new PurchaseDTOs.CreateItem(10, 5, new BigDecimal("10.000"),
-                new BigDecimal("50.00"), null, "Nota test");
-        PurchaseDTOs.BulkCreate request = new PurchaseDTOs.BulkCreate(1, List.of(item));
+                new BigDecimal("50.00"), null);
+        
+        // BulkCreate: userId, globalNote, items
+        PurchaseDTOs.BulkCreate request = new PurchaseDTOs.BulkCreate(1, "Nota globala factura test", List.of(item));
 
         mockProduct.setTrackStock(true);
 
@@ -88,7 +91,8 @@ class PurchaseServiceTest {
     @Test
     @DisplayName("Eroare: User inexistent la achiziție bulk")
     void processBulkPurchase_UserNotFound() {
-        PurchaseDTOs.BulkCreate request = new PurchaseDTOs.BulkCreate(99, List.of());
+        // BulkCreate: userId, globalNote, items
+        PurchaseDTOs.BulkCreate request = new PurchaseDTOs.BulkCreate(99, "Nota test", List.of());
         when(userRepository.findById(99)).thenReturn(Optional.empty());
 
         RuntimeException exception = assertThrows(RuntimeException.class,
@@ -99,8 +103,11 @@ class PurchaseServiceTest {
     @Test
     @DisplayName("Eroare: Produs inexistent în lista bulk")
     void processBulkPurchase_ProductNotFound() {
-        PurchaseDTOs.CreateItem item = new PurchaseDTOs.CreateItem(999, 5, BigDecimal.ONE, BigDecimal.ONE, null, null);
-        PurchaseDTOs.BulkCreate request = new PurchaseDTOs.BulkCreate(1, List.of(item));
+        // CreateItem: productId, warehouseId, quantity, purchasePrice, expirationDate
+        PurchaseDTOs.CreateItem item = new PurchaseDTOs.CreateItem(999, 5, BigDecimal.ONE, BigDecimal.ONE, null);
+        
+        // BulkCreate: userId, globalNote, items
+        PurchaseDTOs.BulkCreate request = new PurchaseDTOs.BulkCreate(1, "Nota test", List.of(item));
 
         when(userRepository.findById(1)).thenReturn(Optional.of(mockUser));
         when(productRepository.findById(999)).thenReturn(Optional.empty());
@@ -116,12 +123,8 @@ class PurchaseServiceTest {
         Purchase batch1 = Purchase.builder().id(1).remainingQuantity(new BigDecimal("5.000")).build();
         Purchase batch2 = Purchase.builder().id(2).remainingQuantity(new BigDecimal("10.000")).build();
 
-        // Adăugat: Serviciul are nevoie de produs pentru a valida operațiunea
         when(productRepository.findById(10)).thenReturn(Optional.of(mockProduct));
-
         when(purchaseRepository.findActiveBatchesFIFO(5, 10)).thenReturn(List.of(batch1, batch2));
-
-        // Mock pentru a evita NPE (deja adăugat anterior)
         when(productComponentRepository.findByParentProductIdAndIsActiveTrue(10)).thenReturn(new ArrayList<>());
 
         purchaseService.deductFromBatchesFIFO(5, 10, new BigDecimal("7.000"));
@@ -159,21 +162,6 @@ class PurchaseServiceTest {
     // --- TESTE: Rapoarte și Alerte ---
 
     @Test
-    @DisplayName("Succes: Obținere achiziții după depozit")
-    void getPurchasesByWarehouse_Success() {
-        Purchase p = Purchase.builder()
-                .product(mockProduct).warehouse(mockWarehouse)
-                .quantity(BigDecimal.TEN).remainingQuantity(BigDecimal.TEN)
-                .build();
-        when(purchaseRepository.findByWarehouseId(5)).thenReturn(List.of(p));
-
-        List<PurchaseDTOs.Response> result = purchaseService.getPurchasesByWarehouse(5);
-
-        assertEquals(1, result.size());
-        assertEquals("Produs Test", result.get(0).productName());
-    }
-
-    @Test
     @DisplayName("Succes: Verificare calcul zile până la expirare în alerte")
     void getExpirationAlerts_Success() {
         LocalDate expiry = LocalDate.now().plusDays(10);
@@ -193,10 +181,10 @@ class PurchaseServiceTest {
     }
 
     @Test
-    @DisplayName("Corner Case: Raport pentru produs fără istoric")
-    void getPurchasesByProduct_Empty() {
-        when(purchaseRepository.findByProductId(10)).thenReturn(List.of());
-        List<PurchaseDTOs.Response> result = purchaseService.getPurchasesByProduct(10);
+    @DisplayName("Corner Case: Raport pentru produs fără istoric (pe o gestiune specifică)")
+    void getPurchasesByProduct_Empty() {        
+        when(purchaseRepository.findByProductIdAndWarehouseId(10, 5)).thenReturn(List.of());
+        List<PurchaseDTOs.Response> result = purchaseService.getPurchasesByProduct(10, 5);
         assertTrue(result.isEmpty());
     }
 }

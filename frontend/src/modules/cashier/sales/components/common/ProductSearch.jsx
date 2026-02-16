@@ -6,10 +6,9 @@ import {
 import AllInclusiveIcon from '@mui/icons-material/AllInclusive'; 
 import { StockCurrentService } from '../../../sales/api/StockCurrentService';
 
-// Importăm Hook-ul nou creat
 import { useProductSearch } from '../../hooks/useProductSearch';
 
-// --- SUB-COMPONENTĂ: STOC LIVE (Rămâne neschimbată sau o poți muta și pe ea separat) ---
+// --- SUB-COMPONENTĂ: STOC LIVE ---
 const LiveStockDisplay = ({ warehouseId, productId, trackStock }) => {
   const [stock, setStock] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -42,11 +41,17 @@ const LiveStockDisplay = ({ warehouseId, productId, trackStock }) => {
   );
 };
 
-// --- COMPONENTA PRINCIPALĂ ---
-const ProductSearch = ({ onProductSelect, warehouseId, onlyTrackStock = false }) => {
+// --- COMPONENTA PRINCIPALĂ MODIFICATĂ ---
+// Adăugăm props: showPrice, showStock
+const ProductSearch = ({ 
+    onProductSelect, 
+    warehouseId, 
+    onlyTrackStock = false, 
+    showPrice = true, // Default TRUE (pentru Vânzare)
+    showStock = true  // Default TRUE
+}) => {
   const theme = useTheme();
   
-  // 1. FOLOSIM HOOK-UL
   const { 
     query, 
     results, 
@@ -57,7 +62,6 @@ const ProductSearch = ({ onProductSelect, warehouseId, onlyTrackStock = false })
     clearSearch 
   } = useProductSearch(onlyTrackStock);
 
-  // 2. State pentru UI (Navigare tastatură) - Asta ține de View, nu de Logică
   const [selectedIndex, setSelectedIndex] = useState(-1); 
   
   const isNoResults = hasSearched && !loading && results.length === 0 && query.length >= 2 && !errorMsg;
@@ -68,7 +72,7 @@ const ProductSearch = ({ onProductSelect, warehouseId, onlyTrackStock = false })
 
   const handleClickAway = () => {
     if (results.length > 0 || query.length > 0) {
-        clearSearch(); // Folosim funcția din hook
+        clearSearch(); 
     }
   };
 
@@ -92,15 +96,24 @@ const ProductSearch = ({ onProductSelect, warehouseId, onlyTrackStock = false })
   };
 
   const handleProductClick = (product) => {
-    onProductSelect(product.id); 
+    onProductSelect(product); // RETURNĂM TOT OBIECTUL PRODUS, NU DOAR ID-UL
     clearSearch();
     setSelectedIndex(-1);
   };
 
+  // --- LOGICĂ DINAMICĂ PENTRU LĂȚIME COLOANE ---
+  const getColWidths = () => {
+      if (showPrice && showStock) return { name: '70%', price: '20%', stock: '10%' };
+      if (showPrice && !showStock) return { name: '80%', price: '20%', stock: '0%' };
+      if (!showPrice && showStock) return { name: '85%', price: '0%', stock: '15%' };
+      return { name: '100%', price: '0%', stock: '0%' }; // Doar Nume
+  };
+  const widths = getColWidths();
+
   const rowStyles = { display: 'flex', alignItems: 'center', width: '100%' };
-  const colName = { width: '70%', paddingRight: 1 };
-  const colPrice = { width: '20%', textAlign: 'right', paddingRight: 1 };
-  const colStock = { width: '10%', textAlign: 'center' };
+  const colName = { width: widths.name, paddingRight: 1 };
+  const colPrice = { width: widths.price, textAlign: 'right', paddingRight: 1, display: showPrice ? 'block' : 'none' };
+  const colStock = { width: widths.stock, textAlign: 'center', display: showStock ? 'block' : 'none',whiteSpace: 'nowrap',minWidth: 'fit-content' };
 
   return (
     <ClickAwayListener onClickAway={handleClickAway}>
@@ -109,14 +122,14 @@ const ProductSearch = ({ onProductSelect, warehouseId, onlyTrackStock = false })
         <TextField 
             fullWidth 
             variant="outlined" 
-            label="Caută produs (Nume)..." 
+            label="Caută produs (Nume / Cod)..." 
             autoComplete="off"            
             value={query} 
             onChange={handleQueryChange} 
             onKeyDown={handleKeyDown} 
-            autoFocus 
-            placeholder="Minim 2 caractere"
-            sx={{ mb: 1, '& .MuiInputBase-input': { textAlign: { xs: 'left', md: 'center' } } }} 
+            // Nu punem autoFocus aici mereu, poate deranja în unele formulare
+            placeholder="Tastează numele produsului..."
+            sx={{ mb: 1, '& .MuiInputBase-input': { textAlign: { xs: 'left', md: 'left' } } }} 
         />
         
         {/* Overlay Status */}
@@ -134,8 +147,8 @@ const ProductSearch = ({ onProductSelect, warehouseId, onlyTrackStock = false })
             <Box sx={{ p: 1.5, bgcolor: theme.palette.grey[100], borderBottom: '1px solid', borderColor: 'divider' }}>
                 <Box sx={rowStyles}>
                     <Box sx={colName}><Typography variant="caption" fontWeight="bold" color="text.secondary">PRODUS</Typography></Box>
-                    <Box sx={colPrice}><Typography variant="caption" fontWeight="bold" color="text.secondary">PREȚ</Typography></Box>
-                    <Box sx={colStock}><Typography variant="caption" fontWeight="bold" color="text.secondary">STOC</Typography></Box>
+                    {showPrice && <Box sx={colPrice}><Typography variant="caption" fontWeight="bold" color="text.secondary">PREȚ VÂNZARE</Typography></Box>}
+                    {showStock && <Box sx={colStock}><Typography variant="caption" fontWeight="bold" color="text.secondary">STOC ACTUAL</Typography></Box>}
                 </Box>
             </Box>
 
@@ -153,10 +166,16 @@ const ProductSearch = ({ onProductSelect, warehouseId, onlyTrackStock = false })
                     >
                     <Box sx={rowStyles}>
                         <Box sx={colName}><Typography variant="body2" fontWeight="500" sx={{ lineHeight: 1.2 }}>{product.name}</Typography></Box>
-                        <Box sx={colPrice}><Typography variant="body2" color="primary" fontWeight="bold">{(product.salePrice || 0).toFixed(2)}</Typography></Box>
-                        <Box sx={colStock}>
-                            <LiveStockDisplay warehouseId={warehouseId} productId={product.id} trackStock={product.trackStock} />
-                        </Box>
+                        
+                        {showPrice && (
+                            <Box sx={colPrice}><Typography variant="body2" color="text.secondary">{(product.salePrice || 0).toFixed(2)}</Typography></Box>
+                        )}
+                        
+                        {showStock && (
+                            <Box sx={colStock}>
+                                <LiveStockDisplay warehouseId={warehouseId} productId={product.id} trackStock={product.trackStock} />
+                            </Box>
+                        )}
                     </Box>
                     </ListItemButton>
                     <Divider />
@@ -172,7 +191,10 @@ const ProductSearch = ({ onProductSelect, warehouseId, onlyTrackStock = false })
 
 ProductSearch.propTypes = {
   onProductSelect: PropTypes.func.isRequired,
-  warehouseId: PropTypes.number
+  warehouseId: PropTypes.number,
+  onlyTrackStock: PropTypes.bool,
+  showPrice: PropTypes.bool,
+  showStock: PropTypes.bool
 };
 
 export default ProductSearch;

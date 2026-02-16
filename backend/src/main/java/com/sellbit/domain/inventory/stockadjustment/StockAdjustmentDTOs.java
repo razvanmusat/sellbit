@@ -39,6 +39,7 @@ public class StockAdjustmentDTOs {
     public record Response(
         Integer id,
         String productName,
+        Integer warehouseId,
         String warehouseName,
         String reasonLabel,
         String userName,

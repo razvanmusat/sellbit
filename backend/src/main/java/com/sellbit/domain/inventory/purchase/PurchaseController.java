@@ -30,21 +30,16 @@ public class PurchaseController {
     public ResponseEntity<Void> addPurchases(@Valid @RequestBody PurchaseDTOs.BulkCreate request) {
         purchaseService.processBulkPurchase(request);
         return ResponseEntity.ok().build();
-    }
-    
-    //Raport achiziții per depozit. Se verifică ce intrări de marfă au fost făcute pe o gestiune specifică.
-    @PreAuthorize("hasAnyAuthority('100')")
-    @GetMapping("/warehouse/{warehouseId}")
-    public ResponseEntity<List<PurchaseDTOs.Response>> getByWarehouse(@PathVariable Integer warehouseId) {
-        return ResponseEntity.ok(purchaseService.getPurchasesByWarehouse(warehouseId));
-    }
+    }    
 
     // AUDIT: Istoric loturi per produs.
-    // Adminul verifică prețurile de achiziție și FIFO pentru un anumit produs.
+    // Adminul verifică prețurile de achiziție și FIFO pentru un anumit produs.    
     @PreAuthorize("hasAnyAuthority('100')")
     @GetMapping("/product/{productId}")
-    public ResponseEntity<List<PurchaseDTOs.Response>> getByProduct(@PathVariable Integer productId) {
-        return ResponseEntity.ok(purchaseService.getPurchasesByProduct(productId));
+    public ResponseEntity<List<PurchaseDTOs.Response>> getByProduct(
+            @PathVariable Integer productId,
+            @RequestParam Integer warehouseId) {
+        return ResponseEntity.ok(purchaseService.getPurchasesByProduct(productId, warehouseId));
     }
 
     // RAPORT: Achiziții totale într-un interval de timp.
@@ -53,8 +48,9 @@ public class PurchaseController {
     @GetMapping("/report")
     public ResponseEntity<List<PurchaseDTOs.Response>> getByDateRange(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate start,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate end) {
-        return ResponseEntity.ok(purchaseService.getPurchasesByDateRange(start, end));
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate end,
+            @RequestParam Integer warehouseId) {
+        return ResponseEntity.ok(purchaseService.getPurchasesByDateRange(start, end, warehouseId));
     }
 
     // ALERTĂ: Produse care expiră curând. Setat implicit pe 15 zile.

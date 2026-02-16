@@ -19,7 +19,7 @@ import ReservationsMainPage from './modules/cashier/reservations/pages/Reservati
 // Import Catering
 import CateringMainPage from './modules/cashier/catering/pages/CateringMainPage';
 
-// Import Stoc
+// Import Stoc (Casier)
 import StockMainPage from './modules/cashier/stock/pages/StockMainPage';
 
 // Import Catalog Full-Screen pentru Vânzare
@@ -28,9 +28,14 @@ import SalesCatalogPage from './modules/cashier/sales/pages/SalesCatalogPage';
 // --- IMPORTURI ADMIN ---
 import AdminLayout from './modules/admin/layout/AdminLayout';
 
-// 👇👇👇 AICI ERA GREȘEALA. AM SCHIMBAT IMPORTUL:
-// NU importam taburile simple, ci PAGINA PRINCIPALA care le contine
+// Import Catalog Admin
 import CatalogMainPage from './modules/admin/catalog/pages/CatalogMainPage'; 
+
+// Import Catering Admin
+import CateringMainPageAdmin from './modules/admin/catering/pages/CateringMainPage';
+
+// 👇 IMPORT NOU: Modulul de Inventar (Achiziții, Ajustări, Stoc)
+import InventoryMainPage from './modules/admin/inventory/pages/InventoryMainPage';
 
 // --- COMPONENTE DE SISTEM ---
 import ProtectedRoute from './modules/auth/components/ProtectedRoute';
@@ -114,7 +119,7 @@ function App() {
             <Navigate to="/home" replace />
           ) : (
             <ProtectedRoute authorityLevel={100}>
-               <AdminLayout />
+                <AdminLayout />
             </ProtectedRoute>
           )
         } 
@@ -122,13 +127,17 @@ function App() {
         {/* 1. Dashboard */}
         <Route path="dashboard" element={<AdminDashboard />} />
         
-        {/* 2. CATALOG (Implementat Real) */}
-        {/* 👇👇👇 AICI AM SCHIMBAT COMPONENTA RANDATA */}
+        {/* 2. CATALOG */}
         <Route path="catalog" element={<CatalogMainPage />} />
 
-        {/* 3. Restul Tab-urilor (Placeholders pentru moment) */}
-        <Route path="catering" element={<PlaceholderPage title="Catering Admin" />} />
-        <Route path="inventory" element={<PlaceholderPage title="Gestiune Stoc & Inventar" />} />
+        {/* 3. CATERING */}
+        <Route path="catering" element={<CateringMainPageAdmin />} />
+        
+        {/* 4. INVENTORY (Achiziții / Ajustări / Inventar) */}
+        {/* 👇 AICI AM LEGAT PAGINA REALĂ */}
+        <Route path="inventory" element={<InventoryMainPage />} />
+
+        {/* 5. Restul Tab-urilor (Placeholders pentru moment) */}
         <Route path="warehouses" element={<PlaceholderPage title="Configurare Gestiuni" />} />
         <Route path="sales" element={<PlaceholderPage title="Rapoarte Vânzări" />} />
         <Route path="users" element={<PlaceholderPage title="Administrare Utilizatori" />} />

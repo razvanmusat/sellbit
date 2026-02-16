@@ -46,4 +46,6 @@ public interface ProductRepository extends JpaRepository<Product, Integer> {
 
 	@Query("SELECT p FROM Product p WHERE p.productType.code = 'CATERING' AND p.isActive = true")
 	List<Product> findAllCateringProducts();
+
+	List<Product> findByCategoryId(Integer categoryId);
 }

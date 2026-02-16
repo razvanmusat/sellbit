@@ -17,6 +17,7 @@ public class StockCurrentDTOs {
         String productName,
         String barcode,
         String unitName,
+        String subcategoryName,
         BigDecimal quantity,
         LocalDateTime updatedAt
     ) {}

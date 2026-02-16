@@ -69,8 +69,7 @@ public class ProductService {
         Product product = new Product();
         mapDtoToEntity(dto, product);
 
-        product.setIsActive(true);
-        product.setTrackStock(dto.trackStock() != null ? dto.trackStock() : true);
+        product.setIsActive(true);        
 
         return convertToDTO(productRepository.save(product));
     }
@@ -110,6 +109,15 @@ public class ProductService {
     public void toggleStatus(Integer id, boolean active) {
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("ERROR.PRODUCT.NOT_FOUND"));
+
+        // LOGICĂ NOUĂ: Validare Părinte la Reactivare
+        if (active) {
+            // Verificăm dacă categoria părinte este activă
+            if (!product.getCategory().getIsActive()) {
+                throw new RuntimeException("ERROR.PRODUCT.PARENT_CATEGORY_INACTIVE");
+            }
+        }
+
         product.setIsActive(active);
         productRepository.save(product);
     }
@@ -171,6 +179,7 @@ public class ProductService {
                 product.getBarcode(),
                 product.getCategory().getId(),
                 product.getProductType().getId(),
+                product.getProductType().getCode(),
                 product.getUnit().getId(),
                 product.getVatRate() != null ? product.getVatRate().getId() : null,
                 product.getSalePrice(),

@@ -4,6 +4,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.sellbit.domain.catalog.product.Product;
+import com.sellbit.domain.catalog.product.ProductRepository;
+
 import jakarta.persistence.EntityNotFoundException;
 
 import java.util.List;
@@ -14,6 +17,7 @@ import java.util.stream.Collectors;
 public class CategoryService {
 
     private final CategoryRepository categoryRepository;
+    private final ProductRepository productRepository;  
 
      //Returnează categoriile active filtrat după părinte pentru navigarea ierarhică în POS.     
     @Transactional(readOnly = true)
@@ -101,13 +105,59 @@ public class CategoryService {
         return convertToDTO(categoryRepository.save(category));
     }
 
+    
+    //Dacă Activa/dezactivam o categorie -> Activam/dezactivam recursiv toți copiii și toate produsele din ea.     
     @Transactional
     public void toggleStatus(Integer id, boolean active) {
         Category category = categoryRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("ERROR.CATEGORY.NOT_FOUND"));
 
+        // 1. Validare Părinte (Rămâne valabilă): Nu te poți activa dacă tatăl e inactiv
+        if (active && category.getParent() != null) {
+            if (!category.getParent().getIsActive()) {
+                throw new RuntimeException("ERROR.CATEGORY.PARENT_INACTIVE");
+            }
+        }
+
+        // 2. Setăm statusul categoriei curente
         category.setIsActive(active);
         categoryRepository.save(category);
+ 
+        // - Dezactivare Categorie -> Dezactivează tot sub ea.
+        // - Activare Categorie -> Activează tot sub ea.
+        propagateStatusRecursively(category, active);
+    }
+
+    private void propagateStatusRecursively(Category parent, boolean targetStatus) {
+        
+        // A. Actualizăm produsele (Optimizat cu saveAll)
+        List<Product> products = productRepository.findByCategoryId(parent.getId());
+        
+        // Filtrăm doar produsele care au status diferit ca să nu facem update inutil
+        List<Product> productsToUpdate = products.stream()
+            .filter(p -> p.getIsActive() != targetStatus)
+            .peek(p -> p.setIsActive(targetStatus))
+            .collect(Collectors.toList());
+
+        if (!productsToUpdate.isEmpty()) {
+            productRepository.saveAll(productsToUpdate); // Un singur query de update (batch)
+        }
+
+        // B. Actualizăm subcategoriile
+        List<Category> subcategories = categoryRepository.findByParentIdOrderByLabelAsc(parent.getId());
+        
+        for (Category sub : subcategories) {
+            boolean statusChanged = sub.getIsActive() != targetStatus;
+            
+            if (statusChanged) {
+                sub.setIsActive(targetStatus);
+                categoryRepository.save(sub);
+            }
+            
+            // Continuăm recursivitatea indiferent dacă s-a schimbat statusul părintelui sau nu
+            // (pentru a asigura consistența în jos)
+            propagateStatusRecursively(sub, targetStatus);
+        }
     }
 
     private CategoryDTO convertToDTO(Category category) {

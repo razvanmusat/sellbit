@@ -89,7 +89,7 @@ public class StockCurrentService {
                     .user(adminUser)
                     .reason(reason)
                     .quantityChange(difference)
-                    .note("Inventar: " + request.reason())
+                    .note(request.reason())
                     .build());
 
             if (difference.compareTo(BigDecimal.ZERO) < 0) {
@@ -183,12 +183,18 @@ public class StockCurrentService {
     }
 
     private StockCurrentDTOs.Response mapToResponse(StockCurrent stock) {
+        String categoryLabel = "GENERAL";
+        if (stock.getProduct() != null && stock.getProduct().getCategory() != null) {
+            categoryLabel = stock.getProduct().getCategory().getLabel();
+        }
+
         return new StockCurrentDTOs.Response(
                 stock.getId().getWarehouseId(),
                 stock.getId().getProductId(),
                 stock.getProduct().getName(),
                 stock.getProduct().getBarcode(),
                 stock.getProduct().getUnit().getLabel(),
+                categoryLabel,
                 stock.getQuantity(),
                 stock.getUpdatedAt());
     }

@@ -1,143 +1,151 @@
-import React, { useState } from 'react';
-import { Box, Button, Skeleton, Snackbar, Alert } from '@mui/material';
+import React from 'react';
+import { Box, Button, Snackbar, Alert, Tabs, Tab, useMediaQuery, useTheme } from '@mui/material';
 import AddCircleIcon from '@mui/icons-material/AddCircle';
 import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolder';
-import EditIcon from '@mui/icons-material/Edit';
 
-// Importurile rămân EXACT cum le ai tu în codul funcțional
 import CategoryBrowser from '../../../../shared/components/catalog/CategoryBrowser';
 import CategoryModal from '../components/CategoryModal';
 import ProductModal from '../components/ProductModal';
+import { useProductCatalog } from '../hooks/useProductCatalog';
 
 const ProductCatalogPage = () => {
-    // --- STATE SI LOGICA EXACTA DIN CODUL TAU ---
-    const [catModalOpen, setCatModalOpen] = useState(false);
-    const [categoryToEdit, setCategoryToEdit] = useState(null);
-    const [currentParentId, setCurrentParentId] = useState(null);
+    const { state, actions } = useProductCatalog();
+    const categoryToEditObj = state.currentCategoryDetails;
 
-    const [prodModalOpen, setProdModalOpen] = useState(false);
-    const [productToEdit, setProductToEdit] = useState(null);
-    const [viewingCategoryId, setViewingCategoryId] = useState(null);
+    const theme = useTheme();
+    const isMobile = useMediaQuery(theme.breakpoints.down('sm')); 
 
-    const [refreshCounter, setRefreshCounter] = useState(0);
-    const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+    const renderHeaderActions = ({ isRoot }) => {
+        const isInactiveTab = state.tabIndex === 1;
 
-    const blurAndOpen = (actionFn) => (e) => {
-        if (e && e.currentTarget) e.currentTarget.blur();
-        actionFn();
-    };
-
-    const openCreateCategory = (parentId) => {
-        setCategoryToEdit(null);
-        setCurrentParentId(parentId);
-        setCatModalOpen(true);
-    };
-
-    const openEditCategory = (category) => {
-        setCategoryToEdit(category);
-        setCatModalOpen(true);
-    };
-
-    const openCreateProduct = (categoryId) => {
-        setProductToEdit(null);
-        setViewingCategoryId(categoryId);
-        setProdModalOpen(true);
-    };
-
-    const openEditProduct = (product) => {
-        setProductToEdit(product);
-        setProdModalOpen(true);
-    };
-
-    const handleSuccess = (msg) => {
-        setRefreshCounter(prev => prev + 1);
-        setSnackbar({ open: true, message: msg || 'Succes!', severity: 'success' });
-    };
-
-    const handleCloseSnackbar = () => setSnackbar(prev => ({ ...prev, open: false }));
-
-    const renderHeaderActions = ({ isRoot, currentCategoryId, currentCategory, subcategories, products, loading }) => {
-        if (loading) return <Skeleton variant="rectangular" width={200} height={36} sx={{ borderRadius: 1 }} />;
-
-        const hasSubcats = subcategories && subcategories.length > 0;
-        const hasProducts = products && products.length > 0;
-        const isEmpty = !hasSubcats && !hasProducts;
+        const btnSx = {
+            minWidth: { xs: 'auto', sm: '64px' }, 
+            px: { xs: 1, sm: 2 }, 
+            fontSize: { xs: '0.75rem', sm: '0.875rem' } 
+        };
 
         if (isRoot) {
+            if (isInactiveTab) return null;
             return (
                 <Button 
                     variant="contained" color="secondary" startIcon={<CreateNewFolderIcon />}
-                    onClick={blurAndOpen(() => openCreateCategory(null))}
+                    onClick={actions.blurAndOpen(() => actions.openCreateCategory(null))}
+                    sx={btnSx}
                 >
-                    Categorie Nouă
+                    <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Categorie Nouă</Box>
+                    <Box component="span" sx={{ display: { xs: 'inline', sm: 'none' } }}>Categorie</Box>
                 </Button>
             );
         }
 
+        const canAddSubcategory = !state.hasAnyProducts;
+        const canAddProduct = !state.hasAnySubcategories;
+
         return (
-            <Box display="flex" gap={2}>
-                <Button 
-                    variant="outlined" color="warning" startIcon={<EditIcon />}
-                    onClick={blurAndOpen(() => openEditCategory(currentCategory))}
-                >
-                    Editează Categoria
-                </Button>
+            <Box display="flex" gap={{ xs: 1, sm: 2 }}>
+                {!isInactiveTab && (
+                    <>
+                        {canAddSubcategory && (
+                            <Button 
+                                variant="contained" color="secondary" startIcon={<CreateNewFolderIcon />}
+                                onClick={actions.blurAndOpen(() => actions.openCreateCategory(state.currentCategoryId))}
+                                sx={btnSx}
+                            >
+                                <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Adaugă Subcategorie</Box>
+                                <Box component="span" sx={{ display: { xs: 'inline', sm: 'none' } }}>Subcat.</Box>
+                            </Button>
+                        )}
 
-                {!hasProducts && (
-                    <Button 
-                        variant="contained" color="secondary" startIcon={<CreateNewFolderIcon />}
-                        onClick={blurAndOpen(() => openCreateCategory(currentCategoryId))}
-                    >
-                        Adaugă Subcategorie
-                    </Button>
-                )}
-
-                {(isEmpty || hasProducts) && (
-                    <Button 
-                        variant="contained" color="primary" startIcon={<AddCircleIcon />}
-                        onClick={blurAndOpen(() => openCreateProduct(currentCategoryId))}
-                    >
-                        Adaugă Produs
-                    </Button>
+                        {canAddProduct && (
+                            <Button 
+                                variant="contained" color="primary" startIcon={<AddCircleIcon />}
+                                onClick={actions.blurAndOpen(() => actions.openCreateProduct(state.currentCategoryId))}
+                                sx={btnSx}
+                            >
+                                <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Adaugă Produs</Box>
+                                <Box component="span" sx={{ display: { xs: 'inline', sm: 'none' } }}>Produs</Box>
+                            </Button>
+                        )}
+                    </>
                 )}
             </Box>
         );
     };
 
+    const renderTabs = () => (
+        <Box borderBottom={1} borderColor="divider" mb={0}>
+            <Tabs 
+                value={state.tabIndex} 
+                onChange={(e, v) => actions.setTabIndex(v)} 
+                indicatorColor="primary" 
+                textColor="primary"
+                variant={isMobile ? "fullWidth" : "standard"}
+            >
+                <Tab label={`Active (${state.countActive})`} />
+                <Tab label={`Inactive (${state.countInactive})`} />
+            </Tabs>
+        </Box>
+    );
+
     return (
-        <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-            <CategoryBrowser 
-                mode="ADMIN" 
-                refreshTrigger={refreshCounter}
-                headerActions={renderHeaderActions}
-                onEditCategory={openEditCategory}
-                onProductClick={openEditProduct} 
-            />
+        <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            
+            <Box sx={{ flexShrink: 0 }}>
+                {renderTabs()}
+            </Box>
+            
+            <Box 
+                sx={{
+                    flex: 1,
+                    // Mentinem scroll-ul cum l-ai definit tu, dar fara padding bottom
+                    overflowY: 'auto',
+                    overflowX: 'hidden',
+                    '&::-webkit-scrollbar': { display: 'none', width: 0, height: 0 },
+                    msOverflowStyle: 'none',
+                    scrollbarWidth: 'none',
+                    px: 0, 
+                    pb: 0 // FIX: Scoaterea lui 10 rezolva spatiul gol de jos
+                }}
+            >
+                <CategoryBrowser 
+                    mode="ADMIN" 
+                    categories={state.filteredCategories}
+                    products={state.filteredProducts}
+                    refreshTrigger={state.refreshCounter}
+                    selectedCategoryId={state.currentCategoryId}
+                    headerActions={renderHeaderActions}
+                    onEditCategory={actions.openEditCategory} 
+                    onProductClick={actions.openEditProduct} 
+                    onCategorySelect={actions.handleCategorySelect}
+                    currentCategoryData={categoryToEditObj}
+                    onToggleStatus={actions.handleToggleItem}
+                />
+            </Box>
 
             <CategoryModal 
-                open={catModalOpen}
-                onClose={() => setCatModalOpen(false)}
-                categoryToEdit={categoryToEdit}
-                parentId={currentParentId}
-                onSuccess={handleSuccess} 
+                open={state.catModalOpen}
+                onClose={() => actions.setCatModalOpen(false)}
+                categoryToEdit={state.categoryToEdit}
+                parentId={state.currentParentId}
+                onSuccess={actions.handleSuccess} 
             />
 
             <ProductModal 
-                open={prodModalOpen}
-                onClose={() => setProdModalOpen(false)}
-                productToEdit={productToEdit}
-                categoryId={viewingCategoryId}
-                onSuccess={handleSuccess}
+                open={state.prodModalOpen}
+                onClose={() => actions.setProdModalOpen(false)}
+                productToEdit={state.productToEdit}
+                categoryId={state.viewingCategoryId}
+                onSuccess={actions.handleSuccess}
             />
 
             <Snackbar 
-                open={snackbar.open} 
+                open={state.snackbar.open} 
                 autoHideDuration={4000} 
-                onClose={handleCloseSnackbar}
+                onClose={actions.handleCloseSnackbar}
                 anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
             >
-                <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} variant="filled" sx={{ width: '100%' }}>
-                    {snackbar.message}
+                <Alert onClose={actions.handleCloseSnackbar} severity={state.snackbar.severity} sx={{ width: '100%' }}>
+                    {state.snackbar.message}
                 </Alert>
             </Snackbar>
         </Box>

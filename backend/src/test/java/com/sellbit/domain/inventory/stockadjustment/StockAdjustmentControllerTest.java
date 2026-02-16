@@ -76,6 +76,7 @@ class StockAdjustmentControllerTest {
     @DisplayName("GET: Raport după date - Parametri Valizi")
     void getByDateRange_Success() throws Exception {
         mockMvc.perform(get(BASE_URL + "/report")
+                .param("warehouseId", "1")
                 .param("start", "2023-01-01")
                 .param("end", "2023-01-31"))
                 .andExpect(status().isOk());

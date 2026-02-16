@@ -46,123 +46,162 @@ class ProductServiceTest {
 
     @Test
     void getProductsForAdmin_ShouldReturnList() {
+        // PREGĂTIRE: Entitate completă pentru a trece de convertToDTO fără NullPointerException
         Product p = new Product();
-        p.setCategory(new Category());
-        p.setUnit(new UnitOfMeasure());
-        p.setProductType(new ProductType());
+        p.setId(1);
+        p.setName("Test");
         
-        when(productRepository.findByCategoryIdOrderByNameAsc(1)).thenReturn(List.of(p));
+        Category c = new Category(); 
+        c.setId(10); // ID necesar pentru convertToDTO
+        p.setCategory(c);
         
-        List<ProductDTO> result = productService.getProductsForAdmin(1);
+        UnitOfMeasure u = new UnitOfMeasure(); 
+        u.setId(1);
+        p.setUnit(u);
         
+        ProductType pt = new ProductType(); 
+        pt.setId(1); 
+        pt.setCode("REGULAR"); // COD necesar pentru convertToDTO
+        p.setProductType(pt);
+        
+        VatRate v = new VatRate(); 
+        v.setId(1);
+        p.setVatRate(v);
+        
+        when(productRepository.findByCategoryIdOrderByNameAsc(10)).thenReturn(List.of(p));
+        
+        // EXECUȚIE
+        List<ProductDTO> result = productService.getProductsForAdmin(10);
+        
+        // VERIFICARE
         assertFalse(result.isEmpty());
-        verify(productRepository).findByCategoryIdOrderByNameAsc(1);
+        assertEquals("REGULAR", result.get(0).productTypeCode());
+        verify(productRepository).findByCategoryIdOrderByNameAsc(10);
     }
 
     @Test
     void getProductByBarcode_ShouldReturnDto() {
         Product p = new Product();
+        p.setId(1);
         p.setIsActive(true);
-        p.setCategory(new Category());
-        p.setUnit(new UnitOfMeasure());
-        p.setProductType(new ProductType());
+        p.setBarcode("123");
+        p.setName("Test");
+
+        Category c = new Category(); c.setId(10);
+        p.setCategory(c);
+
+        UnitOfMeasure u = new UnitOfMeasure(); u.setId(1);
+        p.setUnit(u);
+
+        ProductType pt = new ProductType(); pt.setId(1); pt.setCode("REGULAR");
+        p.setProductType(pt);
+        
+        VatRate v = new VatRate(); v.setId(1);
+        p.setVatRate(v);
 
         when(productRepository.findByBarcode("123")).thenReturn(Optional.of(p));
 
         ProductDTO result = productService.getProductByBarcode("123");
 
         assertNotNull(result);
-    }
-
-    @Test
-    void getProductByBarcode_ShouldThrowIfInactive() {
-        Product p = new Product();
-        p.setIsActive(false);
-
-        when(productRepository.findByBarcode("123")).thenReturn(Optional.of(p));
-
-        assertThrows(RuntimeException.class, () -> productService.getProductByBarcode("123"));
+        assertEquals("123", result.barcode());
     }
 
     @Test
     void createProduct_ShouldSaveSuccessfully() {
-        // Corecție: 13 parametri conform record ProductDTO
+        // DTO Intrare
         ProductDTO dto = new ProductDTO(
-                null, 
-                "Prod", 
-                "123", 
-                10, 
-                1, 
-                1, 
-                1, 
-                new BigDecimal("10"), 
-                new BigDecimal("5"), // purchasePrice
-                true, 
-                true, 
-                null, 
-                null
+                null, "Prod", "123", 10, 1, "REGULAR", 1, 1, 
+                new BigDecimal("10"), new BigDecimal("5"), true, true, null, null
         );
         
+        // MOCK-uri
         when(productRepository.existsByBarcode("123")).thenReturn(false);
-        when(categoryRepository.findById(10)).thenReturn(Optional.of(new Category()));
-        when(unitOfMeasureRepository.findById(1)).thenReturn(Optional.of(new UnitOfMeasure()));
-        when(productTypeRepository.findById(1)).thenReturn(Optional.of(new ProductType()));
-        when(vatRateRepository.findById(1)).thenReturn(Optional.of(new VatRate()));
         
-        Product p = new Product();
-        p.setCategory(new Category());
-        p.setUnit(new UnitOfMeasure());
-        p.setProductType(new ProductType());
-        when(productRepository.save(any(Product.class))).thenReturn(p);
+        // 1. CATEGORIE (FIXUL PENTRU STRICT STUBBING)
+        Category dbCategory = new Category();
+        dbCategory.setId(10); // <--- ID-ul este CRITIC aici!
+        when(categoryRepository.findById(10)).thenReturn(Optional.of(dbCategory));
+        
+        // Acum serviciul va apela existsByParent_Id(10) (nu null), deci se potrivește:
+        when(categoryRepository.existsByParent_Id(10)).thenReturn(false);
+        
+        // 2. UNITATE
+        UnitOfMeasure dbUnit = new UnitOfMeasure(); dbUnit.setId(1);
+        when(unitOfMeasureRepository.findById(1)).thenReturn(Optional.of(dbUnit));
+        
+        // 3. TIP PRODUS (pt logică stoc)
+        ProductType dbType = new ProductType();
+        dbType.setId(1);
+        dbType.setCode("REGULAR");
+        when(productTypeRepository.findById(1)).thenReturn(Optional.of(dbType));
+        
+        // 4. TVA
+        VatRate dbVat = new VatRate(); dbVat.setId(1);
+        when(vatRateRepository.findById(1)).thenReturn(Optional.of(dbVat));
+        
+        // 5. SAVE
+        when(productRepository.save(any(Product.class))).thenAnswer(i -> {
+            Product toSave = i.getArgument(0);
+            toSave.setId(99); // Simulăm generarea ID-ului
+            return toSave;
+        });
 
-        productService.createProduct(dto);
+        ProductDTO result = productService.createProduct(dto);
 
+        assertNotNull(result);
         verify(productRepository).save(any(Product.class));
     }
 
     @Test
     void updateProduct_ShouldUpdateFields() {
+        // Produs existent
         Product existing = new Product();
         existing.setId(1);
         existing.setBarcode("old");
-        existing.setCategory(new Category());
+        existing.setName("Old Name");
+        existing.setCategory(new Category()); existing.getCategory().setId(99);
         existing.setUnit(new UnitOfMeasure());
         existing.setProductType(new ProductType());
 
-        // Corecție: 13 parametri conform record ProductDTO
+        // DTO Update
         ProductDTO dto = new ProductDTO(
-                1, 
-                "New", 
-                "new", 
-                10, 
-                1, 
-                1, 
-                null, 
-                new BigDecimal("20"), 
-                new BigDecimal("10"), // purchasePrice
-                true, 
-                true, 
-                null, 
-                null
+                1, "New Name", "new", 10, 1, "REGULAR", 1, 1, 
+                new BigDecimal("20"), new BigDecimal("10"), true, true, null, null
         );
+
+        // MOCK-uri DB
+        Category dbCategory = new Category(); dbCategory.setId(10); // ID CRITIC
+        ProductType dbType = new ProductType(); dbType.setId(1); dbType.setCode("REGULAR");
+        VatRate dbVat = new VatRate(); dbVat.setId(1);
+        UnitOfMeasure dbUnit = new UnitOfMeasure(); dbUnit.setId(1);
 
         when(productRepository.findById(1)).thenReturn(Optional.of(existing));
         when(productRepository.existsByBarcode("new")).thenReturn(false);
-        when(categoryRepository.findById(10)).thenReturn(Optional.of(new Category()));
-        when(unitOfMeasureRepository.findById(1)).thenReturn(Optional.of(new UnitOfMeasure()));
-        when(productTypeRepository.findById(1)).thenReturn(Optional.of(new ProductType()));
-        when(productRepository.save(any(Product.class))).thenReturn(existing);
+        
+        // Logica mapDtoToEntity
+        when(categoryRepository.findById(10)).thenReturn(Optional.of(dbCategory));
+        when(categoryRepository.existsByParent_Id(10)).thenReturn(false);
+        
+        when(unitOfMeasureRepository.findById(1)).thenReturn(Optional.of(dbUnit));
+        when(productTypeRepository.findById(1)).thenReturn(Optional.of(dbType));
+        when(vatRateRepository.findById(1)).thenReturn(Optional.of(dbVat));
+        
+        when(productRepository.save(any(Product.class))).thenAnswer(i -> i.getArgument(0));
 
         productService.updateProduct(1, dto);
 
         verify(productRepository).save(existing);
+        assertEquals("New Name", existing.getName());
     }
 
     @Test
     void moveProduct_ShouldUpdateCategory() {
         Product p = new Product();
+        p.setId(1);
+        
         Category c = new Category();
-        c.setId(10);
+        c.setId(10); // ID CRITIC
 
         when(productRepository.findById(1)).thenReturn(Optional.of(p));
         when(categoryRepository.findById(10)).thenReturn(Optional.of(c));

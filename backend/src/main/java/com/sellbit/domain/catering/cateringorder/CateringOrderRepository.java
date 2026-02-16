@@ -28,4 +28,6 @@ public interface CateringOrderRepository extends JpaRepository<CateringOrder, In
     @Modifying
     @Query("UPDATE CateringOrder co SET co.orderDate = :newDate WHERE co.reservationId.id = :reservationId")
     void moveOrdersToDateJPQL(@Param("reservationId") Integer reservationId, @Param("newDate") LocalDate newDate);
+
+    List<CateringOrder> findByIsPaidTrueAndPaidAtBetweenOrderByPaidAtDesc(LocalDateTime start, LocalDateTime end);
 }

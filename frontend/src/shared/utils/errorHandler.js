@@ -28,6 +28,7 @@ const ERROR_MESSAGES = {
     "ERROR.STOCK": "Stoc insuficient.",
     "ERROR.PRODUCT.REQUIRED": "Produsul este obligatoriu.",
     "ERROR.WAREHOUSE.REQUIRED": "Gestiunea este obligatorie.",
+    "ERROR.USER.ADMIN_NOT_FOUND": "Eroare internă: Utilizatorul Administrator nu a fost găsit.",
 
     // --- STOCKS & ADJUSTMENTS (STRICT LOGIC) ---
     "ERROR.ADJUSTMENT.INVALID_QUANTITY": "Cantitatea introdusă pentru ajustare este invalidă.",
@@ -82,6 +83,8 @@ const ERROR_MESSAGES = {
     "ERROR.CATEGORY.NOT_FOUND": "Categoria nu a fost găsită.",
     "ERROR.CATEGORY.PARENT_IMMUTABLE": "Nu poți muta o categorie existentă sub un alt părinte.",
     "ERROR.CATEGORY.NOT_LEAF": "Nu poți adăuga produse aici! Această categorie are subcategorii.",
+    "ERROR.CATEGORY.NOT_FOUND_ID": "Categoria cu acest ID nu a fost găsită.",
+    "ERROR.CATEGORY.PARENT_INACTIVE": "Categoria părinte este inactivă. Activeaz-o pe aceea mai întâi.",
 
     // --- PRODUCTS (ADMIN) ---
     "ERROR.PRODUCT.DUPLICATE_BARCODE": "Acest cod de bare este deja folosit la alt produs.",
@@ -90,6 +93,7 @@ const ERROR_MESSAGES = {
     "ERROR.UNIT.NOT_FOUND": "Unitatea de măsură selectată este invalidă.",
     "ERROR.PRODUCT_TYPE.NOT_FOUND": "Tipul de produs selectat este invalid.",
     "ERROR.VAT.NOT_FOUND": "Cota TVA selectată este invalidă.",
+    "ERROR.PRODUCT.PARENT_CATEGORY_INACTIVE": "Nu poți activa produsul deoarece categoria din care face parte este inactivă.",
 
     // --- PRODUCTS VALIDATION ---
     "ERROR.PRODUCT.NAME_REQUIRED": "Numele produsului este obligatoriu.",
@@ -108,7 +112,10 @@ const ERROR_MESSAGES = {
     "ERROR.QUANTITY.TOO_LOW": "Cantitatea ingredientului trebuie să fie pozitivă.",
     "ERROR.CHILD_PRODUCT.NOT_FOUND": "Unul dintre ingrediente nu mai există în sistem.",
     "ERROR.COMPOSITE.SELF_REFERENCE": "Eroare logică: Un produs nu poate fi propriul său ingredient.",
-
+    "ERROR.COMPOSITE.OPEN_RECEIPTS_EXIST": "Există bonuri deschise! Nu poți modifica rețeta în timpul programului.",
+    "ERROR.COMPOSITE.SELF_REFERENCE": "Eroare logică: Nu poți adăuga meniul ca ingredient în el însuși.",
+    "ERROR.QUANTITY.REQUIRED": "Cantitatea este obligatorie.",
+    
     // --- GENERICE ---
     "INTERNAL_SERVER_ERROR": "A apărut o eroare internă la server.",
     "DEFAULT": "A apărut o eroare neașteptată. Încearcă din nou."

@@ -19,7 +19,7 @@ public class StockCurrentController {
     // RAPORT: Stoc scriptic per depozit.
     // Adminul îl folosește pentru a vedea situația globală a mărfii dintr-o
     // gestiune.
-    @PreAuthorize("hasAnyAuthority('100')")
+    @PreAuthorize("hasAnyAuthority('50', '100')")
     @GetMapping("/warehouse/{warehouseId}")
     public ResponseEntity<List<StockCurrentDTOs.Response>> getStockByWarehouse(@PathVariable Integer warehouseId) {
         return ResponseEntity.ok(stockCurrentService.getStockByWarehouse(warehouseId));

@@ -23,21 +23,24 @@ public class PurchaseDTOs {
 
 			@NotNull(message = "ERROR.PRICE.REQUIRED") @DecimalMin(value = "0.00", message = "ERROR.PRICE.MIN_VALUE") BigDecimal purchasePrice,
 
-			LocalDate expirationDate,
-
-			String note) {
+			LocalDate expirationDate){
 	}
 
-	public record BulkCreate(@NotNull(message = "ERROR.USER.REQUIRED") Integer userId,
+	public record BulkCreate(
+            @NotNull(message = "ERROR.USER.REQUIRED") 
+            Integer userId,
+			            
+            String globalNote, 
 
-			@NotEmpty(message = "ERROR.LIST.EMPTY") @Valid // Obligatoriu pentru a valida fiecare obiect din listă
-			List<CreateItem> items) {
-	}
+            @NotEmpty(message = "ERROR.LIST.EMPTY") 
+            @Valid 
+            List<CreateItem> items
+    ) {}
 
 	/**
 	 * Pentru afișarea în istoricul achizițiilor/rapoarte.
 	 */
-	public record Response(Integer id, String productName, String warehouseName, BigDecimal quantity,
+	public record Response(Integer id, String productName, String warehouseName, String userName, BigDecimal quantity,
 			BigDecimal remainingQuantity, BigDecimal purchasePrice, LocalDateTime purchasedAt, LocalDate expirationDate,
 			String note) {
 	}

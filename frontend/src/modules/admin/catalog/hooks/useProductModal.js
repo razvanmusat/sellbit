@@ -47,7 +47,9 @@ export const useProductModal = (open, onClose, productToEdit, categoryId, onSucc
                 setUnits(u || []);
                 setVatRates(v || []);
             } catch (err) {
+                // Aici putem lăsa console.error, sau putem afișa un snackbar discret
                 console.error("Eroare încărcare nomenclatoare:", err);
+                // showSnackbar(getFriendlyErrorMessage(err)); // Opțional
             }
         };
         if (open) fetchLookups();
@@ -86,7 +88,11 @@ export const useProductModal = (open, onClose, productToEdit, categoryId, onSucc
 
     const handleSave = async (e) => {
         if (e) e.preventDefault();
-        if (!vatRateId) return showSnackbar("Cota TVA este obligatorie!");
+
+        // VALIDARE: Folosim cheia din dicționar, nu text hardcodat!
+        if (!vatRateId) {
+            return showSnackbar(getFriendlyErrorMessage("ERROR.VAT.REQUIRED"));
+        }
 
         const payload = {
             name,
@@ -95,7 +101,7 @@ export const useProductModal = (open, onClose, productToEdit, categoryId, onSucc
             productTypeId,
             unitId,
             vatRateId,
-            salePrice: parseFloat(salePrice),
+            salePrice: salePrice ? parseFloat(salePrice) : 0, // Protecție pt NaN
             purchasePrice: purchasePrice ? parseFloat(purchasePrice) : null,
             isActive: isEditMode ? currentIsActive : true
         };
@@ -111,6 +117,7 @@ export const useProductModal = (open, onClose, productToEdit, categoryId, onSucc
             }
             onClose();
         } catch (err) {
+            // EROARE BACKEND -> DICȚIONAR
             showSnackbar(getFriendlyErrorMessage(err));
         } finally {
             setLoading(false);
@@ -125,6 +132,7 @@ export const useProductModal = (open, onClose, productToEdit, categoryId, onSucc
             onSuccess(currentIsActive ? "Produs dezactivat." : "Produs reactivat.");
             onClose();
         } catch (err) {
+             // EROARE BACKEND -> DICȚIONAR
             showSnackbar(getFriendlyErrorMessage(err));
             setLoading(false);
         }
@@ -137,7 +145,8 @@ export const useProductModal = (open, onClose, productToEdit, categoryId, onSucc
             const leaves = await CategoryService.getLeafCategories();
             setLeafCategories(leaves);
         } catch (err) {
-            showSnackbar("Nu am putut încărca categoriile.");
+             // EROARE BACKEND -> DICȚIONAR (Era hardcodat înainte)
+            showSnackbar(getFriendlyErrorMessage(err));
         } finally {
             setLoadingLeaves(false);
         }
@@ -152,6 +161,7 @@ export const useProductModal = (open, onClose, productToEdit, categoryId, onSucc
             onSuccess("Produs mutat!");
             onClose();
         } catch (err) {
+             // EROARE BACKEND -> DICȚIONAR
             showSnackbar(getFriendlyErrorMessage(err));
             setLoading(false);
         }

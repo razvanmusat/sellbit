@@ -40,9 +40,10 @@ public class StockAdjustmentController {
     @PreAuthorize("hasAnyAuthority('100')")
     @GetMapping("/report")
     public ResponseEntity<List<StockAdjustmentDTOs.Response>> getByDateRange(
+            @RequestParam Integer warehouseId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate start,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate end) {
-        return ResponseEntity.ok(adjustmentService.getAdjustmentsByDateRange(start, end));
+        return ResponseEntity.ok(adjustmentService.getAdjustmentsByDateRange(warehouseId, start, end));
     }
 
     //AUDIT: Istoricul ajustărilor pentru un anumit produs.
@@ -51,13 +52,5 @@ public class StockAdjustmentController {
     @GetMapping("/product/{productId}")
     public ResponseEntity<List<StockAdjustmentDTOs.Response>> getByProduct(@PathVariable Integer productId) {
         return ResponseEntity.ok(adjustmentService.getAdjustmentsByProduct(productId));
-    }
-    
-    /*Raportul ajustărilor dintr-o gestiune specifică.
-    Util pentru verificarea pierderilor/spargerilor pe un anumit depozit.*/     
-    @PreAuthorize("hasAnyAuthority('100')")
-    @GetMapping("/warehouse/{warehouseId}")
-    public ResponseEntity<List<StockAdjustmentDTOs.Response>> getByWarehouse(@PathVariable Integer warehouseId) {
-        return ResponseEntity.ok(adjustmentService.getAdjustmentsByWarehouse(warehouseId));
     }
 }

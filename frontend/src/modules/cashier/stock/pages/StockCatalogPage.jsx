@@ -1,7 +1,6 @@
 import React from 'react';
 import { Box } from '@mui/material';
 
-// Importăm componenta "mamă" de navigare
 import CategoryBrowser from '../../../../shared/components/catalog/CategoryBrowser';
 
 const StockCatalogPage = ({ warehouseId }) => {
@@ -11,7 +10,18 @@ const StockCatalogPage = ({ warehouseId }) => {
   };
 
   return (
-    <Box sx={{ height: '100%', p: 1 }}>
+    <Box 
+        sx={{ 
+            height: '100%', 
+            // MODIFICARE: Eliminat p: 1, adăugat stiluri admin-like
+            px: 0, 
+            overflowY: 'auto',
+            overflowX: 'hidden',
+            '&::-webkit-scrollbar': { display: 'none', width: 0, height: 0 },
+            '-ms-overflow-style': 'none',
+            'scrollbar-width': 'none',
+        }}
+    >
       <CategoryBrowser 
         mode="STOCK" 
         warehouseId={warehouseId}

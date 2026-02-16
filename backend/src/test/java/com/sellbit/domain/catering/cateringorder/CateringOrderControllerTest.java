@@ -81,9 +81,20 @@ class CateringOrderControllerTest {
     @DisplayName("GET /available-products: Succes")
     void getAvailableProducts_Success() throws Exception {
         ProductDTO p = new ProductDTO(
-                1, "Meniu Pui", "123456", 1, 1, 1, 1, 
-                new BigDecimal("25.00"), new BigDecimal("15.00"), 
-                true, true, LocalDateTime.now(), LocalDateTime.now()
+                1, 
+                "Meniu Pui", 
+                "123456", 
+                1,         
+                1,         
+                "REGULAR",  
+                1,          
+                1,         
+                new BigDecimal("25.00"), 
+                new BigDecimal("15.00"), 
+                true, 
+                true, 
+                LocalDateTime.now(), 
+                LocalDateTime.now()
         );
         
         when(orderService.getAvailableCateringProducts()).thenReturn(List.of(p));

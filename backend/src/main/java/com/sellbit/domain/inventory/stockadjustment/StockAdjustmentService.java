@@ -38,16 +38,7 @@ public class StockAdjustmentService {
         }
     	return adjustmentRepository.findByProductIdOrderByAdjustedAtDesc(productId)
                 .stream().map(this::mapToResponse).toList();
-    }
-
-    @Transactional(readOnly = true)
-    public List<StockAdjustmentDTOs.Response> getAdjustmentsByWarehouse(Integer warehouseId) {
-    	if (!warehouseRepository.existsById(warehouseId)) {
-            throw new RuntimeException("ERROR.WAREHOUSE.NOT_FOUND");
-        }
-    	return adjustmentRepository.findByWarehouseIdOrderByAdjustedAtDesc(warehouseId)
-                .stream().map(this::mapToResponse).toList();
-    }
+    }    
 
     /**
      * Procesează o ajustare de stoc și sincronizează loturile FIFO.
@@ -122,13 +113,16 @@ public class StockAdjustmentService {
         );
     }
 
-
-    /**
-     * Citire pentru rapoarte (Interval Date)
-     */
+    //Raport Jurnal (Gestiune + Dată)
     @Transactional(readOnly = true)
-    public List<StockAdjustmentDTOs.Response> getAdjustmentsByDateRange(LocalDate start, LocalDate end) {
-        return adjustmentRepository.findByAdjustedAtBetweenOrderByAdjustedAtDesc(
+    public List<StockAdjustmentDTOs.Response> getAdjustmentsByDateRange(Integer warehouseId, LocalDate start, LocalDate end) {
+        // Validare gestiune
+        if (!warehouseRepository.existsById(warehouseId)) {
+            throw new RuntimeException("ERROR.WAREHOUSE.NOT_FOUND");
+        }
+
+        return adjustmentRepository.findByWarehouseIdAndAdjustedAtBetweenOrderByAdjustedAtDesc(
+                warehouseId,
                 start.atStartOfDay(), 
                 end.atTime(23, 59, 59)
         ).stream().map(this::mapToResponse).toList();
@@ -138,9 +132,10 @@ public class StockAdjustmentService {
         return new StockAdjustmentDTOs.Response(
                 s.getId(),
                 s.getProduct().getName(),
+                s.getWarehouse().getId(),
                 s.getWarehouse().getName(),
                 s.getReason().getLabel(),
-                s.getUser().getUsername(),
+                s.getUser().getFullName(),
                 s.getQuantityChange(),
                 s.getNote(),
                 s.getAdjustedAt()
