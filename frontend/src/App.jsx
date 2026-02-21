@@ -1,7 +1,7 @@
-import React from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
-import { Typography, Box } from '@mui/material';
+import { Typography, Box, Snackbar, Alert, Button } from '@mui/material';
 import dayjs from 'dayjs';
 import 'dayjs/locale/ro';
 
@@ -37,6 +37,16 @@ import CateringMainPageAdmin from './modules/admin/catering/pages/CateringMainPa
 // 👇 IMPORT NOU: Modulul de Inventar (Achiziții, Ajustări, Stoc)
 import InventoryMainPage from './modules/admin/inventory/pages/InventoryMainPage';
 
+import WarehousesMainPage from './modules/admin/settings/warehouses/pages/WarehousesMainPage';
+
+import SalesMainPage from './modules/admin/sales/pages/SalesMainPage';
+import UsersMainPage from './modules/admin/settings/users/pages/UsersMainPage';
+import SystemSettingsPage from './modules/admin/settings/pages/SystemSettingsPage';
+import CompanySettingsPage from './modules/admin/settings/company/pages/CompanySettingsPage';
+import VatRatesSettingsPage from './modules/admin/settings/vat/pages/VatRatesSettingsPage';
+import VoucherMainPage from './modules/admin/vouchers/pages/VoucherMainPage';
+import { StoreService } from './modules/admin/settings/company/api/StoreService';
+
 // --- COMPONENTE DE SISTEM ---
 import ProtectedRoute from './modules/auth/components/ProtectedRoute';
 import MainLayout from './shared/components/layout/MainLayout';
@@ -56,42 +66,75 @@ const PlaceholderPage = ({ title }) => (
 
 function App() {
   const { token, user } = useSelector((state) => state.auth);
+  const navigate = useNavigate();
   const isAuthenticated = token && user;
+  const [showStoreSetupWarning, setShowStoreSetupWarning] = useState(false);
   
   // Verificăm nivelul de autoritate curent
   const userAuthority = user ? user.authorityLevel : 0;
 
-  return (
-    <Routes>
-      <Route 
-        path="/"
-        element={<Navigate to={isAuthenticated ? "/home" : "/login"} replace />}
-      />
+  useEffect(() => {
+    let isCancelled = false;
 
-      <Route 
-        path="/login" 
-        element={isAuthenticated ? <Navigate to="/home" replace /> : <LoginPage />} 
-      />
+    const checkStoreConfigured = async () => {
+      if (!isAuthenticated || userAuthority < 100) {
+        if (!isCancelled) {
+          setShowStoreSetupWarning(false);
+        }
+        return;
+      }
+
+      try {
+        const configured = await StoreService.isConfigured();
+        if (!isCancelled) {
+          setShowStoreSetupWarning(!configured);
+        }
+      } catch {
+        if (!isCancelled) {
+          setShowStoreSetupWarning(false);
+        }
+      }
+    };
+
+    checkStoreConfigured();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [isAuthenticated, userAuthority]);
+
+  return (
+    <>
+      <Routes>
+        <Route 
+          path="/"
+          element={<Navigate to={isAuthenticated ? "/home" : "/login"} replace />}
+        />
+
+        <Route 
+          path="/login" 
+          element={isAuthenticated ? <Navigate to="/home" replace /> : <LoginPage />} 
+        />
 
       {/* CATALOG VÂNZARE (FULL SCREEN) */}
-      <Route 
-        path="/sales/catalog" 
-        element={
-          <ProtectedRoute authorityLevel={50}> 
-             <SalesCatalogPage />
-          </ProtectedRoute>
-        } 
-      />
+        <Route 
+          path="/sales/catalog" 
+          element={
+            <ProtectedRoute authorityLevel={50}> 
+               <SalesCatalogPage />
+            </ProtectedRoute>
+          } 
+        />
 
       {/* --- ZONA CASIER (MainLayout) --- */}
-      <Route 
-        path="/home" 
-        element={
-          <ProtectedRoute authorityLevel={50}> 
-             <MainLayout />
-          </ProtectedRoute>
-        } 
-      >
+        <Route 
+          path="/home" 
+          element={
+            <ProtectedRoute authorityLevel={50}> 
+               <MainLayout />
+            </ProtectedRoute>
+          } 
+        >
         {/* Componenta Home default */}
         <Route index element={<Home />} />
         
@@ -109,21 +152,21 @@ function App() {
         
         {/* 5. Stoc */}
         <Route path="stock" element={<StockMainPage />} />
-      </Route>
+        </Route>
 
       {/* --- ZONA ADMIN (AdminLayout) --- */}
-      <Route 
-        path="/admin"
-        element={
-          isAuthenticated && userAuthority < 100 ? (
-            <Navigate to="/home" replace />
-          ) : (
-            <ProtectedRoute authorityLevel={100}>
-                <AdminLayout />
-            </ProtectedRoute>
-          )
-        } 
-      >
+        <Route 
+          path="/admin"
+          element={
+            isAuthenticated && userAuthority < 100 ? (
+              <Navigate to="/home" replace />
+            ) : (
+              <ProtectedRoute authorityLevel={100}>
+                  <AdminLayout />
+              </ProtectedRoute>
+            )
+          } 
+        >
         {/* 1. Dashboard */}
         <Route path="dashboard" element={<AdminDashboard />} />
         
@@ -137,17 +180,49 @@ function App() {
         {/* 👇 AICI AM LEGAT PAGINA REALĂ */}
         <Route path="inventory" element={<InventoryMainPage />} />
 
-        {/* 5. Restul Tab-urilor (Placeholders pentru moment) */}
-        <Route path="warehouses" element={<PlaceholderPage title="Configurare Gestiuni" />} />
-        <Route path="sales" element={<PlaceholderPage title="Rapoarte Vânzări" />} />
-        <Route path="users" element={<PlaceholderPage title="Administrare Utilizatori" />} />
-        <Route path="company" element={<PlaceholderPage title="Date Companie" />} />
-        <Route path="vouchers" element={<PlaceholderPage title="Vouchere & Campanii" />} />
-      </Route>
+        <Route path="sales" element={<SalesMainPage />} />
+        {/* 5. Setări sistem */}
+        <Route path="settings" element={<SystemSettingsPage />}>
+          <Route index element={<Navigate to="warehouses" replace />} />
+          <Route path="warehouses" element={<WarehousesMainPage />} />
+          <Route path="users" element={<UsersMainPage />} />
+          <Route path="company" element={<CompanySettingsPage />} />
+          <Route path="vat-rates" element={<VatRatesSettingsPage />} />
+        </Route>
+
+        {/* Redirecturi pentru căile vechi */}
+        <Route path="warehouses" element={<Navigate to="/admin/settings/warehouses" replace />} />
+        <Route path="users" element={<Navigate to="/admin/settings/users" replace />} />
+        <Route path="company" element={<Navigate to="/admin/settings/company" replace />} />
+
+        <Route path="vouchers" element={<VoucherMainPage />} />
+        </Route>
 
       {/* CATCH ALL */}
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+
+      <Snackbar
+        open={showStoreSetupWarning}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+      >
+        <Alert
+          severity="warning"
+          variant="filled"
+          action={
+            <Button
+              color="inherit"
+              size="small"
+              onClick={() => navigate('/admin/settings/company')}
+            >
+              Configurează
+            </Button>
+          }
+        >
+          Lipsesc datele companiei. Completează-le pentru funcționare corectă.
+        </Alert>
+      </Snackbar>
+    </>
   );
 }
 

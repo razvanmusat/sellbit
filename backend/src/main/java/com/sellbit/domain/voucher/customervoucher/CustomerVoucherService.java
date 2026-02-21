@@ -49,6 +49,20 @@ public class CustomerVoucherService {
                 .collect(Collectors.toList());
     }
 
+    @Transactional(readOnly = true)
+    public List<CustomerVoucherDTOs.SummaryResponse> getAvailableVouchers(LocalDate fromDate, LocalDate toDate) {
+        return voucherRepository.findAvailableBetween(fromDate, toDate, LocalDateTime.now()).stream()
+                .map(this::mapToSummary)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public List<CustomerVoucherDTOs.SummaryResponse> getUsedVouchers(LocalDate fromDate, LocalDate toDate) {
+        return voucherRepository.findUsedBetween(fromDate, toDate).stream()
+                .map(this::mapToSummary)
+                .collect(Collectors.toList());
+    }
+
     // --- LOGICA DE VALIDARE & CONSUM ---
 
     @Transactional(readOnly = true)
@@ -215,7 +229,7 @@ public class CustomerVoucherService {
                 .campaign(campaign)
                 .discountType(campaign.getDiscountType())
                 .discountValue(campaign.getDiscountValue())
-                .expiresAt(LocalDateTime.now().plusDays(campaign.getValidDays()))
+            .expiresAt(LocalDate.now().plusDays(campaign.getValidDays()).atTime(23, 59, 59))
                 .issuedReceipt(receipt)
                 .used(false)
                 .build();

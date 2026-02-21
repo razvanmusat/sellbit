@@ -5,7 +5,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/voucher/customer-vouchers")
@@ -42,14 +44,24 @@ public class CustomerVoucherController {
     // Listarea tuturor voucherelor deja consumate.
     @PreAuthorize("hasAuthority('100')")
     @GetMapping("/used")
-    public ResponseEntity<List<CustomerVoucherDTOs.SummaryResponse>> getUsedVouchers() {
+    public ResponseEntity<List<CustomerVoucherDTOs.SummaryResponse>> getUsedVouchers(
+            @RequestParam Optional<LocalDate> fromDate,
+            @RequestParam Optional<LocalDate> toDate) {
+        if (fromDate.isPresent() && toDate.isPresent()) {
+            return ResponseEntity.ok(customerVoucherService.getUsedVouchers(fromDate.get(), toDate.get()));
+        }
         return ResponseEntity.ok(customerVoucherService.getUsedVouchers());
     }
 
     // Listarea tuturor voucherelor încă disponibile (neutilizate).
     @PreAuthorize("hasAuthority('100')")
     @GetMapping("/available")
-    public ResponseEntity<List<CustomerVoucherDTOs.SummaryResponse>> getAvailableVouchers() {
+    public ResponseEntity<List<CustomerVoucherDTOs.SummaryResponse>> getAvailableVouchers(
+            @RequestParam Optional<LocalDate> fromDate,
+            @RequestParam Optional<LocalDate> toDate) {
+        if (fromDate.isPresent() && toDate.isPresent()) {
+            return ResponseEntity.ok(customerVoucherService.getAvailableVouchers(fromDate.get(), toDate.get()));
+        }
         return ResponseEntity.ok(customerVoucherService.getAvailableVouchers());
     }
     

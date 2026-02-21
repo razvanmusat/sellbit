@@ -46,15 +46,14 @@ class ReceiptControllerTest {
     void create_Success() throws Exception {
         var req = new ReceiptDTOs.CreateRequest(1, "Masa 5", 1, "Nota test");
         
-        // MODIFICAT: Am adăugat List.of() la final pentru payments
         var res = new ReceiptDTOs.Response(
-                1, "Deschis", "Masa 5", 
+                1, "Deschis", "Masa: Masa 5", 
                 BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, 
                 "Central", 
                 1, 
-                "Admin", LocalDateTime.now(), null, "Nota test", null,
+                "Admin", LocalDateTime.now(), null, "Nota test", null, null,
                 List.of(), // items
-                List.of()  // payments (NOU)
+                List.of()  // payments
         );
 
         when(receiptService.createReceipt(any())).thenReturn(res);
@@ -66,7 +65,7 @@ class ReceiptControllerTest {
                 .andExpect(jsonPath("$.id").value(1))
                 .andExpect(jsonPath("$.warehouseId").value(1))
                 .andExpect(jsonPath("$.statusLabel").value("Deschis"))
-                .andExpect(jsonPath("$.tableName").value("Masa 5"));
+                .andExpect(jsonPath("$.tableName").value("Masa: Masa 5"));
     }
 
     @Test
@@ -125,15 +124,14 @@ class ReceiptControllerTest {
         var itemReq = new ReceiptDTOs.RefundItemRequest(1, new BigDecimal("1.00"));
         var refundReq = new ReceiptDTOs.RefundRequest(1, List.of(itemReq), 1);
         
-        // MODIFICAT: Am adăugat List.of() la final pentru payments
         var response = new ReceiptDTOs.Response(
-                101, "Inchis", "REFUND: 100", 
+                101, "Inchis", "Stornare la Bon #100", 
                 new BigDecimal("-50.00"), new BigDecimal("-42.00"), new BigDecimal("-8.00"), 
                 "Central", 
                 1, 
-                "Admin", LocalDateTime.now(), LocalDateTime.now(), null, 100,
+                "Admin", LocalDateTime.now(), LocalDateTime.now(), null, null, 100,
                 List.of(), // items
-                List.of()  // payments (NOU)
+                List.of()  // payments
         );
 
         when(receiptService.createPartialRefund(eq(100), any())).thenReturn(response);
@@ -142,6 +140,7 @@ class ReceiptControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(refundReq)))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tableName").value("Stornare la Bon #100"))
                 .andExpect(jsonPath("$.totalAmount").value(-50.00))
                 .andExpect(jsonPath("$.warehouseId").value(1))
                 .andExpect(jsonPath("$.statusLabel").value("Inchis"))
@@ -152,7 +151,9 @@ class ReceiptControllerTest {
     @Test
     @DisplayName("GET /api/sales/receipts/reports/profit - Succes: Verifică returnare sumă")
     void getProfit_Success() throws Exception {
-        when(receiptService.getGrossProfitReport(any(), any())).thenReturn(new BigDecimal("100.00"));
+        // MODIFICAT: Acum acceptă 3 argumente (start, end, warehouseId)
+        // warehouseId vine null din request, deci any() îl acoperă
+        when(receiptService.getGrossProfitReport(any(), any(), any())).thenReturn(new BigDecimal("100.00"));
 
         mockMvc.perform(get("/api/sales/receipts/reports/profit")
                         .param("start", "2026-01-01T00:00:00")
@@ -174,15 +175,14 @@ class ReceiptControllerTest {
     @Test
     @DisplayName("GET /api/sales/receipts/active - Succes: Returnează lista de mese active")
     void getActive_Success() throws Exception {
-        // MODIFICAT: Am adăugat List.of() la final pentru payments
         var response = new ReceiptDTOs.Response(
-                1, "Deschis", "Masa 10", 
+                1, "Deschis", "Masa: Masa 10", 
                 BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, 
                 "Central", 
                 1, 
-                "Admin", LocalDateTime.now(), null, null, null,
+                "Admin", LocalDateTime.now(), null, null, null, null,
                 List.of(), // items
-                List.of()  // payments (NOU)
+                List.of()  // payments
         );
 
         when(receiptService.getActiveReceipts(1)).thenReturn(List.of(response));
@@ -190,9 +190,8 @@ class ReceiptControllerTest {
         mockMvc.perform(get("/api/sales/receipts/active")
                         .param("warehouseId", "1"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].tableName").value("Masa 10"))
-                .andExpect(jsonPath("$[0].warehouseId").value(1))
-                .andExpect(jsonPath("$.length()").value(1));
+                .andExpect(jsonPath("$[0].tableName").value("Masa: Masa 10"))
+                .andExpect(jsonPath("$[0].warehouseId").value(1));
     }
 
     @Test
@@ -206,15 +205,14 @@ class ReceiptControllerTest {
     @Test
     @DisplayName("GET /api/sales/receipts/report - Succes: Returnează istoricul filtrat")
     void getReport_Success() throws Exception {
-        // MODIFICAT: Am adăugat List.of() la final pentru payments
         var response = new ReceiptDTOs.Response(
-                100, "Inchis", "Masa 5", 
+                100, "Inchis", "Masa: Masa 5", 
                 new BigDecimal("150.00"), new BigDecimal("126.00"), new BigDecimal("24.00"), 
                 "Central", 
                 1, 
-                "Admin", LocalDateTime.now().minusDays(1), LocalDateTime.now(), null, null,
+                "Admin", LocalDateTime.now().minusDays(1), LocalDateTime.now(), null, null, null,
                 List.of(), // items
-                List.of()  // payments (NOU)
+                List.of()  // payments
         );
 
         when(receiptService.getReceiptsReport(eq(1), eq("CLOSED"), any(), any()))

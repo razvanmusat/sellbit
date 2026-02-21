@@ -73,7 +73,7 @@ const CateringOrdersReportTab = () => {
                         
                         <Stack direction="row" spacing={3} alignItems="center">
                              <Box textAlign="right">
-                                <Typography variant="caption" display="block" color="success.main" fontWeight="bold">ÎNCASAT</Typography>
+                                <Typography variant="caption" display="block" color="success.main" fontWeight="bold">PLĂTIT</Typography>
                                 <Typography variant="body1" fontWeight="bold">
                                     {reportData.totals.paid.toLocaleString('ro-RO')} RON
                                 </Typography>

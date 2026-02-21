@@ -49,8 +49,10 @@ const CategoryModal = ({ open, onClose, categoryToEdit, parentId, onSuccess }) =
                                 value={state.code}
                                 onChange={(e) => setters.setCode(e.target.value.toUpperCase())}    
                                 // FIX: Folosim InputProps standard pentru TextField simplu
-                                InputProps={{
-                                    endAdornment: state.isSystemCategory ? <LockIcon color="action" /> : null
+                                slotProps={{
+                                    input: {
+                                        endAdornment: state.isSystemCategory ? <LockIcon color="action" /> : null
+                                    }
                                 }}
                             />
 

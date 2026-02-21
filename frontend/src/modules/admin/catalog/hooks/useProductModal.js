@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { ProductService } from '../api/ProductService';
-import { CategoryService } from '../api/CategoryService';
 import { LookupService } from '../api/LookupService';
 import { getFriendlyErrorMessage } from '../../../../shared/utils/errorHandler';
 
@@ -33,6 +32,19 @@ export const useProductModal = (open, onClose, productToEdit, categoryId, onSucc
     const [loadingLeaves, setLoadingLeaves] = useState(false);
 
     const currentIsActive = productToEdit?.isActive ?? true;
+
+    const normalizeId = (value) => {
+        if (value === '' || value == null) return null;
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : null;
+    };
+
+    const isMenuTypeId = (typeId) => {
+        const normalizedTypeId = normalizeId(typeId);
+        return types.some(t => normalizeId(t.id) === normalizedTypeId && t.code === 'MENU');
+    };
+
+    const editedProductIsMenu = productToEdit?.productTypeCode === 'MENU' || isMenuTypeId(productToEdit?.productTypeId);
 
     // 1. Fetch Lookups
     useEffect(() => {
@@ -89,20 +101,53 @@ export const useProductModal = (open, onClose, productToEdit, categoryId, onSucc
     const handleSave = async (e) => {
         if (e) e.preventDefault();
 
+        const normalizedProductTypeId = normalizeId(productTypeId);
+        const normalizedUnitId = normalizeId(unitId);
+        const normalizedVatRateId = normalizeId(vatRateId);
+        const normalizedCategoryId = normalizeId(isEditMode ? productToEdit.categoryId : categoryId);
+        const normalizedSalePrice = salePrice === '' ? null : parseFloat(salePrice);
+        const normalizedPurchasePrice = purchasePrice === '' ? null : parseFloat(purchasePrice);
+
+        if (!name || !name.trim()) {
+            return showSnackbar(getFriendlyErrorMessage('ERROR.PRODUCT.NAME_REQUIRED'));
+        }
+
+        if (!normalizedCategoryId) {
+            return showSnackbar(getFriendlyErrorMessage('ERROR.CATEGORY.REQUIRED'));
+        }
+
+        if (!normalizedProductTypeId) {
+            return showSnackbar(getFriendlyErrorMessage('ERROR.PRODUCT_TYPE.REQUIRED'));
+        }
+
+        if (!normalizedUnitId) {
+            return showSnackbar(getFriendlyErrorMessage('ERROR.UNIT.REQUIRED'));
+        }
+
         // VALIDARE: Folosim cheia din dicționar, nu text hardcodat!
-        if (!vatRateId) {
-            return showSnackbar(getFriendlyErrorMessage("ERROR.VAT.REQUIRED"));
+        if (!normalizedVatRateId) {
+            return showSnackbar(getFriendlyErrorMessage('ERROR.VAT.REQUIRED'));
+        }
+
+        if (normalizedSalePrice == null || Number.isNaN(normalizedSalePrice) || normalizedSalePrice < 0) {
+            return showSnackbar(getFriendlyErrorMessage('ERROR.PRICE.INVALID'));
+        }
+
+        const selectedType = types.find(t => normalizeId(t.id) === normalizedProductTypeId);
+        const isCateringType = selectedType?.code === 'CATERING';
+        if (isCateringType && (normalizedPurchasePrice == null || Number.isNaN(normalizedPurchasePrice) || normalizedPurchasePrice <= 0)) {
+            return showSnackbar(getFriendlyErrorMessage('ERROR.CATERING.PRICE_REQUIRED'));
         }
 
         const payload = {
-            name,
-            barcode: barcode || null,
-            categoryId: isEditMode ? productToEdit.categoryId : categoryId,
-            productTypeId,
-            unitId,
-            vatRateId,
-            salePrice: salePrice ? parseFloat(salePrice) : 0, // Protecție pt NaN
-            purchasePrice: purchasePrice ? parseFloat(purchasePrice) : null,
+            name: name.trim(),
+            barcode: barcode ? barcode.trim() : null,
+            categoryId: normalizedCategoryId,
+            productTypeId: normalizedProductTypeId,
+            unitId: normalizedUnitId,
+            vatRateId: normalizedVatRateId,
+            salePrice: normalizedSalePrice,
+            purchasePrice: normalizedPurchasePrice,
             isActive: isEditMode ? currentIsActive : true
         };
 
@@ -110,10 +155,11 @@ export const useProductModal = (open, onClose, productToEdit, categoryId, onSucc
         try {
             if (isEditMode) {
                 await ProductService.update(productToEdit.id, payload);
-                onSuccess("Produs actualizat!");
+                const affectsMenus = isMenuTypeId(payload.productTypeId) || editedProductIsMenu;
+                onSuccess("Produs actualizat!", { refreshMenus: affectsMenus });
             } else {
                 await ProductService.create(payload);
-                onSuccess("Produs creat!");
+                onSuccess("Produs creat!", { refreshMenus: isMenuTypeId(payload.productTypeId) });
             }
             onClose();
         } catch (err) {
@@ -129,7 +175,7 @@ export const useProductModal = (open, onClose, productToEdit, categoryId, onSucc
         setLoading(true);
         try {
             await ProductService.toggleStatus(productToEdit.id, !currentIsActive);
-            onSuccess(currentIsActive ? "Produs dezactivat." : "Produs reactivat.");
+            onSuccess(currentIsActive ? "Produs dezactivat." : "Produs reactivat.", { refreshMenus: editedProductIsMenu });
             onClose();
         } catch (err) {
              // EROARE BACKEND -> DICȚIONAR
@@ -158,7 +204,7 @@ export const useProductModal = (open, onClose, productToEdit, categoryId, onSucc
         setLoading(true);
         try {
             await ProductService.move(productToEdit.id, selectedMoveCategory.id);
-            onSuccess("Produs mutat!");
+            onSuccess("Produs mutat!", { refreshMenus: editedProductIsMenu });
             onClose();
         } catch (err) {
              // EROARE BACKEND -> DICȚIONAR

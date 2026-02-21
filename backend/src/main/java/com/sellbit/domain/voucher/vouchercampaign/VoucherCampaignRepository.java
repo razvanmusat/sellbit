@@ -28,4 +28,6 @@ public interface VoucherCampaignRepository extends JpaRepository<VoucherCampaign
     List<String> findActivePrefixes(@Param("today") java.time.LocalDate today);
 
     boolean existsByPrefixAndActiveTrue(String prefix);
+
+    boolean existsByPrefixAndActiveTrueAndIdNot(String prefix, Integer id);
 }

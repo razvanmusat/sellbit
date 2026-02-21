@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Box, Tabs, Tab, Paper, Typography, CircularProgress, Alert } from '@mui/material';
+import React, { useEffect } from 'react';
+import { Box, Tabs, Tab, Paper, Typography } from '@mui/material';
 import { useSearchParams } from 'react-router-dom';
 
 // Importuri Redux
@@ -11,81 +11,43 @@ import AssessmentIcon from '@mui/icons-material/Assessment';
 import HistoryIcon from '@mui/icons-material/History';
 import StoreIcon from '@mui/icons-material/Store';
 
-import { WarehouseService } from '../../../cashier/sales/api/WarehouseService';
-import WarehouseTabs from '../../../cashier/sales/components/common/WarehouseTabs';
 import StockInForm from '../components/StockInForm'; 
 import PurchaseReport from '../components/PurchaseReport';
 import ProductAudit from '../components/ProductAudit';
 
-const PurchaseMainPage = () => {
-    // State local doar pentru datele API (gestiuni)
-    const [warehouses, setWarehouses] = useState([]);
-    const [loadingWarehouses, setLoadingWarehouses] = useState(false);
-    const [error, setError] = useState(null);
-
+const PurchaseMainPage = ({ warehouseId }) => {
     // Hooks Redux
     const dispatch = useDispatch();
     const { startDate, endDate } = useSelector(state => state.purchasePage);
 
-    // URL PARAMS
+    // URL PARAMS (Doar pentru subTab, warehouseId vine din props)
     const [searchParams, setSearchParams] = useSearchParams();
-
-    const warehouseParam = searchParams.get('warehouseId');
-    const selectedWarehouseId = warehouseParam ? Number(warehouseParam) : null;
 
     const subTabParam = searchParams.get('subTab');
     const subTab = subTabParam ? Number(subTabParam) : 0;
-
-    // 1. Încărcare Gestiuni
-    useEffect(() => {
-        let isMounted = true;
-        setLoadingWarehouses(true);
-        WarehouseService.getActiveWarehouses()
-            .then(data => { if (isMounted) setWarehouses(data || []); })
-            .catch(err => { if (isMounted) setError("Eroare la încărcare gestiuni."); })
-            .finally(() => { if (isMounted) setLoadingWarehouses(false); });
-        return () => { isMounted = false; };
-    }, []);
     
+    // 1. Fetch Report la schimbare gestiune/date/tab
     useEffect(() => {
-        if (selectedWarehouseId) {            
-            
+        if (warehouseId) {            
             dispatch(fetchPurchaseReport({ 
                 startDate, 
                 endDate, 
-                warehouseId: selectedWarehouseId 
+                warehouseId: warehouseId 
             }));
         }
-    }, [selectedWarehouseId, subTab, startDate, endDate, dispatch]); 
-    // ^^^ AICI este cheia: am adăugat 'subTab', 'startDate' și 'endDate'
+    }, [warehouseId, subTab, startDate, endDate, dispatch]); 
 
-    // 3. Update URL la schimbare gestiune
-    const handleWarehouseChange = (event, newId) => {
-        const newParams = new URLSearchParams(searchParams);
-        newParams.set('warehouseId', newId);
-        setSearchParams(newParams);
-    };
-
-    // 4. Update URL la schimbare sub-tab
+    // 2. Update URL la schimbare sub-tab
     const handleSubTabChange = (event, newIndex) => {
         const newParams = new URLSearchParams(searchParams);
         newParams.set('subTab', newIndex);
         setSearchParams(newParams);
     };
 
-    if (loadingWarehouses) return <Box p={4} textAlign="center"><CircularProgress /></Box>;
-    if (error) return <Box p={4}><Alert severity="error">{error}</Alert></Box>;
-
     return (
-        <Box sx={{ p: { xs: 0, sm: 2 }, height: '100%', display: 'flex', flexDirection: 'column' }}>
+        <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
             
-            <WarehouseTabs 
-                warehouses={warehouses} 
-                selectedWarehouseId={selectedWarehouseId || false} 
-                onWarehouseChange={handleWarehouseChange} 
-            />
-
-            {!selectedWarehouseId ? (
+            {!warehouseId ? (
                 <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', color: 'text.secondary', opacity: 0.7, mt: 4 }}>
                     <StoreIcon sx={{ fontSize: 60, mb: 2, color: 'text.disabled' }} />
                     <Typography variant="h6">👆 Alege o gestiune pentru a începe.</Typography>
@@ -110,9 +72,9 @@ const PurchaseMainPage = () => {
                     </Paper>
 
                     <Box sx={{ flex: 1, overflowY: 'auto', p: 0, mt: 2 }}>
-                        {subTab === 0 && <StockInForm warehouseId={selectedWarehouseId} />}
-                        {subTab === 1 && <PurchaseReport warehouseId={selectedWarehouseId} />}
-                        {subTab === 2 && <ProductAudit warehouseId={selectedWarehouseId} />}                        
+                        {subTab === 0 && <StockInForm warehouseId={warehouseId} />}
+                        {subTab === 1 && <PurchaseReport warehouseId={warehouseId} />}
+                        {subTab === 2 && <ProductAudit warehouseId={warehouseId} />}                        
                     </Box>
                 </Box>
             )}

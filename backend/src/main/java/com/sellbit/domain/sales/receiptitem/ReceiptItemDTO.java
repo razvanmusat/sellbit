@@ -1,6 +1,7 @@
 package com.sellbit.domain.sales.receiptitem;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 public class ReceiptItemDTO {
 	public record ReceiptItemResponse(
@@ -20,6 +21,17 @@ public class ReceiptItemDTO {
 			String productName,
 			BigDecimal totalQuantity,
 			BigDecimal totalAmount
+	) {
+	}
+
+	public record ProductTimelineResponse(
+			Integer id,
+			Integer receiptId,
+			LocalDateTime date,
+			String userName,
+			BigDecimal quantity,
+			BigDecimal price,
+			BigDecimal total
 	) {
 	}
 }

@@ -13,6 +13,7 @@ const getCookie = (name) => {
 // MODIFICARE 1: Extragem 'params' din argumente
 export const client = async (endpoint, { body, params, ...customConfig } = {}) => {
   const headers = { 'Content-Type': 'application/json' };
+  const isLoginRequest = endpoint === 'security/auth/login';
 
   // 1. Adăugăm Token-ul de autorizare (Bearer) dacă există.
   const token = localStorage.getItem('token');
@@ -67,7 +68,7 @@ export const client = async (endpoint, { body, params, ...customConfig } = {}) =
     }
 
     // --- INTERCEPTARE SESIUNE EXPIRATĂ (401 / 403) ---
-    if (response.status === 401 || response.status === 403) {
+    if ((response.status === 401 || response.status === 403) && !isLoginRequest) {
         localStorage.removeItem('token');
         localStorage.removeItem('user'); 
 

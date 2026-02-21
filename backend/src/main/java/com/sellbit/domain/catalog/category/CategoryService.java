@@ -9,7 +9,9 @@ import com.sellbit.domain.catalog.product.ProductRepository;
 
 import jakarta.persistence.EntityNotFoundException;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -26,9 +28,7 @@ public class CategoryService {
             ? categoryRepository.findByParentIsNullAndIsActiveTrueOrderByLabelAsc()
             : categoryRepository.findByParentIdAndIsActiveTrueOrderByLabelAsc(parentId);
 
-        return categories.stream()
-                .map(this::convertToDTO)
-                .collect(Collectors.toList());
+        return convertToDTOList(categories);
     }
 
     public CategoryDTO getCategoryById(Integer id) {
@@ -39,9 +39,7 @@ public class CategoryService {
 
     @Transactional(readOnly = true)
     public List<CategoryDTO> getAllCategoriesForAdmin() {
-        return categoryRepository.findAllByOrderByLabelAsc().stream()
-                .map(this::convertToDTO)
-                .collect(Collectors.toList());
+        return convertToDTOList(categoryRepository.findAllByOrderByLabelAsc());
     }
     
     //Returnează doar categoriile care nu au subcategorii (indiferent de status).    
@@ -59,9 +57,7 @@ public class CategoryService {
                 ? categoryRepository.findByParentIsNullOrderByLabelAsc()
                 : categoryRepository.findByParentIdOrderByLabelAsc(parentId);
 
-        return categories.stream()
-                .map(this::convertToDTO)
-                .collect(Collectors.toList());
+        return convertToDTOList(categories);
     }
 
     @Transactional
@@ -177,4 +173,23 @@ public class CategoryService {
                 category.getUpdatedAt()
         );
     }
+
+        private List<CategoryDTO> convertToDTOList(List<Category> categories) {
+        if (categories == null || categories.isEmpty()) {
+            return List.of();
+        }
+
+        List<Integer> parentIds = categories.stream()
+            .map(Category::getId)
+            .collect(Collectors.toList());
+
+        Map<Integer, Long> activeChildrenByParentId = new HashMap<>();
+        categoryRepository.countActiveChildrenByParentIds(parentIds)
+            .forEach(row -> activeChildrenByParentId.put((Integer) row[0], (Long) row[1]));
+
+        return categories.stream()
+            .map(category -> convertToDTO(category,
+                activeChildrenByParentId.getOrDefault(category.getId(), 0L) > 0))
+            .collect(Collectors.toList());
+        }
 }

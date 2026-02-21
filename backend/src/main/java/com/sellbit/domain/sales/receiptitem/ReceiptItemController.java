@@ -48,12 +48,24 @@ public class ReceiptItemController {
     }
 
     @PreAuthorize("hasAnyAuthority('100')")
-    @GetMapping("/report/quantity") // Raport cantitativ produse vândute într-un interval de timp.
+    @GetMapping("/report/quantity") // Raport cantitativ produse (filtru opțional pe gestiune)
     public ResponseEntity<List<ReceiptItemDTO.QuantityReportResponse>> getProductsQuantityReport(
+            @RequestParam(required = false) Integer warehouseId,
             @RequestParam @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE_TIME) java.time.LocalDateTime start,
             @RequestParam @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE_TIME) java.time.LocalDateTime end,
             @RequestParam(required = false) List<Integer> productIds) {
 
-        return ResponseEntity.ok(receiptItemService.getProductsQuantityReport(start, end, productIds));
+        return ResponseEntity.ok(receiptItemService.getProductsQuantityReport(start, end, productIds, warehouseId));
+    }
+
+    @PreAuthorize("hasAnyAuthority('100')")
+    @GetMapping("/report/timeline") // Timeline detaliat pentru un produs selectat
+    public ResponseEntity<List<ReceiptItemDTO.ProductTimelineResponse>> getProductTimeline(
+            @RequestParam(required = false) Integer warehouseId,
+            @RequestParam Integer productId,
+            @RequestParam @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE_TIME) java.time.LocalDateTime start,
+            @RequestParam @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE_TIME) java.time.LocalDateTime end) {
+
+        return ResponseEntity.ok(receiptItemService.getProductTimeline(start, end, productId, warehouseId));
     }
 }

@@ -27,6 +27,12 @@ public class ProductController {
         return ResponseEntity.ok(productService.searchForAdmin(query));
     }
 
+    @PreAuthorize("hasAnyAuthority('100')")
+    @GetMapping("/admin/menus")
+    public ResponseEntity<List<ProductDTO>> getMenusForAdmin() {
+        return ResponseEntity.ok(productService.getMenusForAdmin());
+    }
+
     // --- POS (VÂNZARE) ---
     @PreAuthorize("hasAnyAuthority('50', '100')")
     @GetMapping("/pos") // Listă produse active pentru vânzare în categoria selectată

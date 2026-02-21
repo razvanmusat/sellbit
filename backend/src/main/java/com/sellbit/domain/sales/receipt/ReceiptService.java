@@ -60,6 +60,14 @@ public class ReceiptService {
         private final PaymentMethodRepository paymentMethodRepository;
         private final ProductRepository productRepository;
 
+        @Transactional(readOnly = true)
+        public ReceiptDTOs.Response getReceiptById(Integer id) {
+                Receipt receipt = receiptRepository.findById(id)
+                                .orElseThrow(() -> new RuntimeException("ERROR.RECEIPT.NOT_FOUND"));
+
+                return mapToResponse(receipt);
+        }
+
         // OPERAȚIONAL: Pentru afișarea meselor/bonurilor deschise în tab-ul din React.
         @Transactional(readOnly = true)
         public List<ReceiptDTOs.Response> getActiveReceipts(Integer warehouseId) {
@@ -78,6 +86,13 @@ public class ReceiptService {
                                 .stream()
                                 .map(this::mapToResponse)
                                 .collect(Collectors.toList());
+        }
+
+        @Transactional(readOnly = true)
+        public List<ReceiptDTOs.SummaryResponse> getReceiptsReportSummary(Integer warehouseId, String statusCode,
+                        LocalDateTime start, LocalDateTime end) {
+                return receiptRepository.findSummaryByWarehouseIdAndStatusCodeAndClosedAtBetween(
+                                warehouseId, statusCode, start, end);
         }
 
         // Deschide un bon nou (status OPEN).
@@ -284,6 +299,10 @@ public class ReceiptService {
                 } else {
                         explanation = "Masa: " + receipt.getTableName();
                 }
+
+                String reasonLabel = (receipt.getCancelReason() != null)
+                                ? receipt.getCancelReason().getLabel()
+                                : null;
                 return new ReceiptDTOs.Response(
                                 receipt.getId(),
                                 receipt.getStatus().getLabel(),
@@ -297,6 +316,7 @@ public class ReceiptService {
                                 receipt.getCreatedAt(),
                                 receipt.getClosedAt(),
                                 receipt.getNote(),
+                                reasonLabel,
                                 receipt.getOriginalReceipt() != null ? receipt.getOriginalReceipt().getId() : null,
                                 itemDTOs,
                                 paymentDTOs);
@@ -417,13 +437,13 @@ public class ReceiptService {
         }
 
         @Transactional(readOnly = true)
-        public BigDecimal getGrossProfitReport(LocalDateTime start, LocalDateTime end) {
+        public BigDecimal getGrossProfitReport(LocalDateTime start, LocalDateTime end, Integer warehouseId) {
                 // 1. Profitul brut teoretic (din linii)
-                BigDecimal grossTheoreticalProfit = itemRepository.calculateTotalProfit(start, end);
+                BigDecimal grossTheoreticalProfit = itemRepository.calculateTotalProfit(start, end, warehouseId);
 
                 // 2. Suma discount-urilor oferite prin vouchere (plăți virtuale)
                 // Presupunem că ai injectat paymentRepository în ReceiptService
-                BigDecimal totalVouchers = paymentRepository.getTotalVoucherDiscounts(start, end);
+                BigDecimal totalVouchers = paymentRepository.getTotalVoucherDiscounts(start, end, warehouseId);
 
                 // 3. Profitul real = Profit Linii - Valoare Vouchere
                 return grossTheoreticalProfit.subtract(totalVouchers);

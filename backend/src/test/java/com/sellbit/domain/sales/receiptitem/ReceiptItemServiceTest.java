@@ -242,10 +242,12 @@ class ReceiptItemServiceTest {
         var mockReport = new ReceiptItemDTO.QuantityReportResponse(
                 "Test Product", new BigDecimal("10.000"), new BigDecimal("1190.00"));
         
-        when(itemRepository.getProductsQuantityReport(start, end, productIds))
+        // MODIFICAT: Acceptă 4 argumente (start, end, productIds, warehouseId)
+        when(itemRepository.getProductsQuantityReport(start, end, productIds, null))
                 .thenReturn(List.of(mockReport));
 
-        var result = receiptItemService.getProductsQuantityReport(start, end, productIds);
+        // MODIFICAT: Apel cu 4 argumente
+        var result = receiptItemService.getProductsQuantityReport(start, end, productIds, null);
 
         assertEquals(1, result.size());
         assertEquals("Test Product", result.get(0).productName());
@@ -257,10 +259,12 @@ class ReceiptItemServiceTest {
         java.time.LocalDateTime start = java.time.LocalDateTime.now();
         java.time.LocalDateTime end = java.time.LocalDateTime.now();
         
-        when(itemRepository.getProductsQuantityReport(any(), any(), isNull()))
+        // MODIFICAT: Acceptă 4 argumente
+        when(itemRepository.getProductsQuantityReport(any(), any(), isNull(), any()))
                 .thenReturn(new ArrayList<>());
 
-        var result = receiptItemService.getProductsQuantityReport(start, end, null);
+        // MODIFICAT: Apel cu 4 argumente
+        var result = receiptItemService.getProductsQuantityReport(start, end, null, null);
 
         assertNotNull(result);
         assertTrue(result.isEmpty());
@@ -269,10 +273,12 @@ class ReceiptItemServiceTest {
     @Test
     @DisplayName("getProductsQuantityReport - Caz Limită: Repository returnează listă goală")
     void getProductsQuantityReport_EmptyResult() {
-        when(itemRepository.getProductsQuantityReport(any(), any(), any()))
+        // MODIFICAT: Acceptă 4 argumente
+        when(itemRepository.getProductsQuantityReport(any(), any(), any(), any()))
                 .thenReturn(List.of());
 
-        var result = receiptItemService.getProductsQuantityReport(java.time.LocalDateTime.now(), java.time.LocalDateTime.now(), null);
+        // MODIFICAT: Apel cu 4 argumente
+        var result = receiptItemService.getProductsQuantityReport(java.time.LocalDateTime.now(), java.time.LocalDateTime.now(), null, null);
 
         assertTrue(result.isEmpty());
     }

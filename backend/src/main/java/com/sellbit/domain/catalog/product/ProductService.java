@@ -43,6 +43,12 @@ public class ProductService {
     }
 
     @Transactional(readOnly = true)
+    public List<ProductDTO> getMenusForAdmin() {
+        return productRepository.findMenusForAdmin()
+                .stream().map(this::convertToDTO).collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
     public List<ProductDTO> searchForPos(String query) {
         return productRepository.findByNameContainingIgnoreCaseAndIsActiveTrueOrderByNameAsc(query)
                 .stream().map(this::convertToDTO).collect(Collectors.toList());

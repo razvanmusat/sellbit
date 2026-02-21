@@ -22,6 +22,15 @@ public class VoucherCampaignController {
     }
 
     @PreAuthorize("hasAuthority('100')")
+    @PutMapping("/{id}") // Editarea unei campanii de vouchere.
+    public ResponseEntity<VoucherCampaignDTOs.Response> update(
+            @PathVariable Integer id,
+            @RequestBody VoucherCampaignDTOs.Request request
+    ) {
+        return ResponseEntity.ok(campaignService.update(id, request));
+    }
+
+    @PreAuthorize("hasAuthority('100')")
     @GetMapping // Listarea tuturor campaniilor de vouchere (istoric complet).
     public ResponseEntity<List<VoucherCampaignDTOs.Response>> getAll() {
         return ResponseEntity.ok(campaignService.getAll());

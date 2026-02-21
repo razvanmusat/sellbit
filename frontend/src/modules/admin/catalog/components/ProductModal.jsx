@@ -40,21 +40,24 @@ const ProductModal = ({ open, onClose, productToEdit, categoryId, onSuccess }) =
                     <IconButton onClick={onClose} size="small"><CloseIcon /></IconButton>
                 </DialogTitle>
                 
-                <form onSubmit={handlers.handleSave} noValidate>
+                <form onSubmit={handlers.handleSave} noValidate autoComplete="off">
                     <DialogContent dividers>
                         <Box display="flex" flexDirection="column" gap={2}>
                             <TextField 
                                 label="Nume Produs" fullWidth required 
+                                autoComplete="off"
                                 value={state.name} onChange={e => setters.setName(e.target.value)} 
                             />
                             
                             <TextField 
                                 label="Cod de Bare" fullWidth 
+                                autoComplete="off"
                                 value={state.barcode} onChange={e => setters.setBarcode(e.target.value)} 
                             />
                             
                             <TextField 
                                 label="Preț Vânzare" type="number" fullWidth required
+                                autoComplete="off"
                                 slotProps={{ input: { endAdornment: <InputAdornment position="end">RON</InputAdornment> } }}
                                 value={state.salePrice} onChange={e => setters.setSalePrice(e.target.value)}
                             />
@@ -76,6 +79,7 @@ const ProductModal = ({ open, onClose, productToEdit, categoryId, onSuccess }) =
                             {isCatering && (
                                 <TextField 
                                     label="Preț Achiziție" type="number" fullWidth
+                                    autoComplete="off"
                                     slotProps={{ input: { endAdornment: <InputAdornment position="end">RON</InputAdornment> } }}
                                     value={state.purchasePrice} onChange={e => setters.setPurchasePrice(e.target.value)}
                                 />

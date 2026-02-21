@@ -147,7 +147,7 @@ class ReceiptPaymentServiceTest {
     // --- Teste getPaymentsReport ---
 
     @Test
-    @DisplayName("getPaymentsReport - Succes: Calculează totalul pentru o metodă specifică")
+    @DisplayName("getPaymentsReport - Succes: Calculeaza totalul pentru o metoda specifica")
     void getPaymentsReport_Success_WithMethod() {
         // Arrange
         LocalDateTime start = LocalDateTime.now().minusDays(1);
@@ -155,18 +155,20 @@ class ReceiptPaymentServiceTest {
         String method = "CASH";
         BigDecimal expectedTotal = new BigDecimal("1100.00");
 
-        when(paymentRepository.calculatePaymentsSum(start, end, method)).thenReturn(expectedTotal);
+        when(paymentRepository.calculatePaymentsSum(start, end, method, null)).thenReturn(expectedTotal);
 
         // Act
-        ReceiptPaymentDTO.ReportResponse result = paymentService.getPaymentsReport(start, end, method);
+        List<ReceiptPaymentDTO.ReportResponse> result = paymentService.getPaymentsReport(start, end, method, null);
 
         // Assert
         assertNotNull(result);
-        assertEquals(expectedTotal, result.totalAmount());
-        assertEquals("CASH", result.methodCode());
-        assertEquals(start, result.start());
-        assertEquals(end, result.end());
-        verify(paymentRepository).calculatePaymentsSum(start, end, method);
+        assertEquals(1, result.size());
+        assertEquals(expectedTotal, result.get(0).totalAmount());
+        assertEquals("CASH", result.get(0).methodCode());
+        assertEquals(start, result.get(0).start());
+        assertEquals(end, result.get(0).end());
+        
+        verify(paymentRepository).calculatePaymentsSum(start, end, method, null);
     }
 
     @Test
@@ -175,44 +177,56 @@ class ReceiptPaymentServiceTest {
         // Arrange
         LocalDateTime start = LocalDateTime.now().minusDays(1);
         LocalDateTime end = LocalDateTime.now();
-        when(paymentRepository.calculatePaymentsSum(start, end, null)).thenReturn(new BigDecimal("2000.00"));
+        
+        PaymentMethod method1 = PaymentMethod.builder().id(1).code("CASH").label("Numerar").build();
+        PaymentMethod method2 = PaymentMethod.builder().id(2).code("CARD").label("Card").build();
+        
+        when(paymentMethodRepository.findAll()).thenReturn(List.of(method1, method2));
+        when(paymentRepository.calculatePaymentsSum(start, end, "CASH", null)).thenReturn(new BigDecimal("1000.00"));
+        when(paymentRepository.calculatePaymentsSum(start, end, "CARD", null)).thenReturn(new BigDecimal("1000.00"));
 
         // Act
-        var result = paymentService.getPaymentsReport(start, end, null);
+        List<ReceiptPaymentDTO.ReportResponse> result = paymentService.getPaymentsReport(start, end, null, null);
 
         // Assert
-        assertEquals(new BigDecimal("2000.00"), result.totalAmount());
-        assertNull(result.methodCode());
+        assertEquals(2, result.size());
+        assertEquals(new BigDecimal("1000.00"), result.get(0).totalAmount());
+        assertEquals("CASH", result.get(0).methodCode());
     }
 
     @Test
-    @DisplayName("getPaymentsReport - Caz Limită: Interval de timp inversat (start după end)")
+    @DisplayName("getPaymentsReport - Caz Limitant: Interval de timp inversat (start dupa end)")
     void getPaymentsReport_StartAfterEnd_ReturnsZero() {
         // Arrange
         LocalDateTime start = LocalDateTime.now().plusDays(1);
         LocalDateTime end = LocalDateTime.now();
-        // Repository va returna 0 datorită clauzei BETWEEN care nu va găsi nimic
-        when(paymentRepository.calculatePaymentsSum(start, end, null)).thenReturn(BigDecimal.ZERO);
+        
+        // Repository va returna 0 deoarece BETWEEN nu va gasi nimic
+        when(paymentRepository.calculatePaymentsSum(start, end, "CASH", null)).thenReturn(BigDecimal.ZERO);
 
         // Act
-        var result = paymentService.getPaymentsReport(start, end, null);
+        List<ReceiptPaymentDTO.ReportResponse> result = paymentService.getPaymentsReport(start, end, "CASH", null);
 
         // Assert
-        assertEquals(BigDecimal.ZERO, result.totalAmount());
-        verify(paymentRepository).calculatePaymentsSum(start, end, null);
+        assertEquals(1, result.size());
+        assertEquals(BigDecimal.ZERO, result.get(0).totalAmount());
+        
+        verify(paymentRepository).calculatePaymentsSum(start, end, "CASH", null);
     }
 
     @Test
-    @DisplayName("getPaymentsReport - Caz Limită: Metodă de plată inexistentă")
+    @DisplayName("getPaymentsReport - Caz Limitant: Metoda de plata inexistenta")
     void getPaymentsReport_InvalidMethod_ReturnsZero() {
         // Arrange
         String invalidMethod = "NON_EXISTENT";
-        when(paymentRepository.calculatePaymentsSum(any(), any(), eq(invalidMethod))).thenReturn(BigDecimal.ZERO);
+        
+        when(paymentRepository.calculatePaymentsSum(any(), any(), eq(invalidMethod), any())).thenReturn(BigDecimal.ZERO);
 
         // Act
-        var result = paymentService.getPaymentsReport(LocalDateTime.now(), LocalDateTime.now(), invalidMethod);
+        List<ReceiptPaymentDTO.ReportResponse> result = paymentService.getPaymentsReport(LocalDateTime.now(), LocalDateTime.now(), invalidMethod, null);
 
         // Assert
-        assertEquals(BigDecimal.ZERO, result.totalAmount());
+        assertEquals(1, result.size());
+        assertEquals(BigDecimal.ZERO, result.get(0).totalAmount());
     }
 }

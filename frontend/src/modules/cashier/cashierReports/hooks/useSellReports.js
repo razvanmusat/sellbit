@@ -49,12 +49,18 @@ export const useSellReports = (warehouseId) => {
       grandTotal: 0
     };
 
+    const REAL_MONEY_METHODS = ['CASH', 'CARD', 'BANK_TRANSFER'];
+
     receipts.forEach(receipt => {
-      stats.grandTotal += receipt.totalAmount;
       if (receipt.payments) {
         receipt.payments.forEach(payment => {
           if (stats.hasOwnProperty(payment.methodCode)) {
              stats[payment.methodCode] += payment.amount;
+             
+             // Adunăm la grandTotal doar dacă este metodă de încasare reală
+             if (REAL_MONEY_METHODS.includes(payment.methodCode)) {
+                stats.grandTotal += payment.amount;
+             }
           }
         });
       }

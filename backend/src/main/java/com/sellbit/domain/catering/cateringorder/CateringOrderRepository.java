@@ -19,7 +19,15 @@ public interface CateringOrderRepository extends JpaRepository<CateringOrder, In
             "ORDER BY o.createdAt ASC")
     List<CateringOrder> findByOrderDateOrderByCreatedAtAsc(@Param("date") LocalDate date);
 
-    List<CateringOrder> findByIsPaidFalseAndOrderDateBetweenOrderByOrderDateAsc(LocalDate start, LocalDate end);
+        @Query("SELECT o FROM CateringOrder o " +
+            "JOIN FETCH o.product p " +
+            "LEFT JOIN FETCH o.reservationId r " +
+            "WHERE o.isPaid = false " +
+            "AND o.orderDate BETWEEN :start AND :end " +
+            "ORDER BY o.orderDate ASC, o.createdAt ASC")
+        List<CateringOrder> findByIsPaidFalseAndOrderDateBetweenOrderByOrderDateAsc(
+            @Param("start") LocalDate start,
+            @Param("end") LocalDate end);
 
     @Modifying
     @Query("UPDATE CateringOrder c SET c.isPaid = true, c.paidAt = :paidAt WHERE c.id IN :ids")
@@ -29,5 +37,13 @@ public interface CateringOrderRepository extends JpaRepository<CateringOrder, In
     @Query("UPDATE CateringOrder co SET co.orderDate = :newDate WHERE co.reservationId.id = :reservationId")
     void moveOrdersToDateJPQL(@Param("reservationId") Integer reservationId, @Param("newDate") LocalDate newDate);
 
-    List<CateringOrder> findByIsPaidTrueAndPaidAtBetweenOrderByPaidAtDesc(LocalDateTime start, LocalDateTime end);
+        @Query("SELECT o FROM CateringOrder o " +
+            "JOIN FETCH o.product p " +
+            "LEFT JOIN FETCH o.reservationId r " +
+            "WHERE o.isPaid = true " +
+            "AND o.paidAt BETWEEN :start AND :end " +
+            "ORDER BY o.paidAt DESC")
+        List<CateringOrder> findByIsPaidTrueAndPaidAtBetweenOrderByPaidAtDesc(
+            @Param("start") LocalDateTime start,
+            @Param("end") LocalDateTime end);
 }

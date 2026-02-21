@@ -112,7 +112,7 @@ export const useCategoryModal = (open, onClose, categoryToEdit, parentId, onSucc
         setLoading(true);
         try {
             await CategoryBrowserService.toggleStatus(categoryToEdit.id, !currentIsActive);
-            onSuccess(currentIsActive ? "Categoria a fost dezactivată." : "Categoria a fost reactivată.");
+            onSuccess(currentIsActive ? "Categoria a fost dezactivată." : "Categoria a fost reactivată.", { refreshMenus: true });
             onClose();
         } catch (err) {
             showSnackbar(getFriendlyErrorMessage(err), "error");

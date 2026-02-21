@@ -177,14 +177,28 @@ export const fetchCompositeMenus = createAsyncThunk(
     'catalog/fetchCompositeMenus',
     async (_, { rejectWithValue }) => {
         try {
-            const allProducts = await ProductService.searchForAdmin('');
-            const menus = allProducts.filter(p => p.productTypeCode === 'MENU');
+            const menus = await ProductService.getMenusForAdmin();
             return {
                 active: menus.filter(m => m.isActive === true),
                 inactive: menus.filter(m => m.isActive === false)
             };
         } catch (error) {
             return rejectWithValue(error.message);
+        }
+    },
+    {
+        condition: (_, { getState }) => {
+            const catalogState = getState()?.catalog;
+            if (!catalogState) return true;
+
+            if (catalogState.compositeLoading) {
+                return false;
+            }
+
+            const lastFetchedAt = catalogState.compositeLastFetchedAt;
+            if (!lastFetchedAt) return true;
+
+            return Date.now() - lastFetchedAt > 300;
         }
     }
 );
@@ -195,6 +209,7 @@ const initialState = {
     currentCategoryDetails: null, 
     compositeMenus: { active: [], inactive: [] },
     compositeLoading: false,
+    compositeLastFetchedAt: null,
     lookups: {}, 
     loading: false,
     error: null
@@ -247,6 +262,7 @@ const catalogSlice = createSlice({
                 state.compositeLoading = false;
                 state.compositeMenus.active = action.payload.active;
                 state.compositeMenus.inactive = action.payload.inactive;
+                state.compositeLastFetchedAt = Date.now();
             })
             .addCase(fetchCompositeMenus.rejected, (state) => { state.compositeLoading = false; });
     }

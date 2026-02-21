@@ -24,6 +24,12 @@ export const useCateringPayment = () => {
     const [selectedIds, setSelectedIds] = useState([]);
     const [isConfirmOpen, setIsConfirmOpen] = useState(false);
 
+    const unpaidOrderById = useMemo(() => {
+        const map = new Map();
+        unpaidOrders.forEach((order) => map.set(order.id, order));
+        return map;
+    }, [unpaidOrders]);
+
     // Sync URL
     useEffect(() => {
         const currentParams = Object.fromEntries(searchParams);
@@ -131,12 +137,12 @@ export const useCateringPayment = () => {
 
     const totalToPay = useMemo(() => {
         return selectedIds.reduce((sum, orderId) => {
-            const order = unpaidOrders.find(o => o.id === orderId);
+            const order = unpaidOrderById.get(orderId);
             if (!order) return sum;
             const price = priceMap[order.productId] || 0;
             return sum + (price * order.quantity);
         }, 0);
-    }, [selectedIds, unpaidOrders, priceMap]);
+    }, [selectedIds, unpaidOrderById, priceMap]);
 
     const handlePayConfirm = async () => {
         await dispatch(processCateringPayment(selectedIds));

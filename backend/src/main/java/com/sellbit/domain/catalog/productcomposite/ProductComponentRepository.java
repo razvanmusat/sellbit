@@ -10,9 +10,19 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface ProductComponentRepository extends JpaRepository<ProductComponent, Integer> {
     
-    List<ProductComponent> findByParentProductIdAndIsActiveTrue(Integer parentProductId);
+    @Query("SELECT pc FROM ProductComponent pc " +
+        "JOIN FETCH pc.childProduct cp " +
+        "LEFT JOIN FETCH cp.unit u " +
+        "WHERE pc.parentProduct.id = :parentProductId " +
+        "AND pc.isActive = true")
+    List<ProductComponent> findByParentProductIdAndIsActiveTrue(@Param("parentProductId") Integer parentProductId);
     
-    List<ProductComponent> findByParentProductIdAndIsActiveFalse(Integer parentProductId);
+    @Query("SELECT pc FROM ProductComponent pc " +
+        "JOIN FETCH pc.childProduct cp " +
+        "LEFT JOIN FETCH cp.unit u " +
+        "WHERE pc.parentProduct.id = :parentProductId " +
+        "AND pc.isActive = false")
+    List<ProductComponent> findByParentProductIdAndIsActiveFalse(@Param("parentProductId") Integer parentProductId);
 
     @Modifying
     @Query("UPDATE ProductComponent pc SET pc.isActive = false WHERE pc.parentProduct.id = :parentId AND pc.isActive = true")

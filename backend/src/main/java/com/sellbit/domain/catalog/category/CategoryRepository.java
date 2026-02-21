@@ -2,6 +2,7 @@ package com.sellbit.domain.catalog.category;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import java.util.List;
 import java.util.Optional;
@@ -74,4 +75,11 @@ public interface CategoryRepository extends JpaRepository<Category, Integer> {
             "AND NOT EXISTS (SELECT 1 FROM Category sub WHERE sub.parent = c) " +
             "ORDER BY c.label ASC")
     List<Category> findLeafCategories();
+
+        @Query("SELECT c.parent.id, COUNT(c.id) " +
+            "FROM Category c " +
+            "WHERE c.parent.id IN :parentIds " +
+            "AND c.isActive = true " +
+            "GROUP BY c.parent.id")
+        List<Object[]> countActiveChildrenByParentIds(@Param("parentIds") List<Integer> parentIds);
 }

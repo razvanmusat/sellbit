@@ -5,13 +5,29 @@
 const ERROR_MESSAGES = {
     // --- AUTH & USER ---
     "ERROR.USER.NOT_FOUND": "Utilizatorul nu a fost găsit în sistem.",
+    "ERROR.AUTH.WRONG_OLD_PASSWORD": "Parola veche este incorectă.",
+    "ERROR.USER.INVALID_PASSWORD_STRENGTH": "Parola nouă nu respectă regulile de securitate.",
+    "ERROR.USER.OLD_PASSWORD_EMPTY": "Parola veche este obligatorie.",
+    "ERROR.USER.NEW_PASSWORD_EMPTY": "Parola nouă este obligatorie.",
+    "ERROR.USER.DUPLICATE": "Username-ul există deja. Alege un username unic.",
+    "ERROR.USER.INVALID_USERNAME_FORMAT": "Format invalid pentru username.",
+    "ERROR.USER.CANNOT_DEACTIVATE_LAST_ADMIN": "Nu poți dezactiva ultimul administrator activ.",
+    "ERROR.USER.ALREADY_ACTIVE": "Utilizatorul este deja activ.",
+    "ERROR.ROLE.NOT_FOUND": "Rolul selectat nu există.",
     "ERROR.AUTH.BAD_CREDENTIALS": "Email sau parolă incorectă.",
     "ERROR.AUTH.ACCOUNT_LOCKED": "Contul este blocat. Contactează administratorul.",
 
     // --- CASH & DRAWER ---
     "ERROR.CASH_DRAWER.INSUFFICIENT_FUNDS": "Fonduri insuficiente în sertar! Nu poți scoate mai mulți bani decât există.",
     "ERROR.MOVEMENT_TYPE.NOT_FOUND": "Tipul de mișcare selectat este invalid.",
+    
+    // --- WAREHOUSES (GESTIUNI) ---
     "ERROR.WAREHOUSE.NOT_FOUND": "Gestiunea selectată nu a fost găsită.",
+    "ERROR.WAREHOUSE.CODE_EXISTS": "Codul gestiunii există deja! Alege un cod unic.",
+    "ERROR.WAREHOUSE.HAS_STOCK": "Nu poți dezactiva această gestiune deoarece încă are stoc existent.",
+    "ERROR.WAREHOUSE.CODE_EMPTY": "Codul gestiunii este obligatoriu.",
+    "ERROR.WAREHOUSE.NAME_EMPTY": "Numele gestiunii este obligatoriu.",
+    "ERROR.WAREHOUSE.ID_REQUIRED": "ID-ul gestiunii lipsește (Eroare internă).",
 
     // --- RECEIPTS (BONURI) ---
     "ERROR.RECEIPT.NOT_FOUND": "Bonul fiscal nu a fost găsit.",
@@ -51,6 +67,43 @@ const ERROR_MESSAGES = {
     "ERROR.CUSTOMER_VOUCHER.INVALID_DAY": "Voucherul nu este valabil în această zi.",
     "ERROR.VOUCHER.NO_APPLICABLE_ITEMS": "Bonul nu conține produsele necesare pentru acest voucher.",
     "ERROR.PAYMENT_METHOD.VOUCHER_NOT_CONFIGURED": "Eroare configurare: Metoda de plată Voucher lipsește.",
+        "ERROR.VOUCHER_CAMPAIGN.NAME_REQUIRED": "Denumirea campaniei este obligatorie.",
+        "ERROR.VOUCHER_CAMPAIGN.NAME_TOO_LONG": "Denumirea campaniei este prea lunga.",
+        "ERROR.VOUCHER_CAMPAIGN.START_DATE_REQUIRED": "Data de inceput este obligatorie.",
+        "ERROR.VOUCHER_CAMPAIGN.END_DATE_REQUIRED": "Data de final este obligatorie.",
+        "ERROR.VOUCHER_CAMPAIGN.INVALID_DATE_RANGE": "Intervalul de date este invalid.",
+        "ERROR.VOUCHER_CAMPAIGN.DISCOUNT_TYPE_REQUIRED": "Tipul discountului este obligatoriu.",
+        "ERROR.VOUCHER_CAMPAIGN.TYPE_TOO_LONG": "Tipul discountului este prea lung.",
+        "ERROR.VOUCHER_CAMPAIGN.DISCOUNT_VALUE_REQUIRED": "Valoarea discountului este obligatorie.",
+        "ERROR.VOUCHER_CAMPAIGN.VALUE_MUST_BE_POSITIVE": "Valoarea discountului trebuie sa fie pozitiva.",
+        "ERROR.VOUCHER_CAMPAIGN.INVALID_FORMAT": "Format numeric invalid pentru valoarea discountului.",
+        "ERROR.VOUCHER_CAMPAIGN.NEGATIVE_DISCOUNT": "Valoarea discountului nu poate fi negativa.",
+        "ERROR.VOUCHER_CAMPAIGN.PERCENT_OVER_100": "Discountul procentual nu poate depasi 100%.",
+        "ERROR.VOUCHER_CAMPAIGN.MIN_AMOUNT_POSITIVE": "Suma minima trebuie sa fie pozitiva.",
+        "ERROR.VOUCHER_CAMPAIGN.MIN_AMOUNT_REQUIRED": "Suma minima este obligatorie.",
+        "ERROR.VOUCHER_CAMPAIGN.HOURS_POSITIVE": "Orele minime trebuie sa fie pozitive.",
+        "ERROR.VOUCHER_CAMPAIGN.REQUIRED_PRODUCT_NOT_FOUND": "Produsul necesar nu a fost gasit.",
+        "ERROR.VOUCHER_CAMPAIGN.APPLICABLE_PRODUCT_NOT_FOUND": "Produsul aplicabil nu a fost gasit.",
+        "ERROR.VOUCHER_CAMPAIGN.DAYS_MIN_1": "Valabilitatea in zile trebuie sa fie de cel putin 1 zi.",
+        "ERROR.VOUCHER_CAMPAIGN.DAYS_REQUIRED": "Valabilitatea in zile este obligatorie.",
+        "ERROR.VOUCHER_CAMPAIGN.DAYS_STRING_TOO_LONG": "Lista zilelor aplicabile este prea lunga.",
+        "ERROR.VOUCHER_CAMPAIGN.INVALID_DAYS_FORMAT": "Format invalid pentru zilele aplicabile.",
+        "ERROR.VOUCHER_CAMPAIGN.PREFIX_TOO_LONG": "Prefixul campaniei este prea lung.",
+        "ERROR.VOUCHER_CAMPAIGN.PREFIX_INVALID_CHARS": "Prefixul contine caractere invalide.",
+        "ERROR.VOUCHER_CAMPAIGN.PREFIX_ALREADY_ACTIVE": "Exista deja o campanie activa cu acest prefix.",
+        "ERROR.VOUCHER_CAMPAIGN.CODE_TOO_SHORT": "Codul voucherului este prea scurt.",
+        "ERROR.VOUCHER_CAMPAIGN.CODE_TOO_LONG": "Codul voucherului este prea lung.",
+        "ERROR.VOUCHER_CAMPAIGN.NOT_FOUND": "Campania de vouchere nu a fost gasita.",
+
+    // --- STORE / COMPANY ---
+    "ERROR.STORE.NOT_CONFIGURED": "Datele companiei nu sunt configurate încă.",
+    "ERROR.STORE.NAME_REQUIRED": "Denumirea companiei este obligatorie.",
+    "ERROR.STORE.ADDRESS_REQUIRED": "Adresa companiei este obligatorie.",
+    "ERROR.STORE.PHONE_REQUIRED": "Telefonul companiei este obligatoriu.",
+    "ERROR.STORE.EMAIL_REQUIRED": "Emailul companiei este obligatoriu.",
+    "ERROR.STORE.EMAIL_INVALID": "Emailul companiei are format invalid.",
+    "ERROR.STORE.VAT_REQUIRED": "CUI/CIF este obligatoriu.",
+    "ERROR.STORE.REG_REQUIRED": "Numărul de înregistrare la Registrul Comerțului este obligatoriu.",
 
     // --- RESERVATIONS ---
     "ERROR.RESERVATION.START_REQUIRED": "Selectează ora de început.",

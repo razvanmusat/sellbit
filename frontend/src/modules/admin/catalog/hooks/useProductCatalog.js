@@ -73,7 +73,12 @@ export const useProductCatalog = () => {
     }, [currentCategoryId]);
 
     const openEditCategory = useCallback((cat) => { setCategoryToEdit(cat); setCatModalOpen(true); }, []);
-    const openCreateProduct = useCallback((cid) => { setProductToEdit(null); setViewingCategoryId(cid); setProdModalOpen(true); }, []);
+    const openCreateProduct = useCallback((cid) => {
+        setProductToEdit(null);
+        const fallbackCategoryId = currentCategoryDetails?.id ?? currentCategoryId;
+        setViewingCategoryId(cid ?? fallbackCategoryId ?? null);
+        setProdModalOpen(true);
+    }, [currentCategoryDetails, currentCategoryId]);
     const openEditProduct = useCallback((prod) => { setProductToEdit(prod); setProdModalOpen(true); }, []);
 
     const handleToggleItem = useCallback(async (item, type = 'CATEGORY') => {
@@ -96,13 +101,16 @@ export const useProductCatalog = () => {
         }
     }, [dispatch, currentCategoryId]);
 
-    const handleSuccess = useCallback((msg) => {
+    const handleSuccess = useCallback((msg, options = {}) => {
+        const { refreshMenus = false } = options;
         setRefreshCounter(prev => prev + 1);
         setSnackbar({ open: true, message: msg || 'Succes!', severity: 'success' });
         
         // 1. Refresh Admin UI
         dispatch(fetchCatalogContent(currentCategoryId));
-        dispatch(fetchCompositeMenus());
+        if (refreshMenus) {
+            dispatch(fetchCompositeMenus());
+        }
 
         // 2. --- REFRESH GLOBAL UI (POS/Stocks) ---
         dispatch(fetchGlobalCatalog());

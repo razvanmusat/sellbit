@@ -16,17 +16,23 @@ public interface ReceiptPaymentRepository extends JpaRepository<ReceiptPayment, 
 	@Query("SELECT COALESCE(SUM(rp.amount), 0) FROM ReceiptPayment rp " +
 			"WHERE rp.paymentMethod.code = 'VOUCHER' " +
 			"AND rp.receipt.status.code = 'CLOSED' " +
-			"AND rp.receipt.closedAt BETWEEN :start AND :end")
-	BigDecimal getTotalVoucherDiscounts(LocalDateTime start, LocalDateTime end);
+			"AND rp.receipt.closedAt BETWEEN :start AND :end " +
+			"AND (:warehouseId IS NULL OR rp.receipt.warehouse.id = :warehouseId)")
+	BigDecimal getTotalVoucherDiscounts(
+			@Param("start") LocalDateTime start,
+			@Param("end") LocalDateTime end,
+			@Param("warehouseId") Integer warehouseId);
 
 	@Query("SELECT COALESCE(SUM(rp.amount), 0) " +
 			"FROM ReceiptPayment rp " +
 			"WHERE rp.receipt.status.code = 'CLOSED' " +
 			"AND rp.receipt.closedAt BETWEEN :start AND :end " +
+			"AND (:warehouseId IS NULL OR rp.receipt.warehouse.id = :warehouseId) " +
 			"AND (:methodCode IS NULL OR rp.paymentMethod.code = :methodCode) " +
 			"AND rp.paymentMethod.code != 'ADVANCE'")
 	BigDecimal calculatePaymentsSum(
 			@Param("start") LocalDateTime start,
 			@Param("end") LocalDateTime end,
-			@Param("methodCode") String methodCode);
+			@Param("methodCode") String methodCode,
+			@Param("warehouseId") Integer warehouseId);
 }

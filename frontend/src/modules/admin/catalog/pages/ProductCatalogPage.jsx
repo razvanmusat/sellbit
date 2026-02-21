@@ -59,7 +59,7 @@ const ProductCatalogPage = () => {
                         {canAddProduct && (
                             <Button 
                                 variant="contained" color="primary" startIcon={<AddCircleIcon />}
-                                onClick={actions.blurAndOpen(() => actions.openCreateProduct(state.currentCategoryId))}
+                                onClick={actions.blurAndOpen(() => actions.openCreateProduct(state.currentCategoryDetails?.id ?? state.currentCategoryId))}
                                 sx={btnSx}
                             >
                                 <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Adaugă Produs</Box>

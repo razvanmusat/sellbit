@@ -1,0 +1,43 @@
+import { useState, useEffect, useCallback } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
+import dayjs from 'dayjs';
+import { fetchReceipts, setFilters, selectGroupedReceipts } from '../store/receiptsSlice';
+import { SalesService } from '../api/SalesService';
+
+export const useReceipts = (warehouseId) => {
+    const dispatch = useDispatch();
+    const { startDate, endDate, status, loading, list, loadedWarehouseId } = useSelector(state => state.receipts);
+    const groupedReceipts = useSelector(selectGroupedReceipts);
+    const [selectedReceipt, setSelectedReceipt] = useState(null);
+    const [modalOpen, setModalOpen] = useState(false);
+
+    useEffect(() => {
+        if (warehouseId && status && loadedWarehouseId !== warehouseId) {
+            dispatch(fetchReceipts({ warehouseId, summary: true }));
+        }
+    }, [warehouseId, status, loadedWarehouseId, dispatch]);
+
+    const setDate = (type, val) => {
+        const fmt = type === 'start' ? val.startOf('day').format('YYYY-MM-DDTHH:mm:ss') : val.endOf('day').format('YYYY-MM-DDTHH:mm:ss');
+        dispatch(setFilters({ [type === 'start' ? 'startDate' : 'endDate']: fmt }));
+        dispatch(fetchReceipts({ warehouseId, force: true, summary: true }));
+    };
+
+    const setStatus = (s) => {
+        dispatch(setFilters({ status: s }));
+        dispatch(fetchReceipts({ warehouseId, force: true, summary: true }));
+    };
+
+    const openReceipt = async (id) => {
+        const local = list.find(r => r.id === id);
+        if (local?.items && local?.payments) { setSelectedReceipt(local); setModalOpen(true); return; }
+        const data = await SalesService.getReceiptById(id);
+        if (data) { setSelectedReceipt(data); setModalOpen(true); }
+    };
+
+    return {
+        startDate: dayjs(startDate), endDate: dayjs(endDate), status, groupedReceipts, loading,
+        setDate, setStatus, selectedReceipt, setSelectedReceipt, modalOpen, setModalOpen, openReceipt,
+        refreshData: () => dispatch(fetchReceipts({ warehouseId, force: true, summary: true }))
+    };
+};

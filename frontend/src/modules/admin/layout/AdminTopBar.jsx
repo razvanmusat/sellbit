@@ -7,20 +7,16 @@ import NotificationsIcon from '@mui/icons-material/Notifications';
 import RestaurantMenuIcon from '@mui/icons-material/RestaurantMenu'; // Catalog
 import SoupKitchenIcon from '@mui/icons-material/SoupKitchen';       // Catering
 import InventoryIcon from '@mui/icons-material/Inventory';           // Inventar
-import StoreIcon from '@mui/icons-material/Store';                   // Gestiuni
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';         // Vânzări/Rapoarte
-import ManageAccountsIcon from '@mui/icons-material/ManageAccounts'; // Utilizatori
-import BusinessIcon from '@mui/icons-material/Business';             // Companie
+import SettingsIcon from '@mui/icons-material/Settings';             // Setări sistem
 import CardGiftcardIcon from '@mui/icons-material/CardGiftcard';     // Vouchere
 
 const ADMIN_MENU = [
   { label: 'Catalog', path: '/admin/catalog', icon: <RestaurantMenuIcon /> },
   { label: 'Catering', path: '/admin/catering', icon: <SoupKitchenIcon /> },
   { label: 'Inventar', path: '/admin/inventory', icon: <InventoryIcon /> },
-  { label: 'Gestiuni', path: '/admin/warehouses', icon: <StoreIcon /> },
   { label: 'Vânzări', path: '/admin/sales', icon: <TrendingUpIcon /> },
-  { label: 'Utilizatori', path: '/admin/users', icon: <ManageAccountsIcon /> },
-  { label: 'Companie', path: '/admin/company', icon: <BusinessIcon /> },
+  { label: 'Setări sistem', path: '/admin/settings', icon: <SettingsIcon /> },
   { label: 'Vouchere', path: '/admin/vouchers', icon: <CardGiftcardIcon /> },
 ];
 

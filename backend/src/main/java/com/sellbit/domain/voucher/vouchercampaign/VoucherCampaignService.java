@@ -85,9 +85,80 @@ public class VoucherCampaignService {
         return mapToResponse(saved);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
+    public VoucherCampaignDTOs.Response update(Integer id, @Valid VoucherCampaignDTOs.Request request) {
+        if (request.validUntilDate().isBefore(request.validFromDate())) {
+            throw new RuntimeException("ERROR.VOUCHER_CAMPAIGN.INVALID_DATE_RANGE");
+        }
+
+        VoucherCampaign campaign = repository.findById(id)
+                .orElseThrow(() -> new RuntimeException("ERROR.VOUCHER_CAMPAIGN.NOT_FOUND"));
+
+        if (request.requiredProductId() != null) {
+            boolean exists = productRepository.existsById(request.requiredProductId());
+            if (!exists) {
+                throw new RuntimeException("ERROR.VOUCHER_CAMPAIGN.REQUIRED_PRODUCT_NOT_FOUND");
+            }
+        }
+
+        if (request.applicableProductId() != null) {
+            boolean exists = productRepository.existsById(request.applicableProductId());
+            if (!exists) {
+                throw new RuntimeException("ERROR.VOUCHER_CAMPAIGN.APPLICABLE_PRODUCT_NOT_FOUND");
+            }
+        }
+
+        if (request.discountValue() != null && request.discountValue().compareTo(java.math.BigDecimal.ZERO) < 0) {
+            throw new RuntimeException("ERROR.VOUCHER_CAMPAIGN.NEGATIVE_DISCOUNT");
+        }
+
+        if ("PERCENT".equals(request.discountType()) && request.discountValue() != null) {
+            if (request.discountValue().compareTo(new java.math.BigDecimal("100")) > 0) {
+                throw new RuntimeException("ERROR.VOUCHER_CAMPAIGN.PERCENT_OVER_100");
+            }
+        }
+
+        String finalPrefix = request.prefix() != null ? request.prefix() : "JOACA-";
+
+        if (campaign.getActive() && repository.existsByPrefixAndActiveTrueAndIdNot(finalPrefix, campaign.getId())) {
+            throw new RuntimeException("ERROR.VOUCHER_CAMPAIGN.PREFIX_ALREADY_ACTIVE");
+        }
+
+        campaign.setName(request.name());
+        campaign.setValidFromDate(request.validFromDate());
+        campaign.setValidUntilDate(request.validUntilDate());
+        campaign.setDiscountType(request.discountType());
+        campaign.setDiscountValue(request.discountValue());
+        campaign.setMinAmount(request.minAmount());
+        campaign.setMinHoursPlayed(request.minHoursPlayed());
+        campaign.setRequiredProductId(request.requiredProductId());
+        campaign.setApplicableProductId(request.applicableProductId());
+        campaign.setValidDays(request.validDays() != null ? request.validDays() : 30);
+        campaign.setApplicableDays(request.applicableDays());
+        campaign.setPrefix(finalPrefix);
+        campaign.setCodeLength(request.codeLength() != null ? request.codeLength() : 4);
+        campaign.setReceiptTemplate(request.receiptTemplate());
+        
+        // Reactivare automat daca campaign era inactiv dar acum are date valide
+        if (!campaign.getActive() && request.validUntilDate().isAfter(LocalDate.now())) {
+            campaign.setActive(true);
+        }
+
+        VoucherCampaign updated = repository.save(campaign);
+        return mapToResponse(updated);
+    }
+
+    @Transactional
     public List<VoucherCampaignDTOs.Response> getAll() {
         return repository.findAll().stream()
+                .peek(campaign -> {
+                    // Dezactivare automata daca campania a expirat
+                    if (campaign.getActive() && campaign.getValidUntilDate() != null 
+                            && campaign.getValidUntilDate().isBefore(LocalDate.now())) {
+                        campaign.setActive(false);
+                        repository.save(campaign);
+                    }
+                })
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
     }
@@ -125,8 +196,25 @@ public class VoucherCampaignService {
                 c.getActive(),
                 c.getDiscountType(),
                 c.getDiscountValue(),
+                c.getMinAmount(),
+                c.getMinHoursPlayed(),
                 c.getApplicableDays(),
                 c.getRequiredProductId(),
-                c.getApplicableProductId());
+                c.getApplicableProductId(),
+                getProductName(c.getRequiredProductId()),
+                getProductName(c.getApplicableProductId()),
+                c.getValidDays(),
+                c.getPrefix(),
+                c.getCodeLength(),
+                c.getReceiptTemplate());
+    }
+
+    private String getProductName(Integer productId) {
+        if (productId == null) {
+            return null;
+        }
+        return productRepository.findById(productId)
+                .map(p -> p.getName())
+                .orElse(null);
     }
 }

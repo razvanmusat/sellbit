@@ -9,7 +9,6 @@ import {
 
 // Importăm serviciile din modulele tale (căi relative corecte)
 import { ProductService } from '../api/ProductService'; 
-import { LookupService } from '../api/LookupService'; 
 
 // Utilitarul de erori
 import { getFriendlyErrorMessage } from '../../../../shared/utils/errorHandler';
@@ -19,9 +18,6 @@ const SimpleProductSearch = ({ onSelect }) => {
     const [options, setOptions] = useState([]);
     const [loading, setLoading] = useState(false);
     const [inputValue, setInputValue] = useState('');
-    
-    // Stocăm dinamic ID-ul tipului "MENU"
-    const [menuTypeId, setMenuTypeId] = useState(null);
 
     // State Erori (Snackbar)
     const [snackbar, setSnackbar] = useState({ 
@@ -34,28 +30,7 @@ const SimpleProductSearch = ({ onSelect }) => {
         setSnackbar((prev) => ({ ...prev, open: false }));
     };
 
-    // 1. LA INITIALIZARE: Aflăm ID-ul pentru 'MENU' din baza de date
-    useEffect(() => {
-        const fetchMenuTypeId = async () => {
-            try {
-                // Folosim LookupService pentru a lua toate tipurile
-                const types = await LookupService.getAllProductTypes(); 
-                
-                const menuType = types.find(t => t.code === 'MENU');
-                
-                if (menuType) {
-                    setMenuTypeId(menuType.id);
-                } else {
-                    console.warn("Sistem: Nu s-a găsit tipul de produs cu codul 'MENU'. Filtrarea nu va funcționa.");
-                }
-            } catch (error) {
-                console.error("Nu s-au putut încărca definițiile de tipuri:", error);
-            }
-        };
-        fetchMenuTypeId();
-    }, []);
-
-    // 2. LOGICA DE CĂUTARE (Live Search)
+    // LOGICA DE CĂUTARE (Live Search)
     useEffect(() => {
         let active = true;
 
@@ -71,13 +46,7 @@ const SimpleProductSearch = ({ onSelect }) => {
                 const results = await ProductService.searchForAdmin(inputValue);
                 
                 if (active) {
-                    // FILTRARE DINAMICĂ:
-                    // Excludem produsele care au ID-ul tipului "MENU" (găsit anterior)
-                    let filtered = results;
-                    
-                    if (menuTypeId) {
-                        filtered = results.filter(p => p.productTypeId !== menuTypeId);
-                    }
+                    const filtered = results.filter(p => p.productTypeCode !== 'MENU');
                     
                     setOptions(filtered);
                 }
@@ -104,7 +73,7 @@ const SimpleProductSearch = ({ onSelect }) => {
             active = false;
             clearTimeout(timer);
         };
-    }, [inputValue, menuTypeId]); 
+    }, [inputValue]); 
 
     return (
         <>

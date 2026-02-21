@@ -3,6 +3,7 @@ package com.sellbit.domain.sales.receipt;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -131,6 +132,30 @@ class ReceiptServiceTest {
         assertThrows(RuntimeException.class, () -> receiptService.createReceipt(req));
     }
 
+    @Test
+    @DisplayName("getReceiptById - Succes: Returnează Receipt complet")
+    void getReceiptById_Success() {
+        receipt.setPayments(new ArrayList<>());
+        when(receiptRepository.findById(100)).thenReturn(Optional.of(receipt));
+
+        var res = receiptService.getReceiptById(100);
+
+        assertNotNull(res);
+        assertEquals(100, res.id());
+        assertEquals("Masa: Masa 10", res.tableName());
+        assertEquals(warehouse.getId(), res.warehouseId());
+        verify(receiptRepository).findById(100);
+    }
+
+    @Test
+    @DisplayName("getReceiptById - Eroare: Receipt inexistent")
+    void getReceiptById_Fail_NotFound() {
+        when(receiptRepository.findById(999)).thenReturn(Optional.empty());
+
+        RuntimeException ex = assertThrows(RuntimeException.class, () -> receiptService.getReceiptById(999));
+        assertEquals("ERROR.RECEIPT.NOT_FOUND", ex.getMessage());
+    }
+
     // --- 2. getUnclosedAlerts ---
     @Test
     @DisplayName("getUnclosedAlerts - Succes: Returnează bonuri din zilele anterioare")
@@ -222,11 +247,17 @@ class ReceiptServiceTest {
     @Test
     @DisplayName("closeReceipt - Eroare: Catering fără preț achiziție")
     void closeReceipt_Fail_CateringPrice() {
+        receipt.setStatus(openStatus);
+        
         Product cateringProduct = new Product();
         ProductType type = new ProductType();
         type.setCode("CATERING");
         cateringProduct.setProductType(type);
         cateringProduct.setPurchasePrice(null); 
+
+        ReceiptPayment payment = ReceiptPayment.builder().amount(new BigDecimal("100.00")).build();
+        receipt.setPayments(List.of(payment));
+        receipt.setTotalAmount(new BigDecimal("100.00"));
 
         ReceiptItem item = ReceiptItem.builder().product(cateringProduct).quantity(BigDecimal.ONE).build();
         receipt.setItems(List.of(item));
@@ -300,18 +331,112 @@ class ReceiptServiceTest {
         );
 
         assertTrue(new BigDecimal("-50.00").compareTo(res.totalAmount()) == 0);
+        // mapToResponse uses originalReceipt to format tableName as "Stornare la Bon #<originalId>"
+        assertTrue(res.tableName().contains("Stornare la Bon #"));
     }
 
-    // --- 7. getGrossProfitReport ---
+    // --- 7. getGrossProfitReport - Calcul DETALIAT PROFIT ---
     @Test
-    @DisplayName("getGrossProfitReport - Succes")
-    void getGrossProfitReport_Success() {
-        when(itemRepository.calculateTotalProfit(any(), any())).thenReturn(new BigDecimal("150.00"));
-        when(paymentRepository.getTotalVoucherDiscounts(any(), any())).thenReturn(BigDecimal.ZERO);
+    @DisplayName("getGrossProfitReport - Succes: Net 200 - Purchase 80 = Profit 120 (fara voucher)")
+    void getGrossProfitReport_Success_NoVoucher() {
+        LocalDateTime start = LocalDateTime.now().minusDays(1);
+        LocalDateTime end = LocalDateTime.now();
+        Integer warehouseId = 1;
         
-        var res = receiptService.getGrossProfitReport(LocalDateTime.now(), LocalDateTime.now());
+        // Scenario: Net=200, Purchase=80, Voucher=0 => Profit=120
+        when(itemRepository.calculateTotalProfit(start, end, warehouseId)).thenReturn(new BigDecimal("120.00"));
+        when(paymentRepository.getTotalVoucherDiscounts(start, end, warehouseId)).thenReturn(BigDecimal.ZERO);
         
-        assertEquals(0, new BigDecimal("150.00").compareTo(res));
+        BigDecimal profit = receiptService.getGrossProfitReport(start, end, warehouseId);
+        
+        assertEquals(0, new BigDecimal("120.00").compareTo(profit));
+    }
+
+    @Test
+    @DisplayName("getGrossProfitReport - Succes: Net 200 - Purchase 80 - Voucher 20 = Profit 100")
+    void getGrossProfitReport_Success_WithVoucher() {
+        LocalDateTime start = LocalDateTime.now().minusDays(7);
+        LocalDateTime end = LocalDateTime.now();
+        Integer warehouseId = 2;
+        
+        // Scenario: Net=200, Purchase=80, Voucher=20 => Profit=100
+        // itemRepository.calculateTotalProfit = 200 - 80 = 120
+        // paymentRepository.getTotalVoucherDiscounts = 20
+        // Result = 120 - 20 = 100
+        when(itemRepository.calculateTotalProfit(start, end, warehouseId)).thenReturn(new BigDecimal("120.00"));
+        when(paymentRepository.getTotalVoucherDiscounts(start, end, warehouseId)).thenReturn(new BigDecimal("20.00"));
+        
+        BigDecimal profit = receiptService.getGrossProfitReport(start, end, warehouseId);
+        
+        assertEquals(0, new BigDecimal("100.00").compareTo(profit));
+    }
+
+    @Test
+    @DisplayName("getGrossProfitReport - Succes: Zero Profit")
+    void getGrossProfitReport_Success_ZeroProfit() {
+        LocalDateTime start = LocalDateTime.now().minusMonths(1);
+        LocalDateTime end = LocalDateTime.now();
+        Integer warehouseId = 1;
+        
+        // Scenario: Net=100, Purchase=100 => Profit=0
+        when(itemRepository.calculateTotalProfit(start, end, warehouseId)).thenReturn(BigDecimal.ZERO);
+        when(paymentRepository.getTotalVoucherDiscounts(start, end, warehouseId)).thenReturn(BigDecimal.ZERO);
+        
+        BigDecimal profit = receiptService.getGrossProfitReport(start, end, warehouseId);
+        
+        assertEquals(0, BigDecimal.ZERO.compareTo(profit));
+    }
+
+    @Test
+    @DisplayName("getGrossProfitReport - Succes: Negative Profit (loss)")
+    void getGrossProfitReport_Success_NegativeProfit() {
+        LocalDateTime start = LocalDateTime.now().minusDays(1);
+        LocalDateTime end = LocalDateTime.now();
+        Integer warehouseId = 1;
+        
+        // Scenario: Net=50, Purchase=100 = -50 (pierdere)
+        // itemRepository.calculateTotalProfit = 50 - 100 = -50
+        when(itemRepository.calculateTotalProfit(start, end, warehouseId)).thenReturn(new BigDecimal("-50.00"));
+        when(paymentRepository.getTotalVoucherDiscounts(start, end, warehouseId)).thenReturn(BigDecimal.ZERO);
+        
+        BigDecimal profit = receiptService.getGrossProfitReport(start, end, warehouseId);
+        
+        assertEquals(0, new BigDecimal("-50.00").compareTo(profit));
+    }
+
+    @Test
+    @DisplayName("getGrossProfitReport - Succes: Multiple Vouchers (cumulative discount)")
+    void getGrossProfitReport_Success_MultipleVouchers() {
+        LocalDateTime start = LocalDateTime.now().minusDays(30);
+        LocalDateTime end = LocalDateTime.now();
+        Integer warehouseId = 3;
+        
+        // Scenario: Net=500, Purchase=200, Vouchers=50+30=80 => Profit=220
+        // itemRepository.calculateTotalProfit = 500 - 200 = 300
+        // paymentRepository.getTotalVoucherDiscounts = 80 (suma voucher-elor)
+        // Result = 300 - 80 = 220
+        when(itemRepository.calculateTotalProfit(start, end, warehouseId)).thenReturn(new BigDecimal("300.00"));
+        when(paymentRepository.getTotalVoucherDiscounts(start, end, warehouseId)).thenReturn(new BigDecimal("80.00"));
+        
+        BigDecimal profit = receiptService.getGrossProfitReport(start, end, warehouseId);
+        
+        assertEquals(0, new BigDecimal("220.00").compareTo(profit));
+    }
+
+    @Test
+    @DisplayName("getGrossProfitReport - Succes: High Volume (Net 5000 - Purchase 2000 - Voucher 500 = Profit 2500)")
+    void getGrossProfitReport_Success_HighVolume() {
+        LocalDateTime start = LocalDateTime.now().minusDays(365);
+        LocalDateTime end = LocalDateTime.now();
+        Integer warehouseId = 1;
+        
+        // Scenario realista: Vanzari 5000, Achizitii 2000, Vouchere 500 => Profit 2500
+        when(itemRepository.calculateTotalProfit(start, end, warehouseId)).thenReturn(new BigDecimal("3000.00"));
+        when(paymentRepository.getTotalVoucherDiscounts(start, end, warehouseId)).thenReturn(new BigDecimal("500.00"));
+        
+        BigDecimal profit = receiptService.getGrossProfitReport(start, end, warehouseId);
+        
+        assertEquals(0, new BigDecimal("2500.00").compareTo(profit));
     }
     
     // --- 8. getActiveReceipts ---
@@ -443,29 +568,73 @@ class ReceiptServiceTest {
 
     // --- 13. getBillNoteData (Metodă Nouă - Print) ---
     @Test
-    @DisplayName("getBillNoteData - Succes: Calculează restul de plată")
-    void getBillNoteData_Success_Open() {
+    @DisplayName("getBillNoteData - Succes: Calculeaza restul cu voucher")
+    void getBillNoteData_Success_WithVoucher() {
         com.sellbit.domain.store.Store store = new com.sellbit.domain.store.Store();
         store.setName("Test Store");
+        store.setAddress("Test Address");
+        store.setPhone("0123456789");
         when(storeRepository.getSettings()).thenReturn(Optional.of(store));
         
+        receipt.setStatus(closedStatus);
         receipt.setTotalAmount(new BigDecimal("100.00"));
         receipt.getPayments().add(ReceiptPayment.builder()
                 .amount(new BigDecimal("20.00"))
                 .paymentMethod(PaymentMethod.builder().code("VOUCHER").build())
                 .build());
+        receipt.getPayments().add(ReceiptPayment.builder()
+                .amount(new BigDecimal("80.00"))
+                .paymentMethod(PaymentMethod.builder().code("CASH").build())
+                .build());
+
+        ReceiptItem item = ReceiptItem.builder()
+                .product(new Product())
+                .quantity(BigDecimal.ONE)
+                .unitPrice(new BigDecimal("100.00"))
+                .build();
+        item.getProduct().setName("Test Product");
+        receipt.setItems(List.of(item));
 
         when(receiptRepository.findById(100)).thenReturn(Optional.of(receipt));
         when(customerVoucherRepository.findByUsedReceiptId(100)).thenReturn(Optional.empty());
 
         var res = receiptService.getBillNoteData(100);
 
+        assertEquals("Test Store", res.storeName());
+        assertEquals("Test Address", res.storeAddress());
+        assertEquals("0123456789", res.storePhone());
         assertEquals(new BigDecimal("20.00"), res.voucherValue());
-        assertEquals(new BigDecimal("80.00"), res.totalToPay()); 
+        assertEquals(new BigDecimal("80.00"), res.totalToPay());
+        assertEquals(new BigDecimal("100.00"), res.subtotal());
+        assertFalse(res.items().isEmpty());
+        assertEquals(1, res.items().size());
     }
 
     @Test
-    @DisplayName("getBillNoteData - Eroare: Store lipsă")
+    @DisplayName("getBillNoteData - Succes: Receipt OPEN fara plati")
+    void getBillNoteData_Success_Open() {
+        com.sellbit.domain.store.Store store = new com.sellbit.domain.store.Store();
+        store.setName("Test Store");
+        store.setAddress("Strada Test");
+        store.setPhone("0987654321");
+        when(storeRepository.getSettings()).thenReturn(Optional.of(store));
+        
+        receipt.setStatus(openStatus);
+        receipt.setTotalAmount(new BigDecimal("150.00"));
+        receipt.setPayments(new ArrayList<>());
+
+        when(receiptRepository.findById(100)).thenReturn(Optional.of(receipt));
+        when(customerVoucherRepository.findByUsedReceiptId(100)).thenReturn(Optional.empty());
+
+        var res = receiptService.getBillNoteData(100);
+
+        assertEquals("Test Store", res.storeName());
+        assertEquals(new BigDecimal("150.00"), res.totalToPay());
+        assertNull(res.voucherValue());
+    }
+
+    @Test
+    @DisplayName("getBillNoteData - Eroare: Store lipsa")
     void getBillNoteData_Fail_Store() {
         when(storeRepository.getSettings()).thenReturn(Optional.empty());
         assertThrows(RuntimeException.class, () -> receiptService.getBillNoteData(100));
@@ -473,7 +642,7 @@ class ReceiptServiceTest {
 
     // NOU: Teste Avans (lipseau din clasa veche)
     @Test
-    @DisplayName("registerAdvancePayment - Succes: Flux complet")
+    @DisplayName("registerAdvancePayment - Succes: Flux complet cu TVA 19%")
     void registerAdvancePayment_Success() {
         Integer warehouseId = 1;
         BigDecimal amount = new BigDecimal("119.00");
@@ -481,7 +650,8 @@ class ReceiptServiceTest {
         Integer userId = 5;
 
         when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
-        when(userRepository.findById(userId)).thenReturn(Optional.of(new User()));
+        User user = new User();
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         
         Product advanceProd = new Product();
         VatRate vat = new VatRate();
@@ -491,7 +661,9 @@ class ReceiptServiceTest {
         when(productRepository.findByProductTypeCode("ADVANCE")).thenReturn(List.of(advanceProd));
         
         when(statusRepository.findByCode("CLOSED")).thenReturn(Optional.of(closedStatus));
-        when(paymentMethodRepository.findByCode(pmCode)).thenReturn(Optional.of(new PaymentMethod()));
+        PaymentMethod pm = new PaymentMethod();
+        pm.setCode("CASH");
+        when(paymentMethodRepository.findByCode(pmCode)).thenReturn(Optional.of(pm));
 
         when(receiptRepository.save(any(Receipt.class))).thenAnswer(i -> {
             Receipt r = i.getArgument(0);
@@ -499,17 +671,59 @@ class ReceiptServiceTest {
             return r;
         });
 
-        receiptService.registerAdvancePayment(warehouseId, amount, pmCode, userId, "Advance payment");
+        receiptService.registerAdvancePayment(warehouseId, amount, pmCode, userId, "Test note");
 
         verify(receiptRepository).save(argThat(r -> 
             r.getStatus().getCode().equals("CLOSED") &&
             r.getTotalAmount().compareTo(amount) == 0 &&
-            r.getTotalNet().compareTo(new BigDecimal("100.00")) == 0
+            r.getTotalNet().compareTo(new BigDecimal("100.00")) == 0 &&
+            "Avans Petrecere".equals(r.getTableName())
         ));
 
-        verify(itemRepository).save(any(ReceiptItem.class));
+        verify(itemRepository).save(argThat(item -> 
+            item.getQuantity().compareTo(BigDecimal.ONE) == 0 &&
+            item.getUnitPrice().compareTo(amount) == 0 &&
+            !item.isServiceTime() &&
+            item.getServiceEndAt() == null
+        ));
         verify(paymentRepository).save(any(ReceiptPayment.class));
         verify(cashMovementService).createMovement(eq(warehouseId), eq("SALE"), eq(amount), eq(userId), anyString());
+    }
+
+    @Test
+    @DisplayName("registerAdvancePayment - Succes: Calcul TVA diferit (0%)")
+    void registerAdvancePayment_Success_NoVat() {
+        Integer warehouseId = 1;
+        BigDecimal amount = new BigDecimal("100.00");
+        String pmCode = "CASH";
+        Integer userId = 5;
+
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(new User()));
+        
+        Product advanceProd = new Product();
+        VatRate vat = new VatRate();
+        vat.setRate(BigDecimal.ZERO);
+        advanceProd.setVatRate(vat);
+        
+        when(productRepository.findByProductTypeCode("ADVANCE")).thenReturn(List.of(advanceProd));
+        when(statusRepository.findByCode("CLOSED")).thenReturn(Optional.of(closedStatus));
+        PaymentMethod pm = new PaymentMethod();
+        pm.setCode("CASH");
+        when(paymentMethodRepository.findByCode(pmCode)).thenReturn(Optional.of(pm));
+
+        when(receiptRepository.save(any(Receipt.class))).thenAnswer(i -> {
+            Receipt r = i.getArgument(0);
+            r.setId(778);
+            return r;
+        });
+
+        receiptService.registerAdvancePayment(warehouseId, amount, pmCode, userId, null);
+
+        verify(receiptRepository).save(argThat(r -> 
+            r.getTotalNet().compareTo(amount) == 0 &&
+            r.getTotalVat().compareTo(BigDecimal.ZERO) == 0
+        ));
     }
 
     @Test
@@ -521,6 +735,25 @@ class ReceiptServiceTest {
 
         assertThrows(RuntimeException.class, () -> 
             receiptService.registerAdvancePayment(1, BigDecimal.TEN, "CASH", 1, "Advance payment")
+        );
+    }
+
+    @Test
+    @DisplayName("registerAdvancePayment - Eroare: Cantitate invalida")
+    void registerAdvancePayment_Fail_InvalidAmount() {
+        assertThrows(RuntimeException.class, () -> 
+            receiptService.registerAdvancePayment(1, BigDecimal.ZERO, "CASH", 1, "Test")
+        );
+        assertThrows(RuntimeException.class, () -> 
+            receiptService.registerAdvancePayment(1, new BigDecimal("-10.00"), "CASH", 1, "Test")
+        );
+    }
+
+    @Test
+    @DisplayName("registerAdvancePayment - Eroare: Warehouse ID necesar")
+    void registerAdvancePayment_Fail_NoWarehouseId() {
+        assertThrows(RuntimeException.class, () -> 
+            receiptService.registerAdvancePayment(null, BigDecimal.TEN, "CASH", 1, "Test")
         );
     }
 }

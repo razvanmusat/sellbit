@@ -57,9 +57,23 @@ public class ReceiptDTOs {
                         LocalDateTime createdAt,
                         LocalDateTime closedAt,
                         String note,
+                        String cancelReason,
                         Integer originalReceiptId,
                         List<ItemResponse> items,
                         List<PaymentSummary> payments) {
+        }
+
+        public record SummaryResponse(
+                        Integer id,
+                        String statusLabel,
+                        String tableName,
+                        BigDecimal totalAmount,
+                        String warehouseName,
+                        Integer warehouseId,
+                        String userName,
+                        LocalDateTime createdAt,
+                        LocalDateTime closedAt,
+                        Integer originalReceiptId) {
         }
 
         /**

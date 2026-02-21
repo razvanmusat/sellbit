@@ -7,6 +7,13 @@ export const AuthService = {
     });
   },
 
+  changeOwnPassword: async (oldPassword, newPassword) => {
+    return client('security/users/me/password', {
+      method: 'PATCH',
+      body: { oldPassword, newPassword }
+    });
+  },
+
   logout: () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');

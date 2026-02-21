@@ -56,12 +56,13 @@ public class ReceiptPaymentController {
     }
 
     @PreAuthorize("hasAnyAuthority('100')")
-    @GetMapping("/report/sum") //RAPORT: Total încasări pe metode de plată. Câți bani incasti azi CASH vs CARD.
-    public ResponseEntity<ReceiptPaymentDTO.ReportResponse> getPaymentsReport(
+    @GetMapping("/report/sum") // RAPORT: Total încasări pe metodă de plată (grupat pentru interval de date)
+    public ResponseEntity<List<ReceiptPaymentDTO.ReportResponse>> getPaymentsReport(
+            @RequestParam(required = false) Integer warehouseId,
             @RequestParam @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
             @RequestParam @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE_TIME) LocalDateTime end,
             @RequestParam(required = false) String methodCode) {
 
-        return ResponseEntity.ok(paymentService.getPaymentsReport(start, end, methodCode));
+        return ResponseEntity.ok(paymentService.getPaymentsReport(start, end, methodCode, warehouseId));
     }
 }

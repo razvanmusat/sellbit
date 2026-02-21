@@ -216,12 +216,17 @@ public class ReceiptItemService {
 
     @Transactional(readOnly = true)
     public List<ReceiptItemDTO.QuantityReportResponse> getProductsQuantityReport(LocalDateTime start, LocalDateTime end,
-            List<Integer> productIds) {
-        return itemRepository.getProductsQuantityReport(start, end, productIds);
+            List<Integer> productIds, Integer warehouseId) {
+        return itemRepository.getProductsQuantityReport(start, end, productIds, warehouseId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<ReceiptItemDTO.ProductTimelineResponse> getProductTimeline(LocalDateTime start, LocalDateTime end,
+            Integer productId, Integer warehouseId) {
+        return itemRepository.getProductTimeline(start, end, productId, warehouseId);
     }
 
     // --- METODE NOI PENTRU VERIFICARE STOC ---
-
     private void validateStockAvailability(Integer warehouseId, Product product, BigDecimal requiredQty) {
         List<String> missingProducts = new ArrayList<>();
 

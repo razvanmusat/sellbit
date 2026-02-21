@@ -53,9 +53,9 @@ class StockAdjustmentServiceTest {
 
     @BeforeEach
     void setUp() {
-        mockProduct = Product.builder().id(10).name("P1").build();
+        mockProduct = Product.builder().id(10).name("P1").trackStock(true).build();
         mockWarehouse = Warehouse.builder().id(5).name("W1").build();
-        mockUser = User.builder().id(1).username("admin").build();
+        mockUser = User.builder().id(1).username("admin").fullName("Admin User").build();
         mockReason = AdjustmentReason.builder().id(2).label("Pierdere").build();
 
         // Stubbings comune
@@ -63,6 +63,9 @@ class StockAdjustmentServiceTest {
         when(warehouseRepository.findById(5)).thenReturn(Optional.of(mockWarehouse));
         when(userRepository.findById(1)).thenReturn(Optional.of(mockUser));
         when(reasonRepository.findById(2)).thenReturn(Optional.of(mockReason));
+        when(warehouseRepository.existsById(1)).thenReturn(true);
+        when(warehouseRepository.existsById(5)).thenReturn(true);
+        when(productRepository.existsById(10)).thenReturn(true);
     }
 
     // --- METODA: processAdjustment ---
@@ -139,7 +142,10 @@ class StockAdjustmentServiceTest {
     @DisplayName("getByDateRange: Succes apel repository")
     void getByDateRange_Success() {
         LocalDate now = LocalDate.now();
-        adjustmentService.getAdjustmentsByDateRange(1,now, now);
+        when(adjustmentRepository.findByWarehouseIdAndAdjustedAtBetweenOrderByAdjustedAtDesc(eq(1), any(), any()))
+                .thenReturn(List.of());
+        
+        adjustmentService.getAdjustmentsByDateRange(1, now, now);
         
         verify(adjustmentRepository).findByWarehouseIdAndAdjustedAtBetweenOrderByAdjustedAtDesc(eq(1), any(), any());
     }

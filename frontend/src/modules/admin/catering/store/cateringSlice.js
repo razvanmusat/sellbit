@@ -1,7 +1,6 @@
 import { createSlice, createAsyncThunk, createSelector } from '@reduxjs/toolkit';
 import dayjs from 'dayjs';
 import { CateringService } from '../api/CateringService';
-import { ProductService } from '../../catalog/api/ProductService'; 
 
 // --- THUNKS ---
 
@@ -11,20 +10,22 @@ export const fetchCateringDashboardData = createAsyncThunk(
     'catering/fetchDashboardData',
     async (_, { rejectWithValue }) => {
         try {
-            // A. Prețuri
-            const products = await ProductService.searchForAdmin("");
-            const prices = {};
-            products.forEach(p => prices[p.id] = p.purchasePrice || 0);
-
-            // B. Neplătite (Start An -> Azi)
+            // Interval default (Start An -> Azi)
             const startYear = dayjs().startOf('year').format('YYYY-MM-DD');
             const today = dayjs().format('YYYY-MM-DD');
-            const unpaid = await CateringService.getUnpaidOrders(startYear, today);
 
-            // C. Istoric (Start An -> Azi) - FETCH NOU
-            const history = await CateringService.getPaidHistory(startYear, today);
+            // Cereri în paralel (mai rapid)
+            const [products, unpaid] = await Promise.all([
+                CateringService.getAvailableProducts(),
+                CateringService.getUnpaidOrders(startYear, today)
+            ]);
 
-            return { unpaid, history, prices };
+            const prices = {};
+            (products || []).forEach((p) => {
+                prices[p.id] = p.purchasePrice || 0;
+            });
+
+            return { unpaid, prices };
         } catch (error) {
             return rejectWithValue(error.message || 'Eroare date catering.');
         }
@@ -88,7 +89,6 @@ const cateringSlice = createSlice({
             .addCase(fetchCateringDashboardData.fulfilled, (state, action) => {
                 state.loading = false;
                 state.unpaidOrders = action.payload.unpaid;
-                state.historyOrders = action.payload.history; // <--- SALVĂM ISTORICUL
                 state.priceMap = action.payload.prices;
                 state.lastUpdated = Date.now();
 

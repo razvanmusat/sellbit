@@ -1,6 +1,34 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { AuthService } from '../../../shared/api/AuthService';
 
+const parseJwtPayload = (token) => {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padded = base64.padEnd(base64.length + (4 - (base64.length % 4 || 4)) % 4, '=');
+    const jsonPayload = decodeURIComponent(
+      atob(padded)
+        .split('')
+        .map((c) => `%${`00${c.charCodeAt(0).toString(16)}`.slice(-2)}`)
+        .join('')
+    );
+    return JSON.parse(jsonPayload);
+  } catch {
+    return null;
+  }
+};
+
+const isTokenExpired = (token) => {
+  if (!token) return true;
+  const payload = parseJwtPayload(token);
+  if (!payload || !payload.exp) return true;
+
+  const nowInSeconds = Math.floor(Date.now() / 1000);
+  return payload.exp <= nowInSeconds;
+};
+
 // --- 0. DICȚIONAR DE ERORI (HARDCODED PENTRU FRONTEND) ---
 const translateError = (backendMessage) => {
   const msg = backendMessage || '';
@@ -41,9 +69,17 @@ export const loginUser = createAsyncThunk(
 
 // --- STATE & SLICE ---
 const userFromStorage = localStorage.getItem('user');
+const tokenFromStorage = localStorage.getItem('token');
+const hasValidToken = tokenFromStorage && !isTokenExpired(tokenFromStorage);
+
+if (!hasValidToken) {
+  localStorage.removeItem('token');
+  localStorage.removeItem('user');
+}
+
 const initialState = {
-  user: userFromStorage ? JSON.parse(userFromStorage) : null,
-  token: localStorage.getItem('token') || null,
+  user: hasValidToken && userFromStorage ? JSON.parse(userFromStorage) : null,
+  token: hasValidToken ? tokenFromStorage : null,
   isLoading: false,
   error: null,
 };

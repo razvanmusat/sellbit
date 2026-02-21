@@ -24,6 +24,12 @@ export const ProductService = {
         });
     },
 
+    getMenusForAdmin: async () => {
+        return client(`${BASE_URL}/admin/menus`, {
+            headers: getAuthHeaders()
+        });
+    },
+
     // --- POS READ ---
     getProductsForPos: async (categoryId) => {
         return client(`${BASE_URL}/pos`, {

@@ -104,7 +104,7 @@ const CashDrawerPage = ({ warehouseId }) => {
                   label="Sumă" type="number" fullWidth size="small"
                   value={formData.amount}
                   onChange={(e) => handleInputChange('amount', e.target.value)}
-                  InputProps={{ endAdornment: <InputAdornment position="end">RON</InputAdornment> }}
+                  slotProps={{ input: { endAdornment: <InputAdornment position="end">RON</InputAdornment> } }}
                   disabled={submitting}
                 />
               </Box>

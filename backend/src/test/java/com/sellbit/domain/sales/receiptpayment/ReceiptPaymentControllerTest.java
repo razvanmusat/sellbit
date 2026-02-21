@@ -92,7 +92,7 @@ class ReceiptPaymentControllerTest {
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON));
     }
 
-    // --- Teste Succes ---
+    // --- Teste Succes Rapoarte ---
 
     @Test
     @DisplayName("GET /report/sum - Succes: Returnează totalul corect")
@@ -102,27 +102,33 @@ class ReceiptPaymentControllerTest {
         ReceiptPaymentDTO.ReportResponse mockResponse = new ReceiptPaymentDTO.ReportResponse(
                 new BigDecimal("1100.00"), "CASH", start, end);
 
-        when(paymentService.getPaymentsReport(any(), any(), eq("CASH"))).thenReturn(mockResponse);
+        // Returnează o listă cu obiecte ReportResponse
+        when(paymentService.getPaymentsReport(any(), any(), eq("CASH"), any())).thenReturn(List.of(mockResponse));
 
         mockMvc.perform(get("/api/sales/receipt-payments/report/sum")
                 .param("start", "2026-01-01T00:00:00")
                 .param("end", "2026-01-31T23:59:59")
                 .param("methodCode", "CASH"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.totalAmount").value(1100.00));
+                .andExpect(jsonPath("$[0].totalAmount").value(1100.00))
+                .andExpect(jsonPath("$[0].methodCode").value("CASH"));
     }
 
     @Test
     @DisplayName("GET /report/sum - Succes: Funcționează fără methodCode (null)")
     void getPaymentsReport_NullMethod_Success() throws Exception {
-        when(paymentService.getPaymentsReport(any(), any(), isNull())).thenReturn(
-                new ReceiptPaymentDTO.ReportResponse(BigDecimal.TEN, null, null, null));
+        LocalDateTime start = LocalDateTime.of(2026, 1, 1, 0, 0);
+        LocalDateTime end = LocalDateTime.of(2026, 1, 31, 23, 59);
+        // Returnează o listă cu obiecte ReportResponse
+        when(paymentService.getPaymentsReport(any(), any(), isNull(), any())).thenReturn(
+                List.of(new ReceiptPaymentDTO.ReportResponse(BigDecimal.TEN, null, start, end)));
 
         mockMvc.perform(get("/api/sales/receipt-payments/report/sum")
                 .param("start", "2026-01-01T00:00:00")
                 .param("end", "2026-01-31T23:59:59"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.methodCode").isEmpty());
+                .andExpect(jsonPath("$[0].totalAmount").value(10.00))
+                .andExpect(jsonPath("$[0].methodCode").isEmpty());
     }
 
     // --- Teste Date Eronate ---

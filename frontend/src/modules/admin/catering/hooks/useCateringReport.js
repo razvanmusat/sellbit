@@ -1,10 +1,13 @@
 import { useState, useMemo, useEffect } from 'react';
+import { useDispatch } from 'react-redux';
 import { useSelector } from 'react-redux';
 import { useSearchParams } from 'react-router-dom';
 import dayjs from 'dayjs';
+import { fetchHistoryRange } from '../store/cateringSlice';
 
 export const useCateringReport = () => {
-    const { unpaidOrders, historyOrders, priceMap, loading } = useSelector((state) => state.catering);
+    const dispatch = useDispatch();
+    const { unpaidOrders, historyOrders, priceMap, loading, historyLoading } = useSelector((state) => state.catering);
     const [searchParams, setSearchParams] = useSearchParams();
 
     // 2. STATE LOCAL - Inițializare din URL sau Default
@@ -32,6 +35,12 @@ export const useCateringReport = () => {
             }, { replace: true });
         }
     }, [startDate, endDate, setSearchParams, searchParams]);
+
+    useEffect(() => {
+        const startStr = startDate.format('YYYY-MM-DD');
+        const endStr = endDate.format('YYYY-MM-DD');
+        dispatch(fetchHistoryRange({ start: startStr, end: endStr }));
+    }, [startDate, endDate, dispatch]);
 
     // 3. LOGICA CENTRALIZATĂ
     const reportData = useMemo(() => {
@@ -143,6 +152,6 @@ export const useCateringReport = () => {
         startDate, setStartDate,
         endDate, setEndDate,
         reportData,
-        loading
+        loading: loading || historyLoading
     };
 };

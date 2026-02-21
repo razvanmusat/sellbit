@@ -26,6 +26,12 @@ public class ReceiptController {
 
     private final ReceiptService receiptService;
 
+    @PreAuthorize("hasAuthority('100')")
+    @GetMapping("/{id}") // Endpoint: GET /api/sales/receipts/97
+    public ResponseEntity<ReceiptDTOs.Response> getById(@PathVariable Integer id) {
+        return ResponseEntity.ok(receiptService.getReceiptById(id));
+    }
+
     @PreAuthorize("hasAnyAuthority('50', '100')")
     @PostMapping // POS: Deschide o masă nouă (sau un bon nou).
     public ResponseEntity<ReceiptDTOs.Response> create(@RequestBody @Valid ReceiptDTOs.CreateRequest request) {
@@ -33,11 +39,12 @@ public class ReceiptController {
     }
 
     @PreAuthorize("hasAuthority('100')")
-    @GetMapping("/reports/profit") // RAPORTARE: Obține profitul net într-un interval de timp.
+    @GetMapping("/reports/profit") // RAPORTARE: Obține profitul net (filtru opțional pe gestiune)
     public ResponseEntity<BigDecimal> getProfit(
+            @RequestParam(required = false) Integer warehouseId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end) {
-        return ResponseEntity.ok(receiptService.getGrossProfitReport(start, end));
+        return ResponseEntity.ok(receiptService.getGrossProfitReport(start, end, warehouseId));
     }
 
     @PreAuthorize("hasAnyAuthority('50', '100')")
@@ -47,13 +54,23 @@ public class ReceiptController {
     }
 
     @PreAuthorize("hasAnyAuthority('50', '100')")
-    @GetMapping("/report") //RAPORT: Bonurile într-un interval de timp, filtrat după gestiune si stare
+    @GetMapping("/report") // RAPORT: Bonurile într-un interval de timp, filtrat după gestiune si stare
     public ResponseEntity<List<ReceiptDTOs.Response>> getReport(
             @RequestParam Integer warehouseId,
             @RequestParam String status,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end) {
         return ResponseEntity.ok(receiptService.getReceiptsReport(warehouseId, status, start, end));
+    }
+
+    @PreAuthorize("hasAnyAuthority('50', '100')")
+    @GetMapping("/report/summary")
+    public ResponseEntity<List<ReceiptDTOs.SummaryResponse>> getReportSummary(
+            @RequestParam Integer warehouseId,
+            @RequestParam String status,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end) {
+        return ResponseEntity.ok(receiptService.getReceiptsReportSummary(warehouseId, status, start, end));
     }
 
     @PreAuthorize("hasAnyAuthority('50', '100')")

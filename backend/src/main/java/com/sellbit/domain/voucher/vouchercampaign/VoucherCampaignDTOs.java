@@ -26,6 +26,7 @@ public class VoucherCampaignDTOs {
         @Digits(integer = 8, fraction = 2, message = "ERROR.VOUCHER_CAMPAIGN.INVALID_FORMAT") // Previne overflow DB
         BigDecimal discountValue,
 
+        @NotNull(message = "ERROR.VOUCHER_CAMPAIGN.MIN_AMOUNT_REQUIRED")
         @DecimalMin(value = "0.0", message = "ERROR.VOUCHER_CAMPAIGN.MIN_AMOUNT_POSITIVE")
         @Digits(integer = 8, fraction = 2)
         BigDecimal minAmount,
@@ -36,6 +37,7 @@ public class VoucherCampaignDTOs {
         Integer requiredProductId,
         Integer applicableProductId,
 
+        @NotNull(message = "ERROR.VOUCHER_CAMPAIGN.DAYS_REQUIRED")
         @Min(value = 1, message = "ERROR.VOUCHER_CAMPAIGN.DAYS_MIN_1")
         Integer validDays,
 
@@ -62,8 +64,16 @@ public class VoucherCampaignDTOs {
         Boolean active,
         String discountType,
         BigDecimal discountValue,
+        BigDecimal minAmount,
+        Integer minHoursPlayed,
         String applicableDays,
         Integer requiredProductId,
-        Integer applicableProductId
+        Integer applicableProductId,
+        String requiredProductName,
+        String applicableProductName,
+        Integer validDays,
+        String prefix,
+        Integer codeLength,
+        String receiptTemplate
     ) {}
 }

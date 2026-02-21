@@ -71,11 +71,11 @@ public class Receipt {
     private LocalDateTime closedAt;
 
     // Relații bidirecționale cu gestionare în cascadă
-    @OneToMany(mappedBy = "receipt", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "receipt", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @Builder.Default
     private List<ReceiptItem> items = new ArrayList<>();
 
-    @OneToMany(mappedBy = "receipt", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "receipt", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @Builder.Default
     private List<ReceiptPayment> payments = new ArrayList<>();
 

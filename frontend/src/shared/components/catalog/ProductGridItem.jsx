@@ -72,7 +72,7 @@ const ProductGridItem = ({ product, onClick, mode, warehouseId, isMenuCategory }
                 <Tooltip 
                     title={<MenuTooltipContent />} 
                     arrow placement="top" onOpen={handleTooltipOpen}
-                    componentsProps={{
+                    slotProps={{
                         tooltip: { sx: { bgcolor: '#263238', minWidth: 150 } },
                         arrow: { sx: { color: '#263238' } }
                     }}

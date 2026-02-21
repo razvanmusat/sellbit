@@ -150,7 +150,9 @@ class ReceiptItemControllerTest {
         var reportLine = new ReceiptItemDTO.QuantityReportResponse(
                 "Produs Test", new BigDecimal("10.00"), new BigDecimal("100.00"));
 
-        when(receiptItemService.getProductsQuantityReport(any(), any(), any()))
+        // MODIFICAT: Acceptă 4 argumente (start, end, productIds, warehouseId)
+        // warehouseId este null în acest request
+        when(receiptItemService.getProductsQuantityReport(any(), any(), any(), any()))
                 .thenReturn(List.of(reportLine));
 
         mockMvc.perform(get("/api/sales/receipt-items/report/quantity")
@@ -165,7 +167,8 @@ class ReceiptItemControllerTest {
     @Test
     @DisplayName("GET /report/quantity - Succes: Filtrare după ID-uri")
     void getQuantityReport_WithIds_Success() throws Exception {
-        when(receiptItemService.getProductsQuantityReport(any(), any(), any()))
+        // MODIFICAT: Acceptă 4 argumente
+        when(receiptItemService.getProductsQuantityReport(any(), any(), any(), any()))
                 .thenReturn(List.of());
 
         mockMvc.perform(get("/api/sales/receipt-items/report/quantity")

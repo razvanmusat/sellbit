@@ -2,6 +2,7 @@ package com.sellbit.domain.sales.receiptpayment;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
@@ -167,15 +168,28 @@ public class ReceiptPaymentService {
         voucherService.consumeVoucher(voucherCode, receipt);
     }
 
-    public ReceiptPaymentDTO.ReportResponse getPaymentsReport(LocalDateTime start, LocalDateTime end,
-            String methodCode) {
-        BigDecimal total = paymentRepository.calculatePaymentsSum(start, end, methodCode);
-
-        return new ReceiptPaymentDTO.ReportResponse(
-                total,
-                methodCode, // Returnăm exact codul primit (null dacă e "Toate")
-                start,
-                end);
+    public List<ReceiptPaymentDTO.ReportResponse> getPaymentsReport(
+            LocalDateTime start, 
+            LocalDateTime end,
+            String methodCode, 
+            Integer warehouseId) {
+        
+        List<ReceiptPaymentDTO.ReportResponse> reports = new ArrayList<>();
+        
+        // Dacă se cere o metodă specifică, returnez doar pentru acea metodă
+        if (methodCode != null && !methodCode.isEmpty()) {
+            BigDecimal total = paymentRepository.calculatePaymentsSum(start, end, methodCode, warehouseId);
+            reports.add(new ReceiptPaymentDTO.ReportResponse(total, methodCode, start, end));
+        } else {
+            // Altfel, returnez date pentru TOATE metodele de plată
+            List<PaymentMethod> allMethods = paymentMethodRepository.findAll();
+            for (PaymentMethod method : allMethods) {
+                BigDecimal total = paymentRepository.calculatePaymentsSum(start, end, method.getCode(), warehouseId);
+                reports.add(new ReceiptPaymentDTO.ReportResponse(total, method.getCode(), start, end));
+            }
+        }
+        
+        return reports;
     }
 
     private ReceiptPaymentDTO.Response mapToResponse(ReceiptPayment payment) {

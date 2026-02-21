@@ -38,6 +38,24 @@ public interface ReceiptRepository extends JpaRepository<Receipt, Integer> {
             @Param("start") LocalDateTime start,
             @Param("end") LocalDateTime end);
 
+        @Query("SELECT new com.sellbit.domain.sales.receipt.ReceiptDTOs$SummaryResponse(" +
+                        "r.id, s.label, r.tableName, r.totalAmount, w.name, w.id, COALESCE(u.fullName, 'N/A'), " +
+                        "r.createdAt, r.closedAt, o.id) " +
+                        "FROM Receipt r " +
+                        "JOIN r.status s " +
+                        "JOIN r.warehouse w " +
+                        "LEFT JOIN r.user u " +
+                        "LEFT JOIN r.originalReceipt o " +
+                        "WHERE w.id = :warehouseId " +
+                        "AND s.code = :statusCode " +
+                        "AND r.closedAt BETWEEN :start AND :end " +
+                        "ORDER BY r.closedAt ASC")
+        List<ReceiptDTOs.SummaryResponse> findSummaryByWarehouseIdAndStatusCodeAndClosedAtBetween(
+                        @Param("warehouseId") Integer warehouseId,
+                        @Param("statusCode") String statusCode,
+                        @Param("start") LocalDateTime start,
+                        @Param("end") LocalDateTime end);
+
         /**
          * JURNAL TOTAL (Audit):
          * Toate mișcările de pe un tab (Gestiune) indiferent dacă sunt CLOSED sau
