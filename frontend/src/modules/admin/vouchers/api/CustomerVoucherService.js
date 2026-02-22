@@ -24,5 +24,10 @@ export const CustomerVoucherService = {
 
   reactivate: async (code) => client(`${BASE_URL}/reactivate/${encodeURIComponent(code)}`, { method: 'POST' }),
 
+  consume: async (code, receiptId = null) => client(`${BASE_URL}/consume`, {
+    method: 'POST',
+    body: { code, receiptId },
+  }),
+
   validate: async (code) => client(`${BASE_URL}/validate/${encodeURIComponent(code)}`),
 };

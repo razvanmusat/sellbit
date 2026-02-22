@@ -161,6 +161,20 @@ const VoucherCampaignFormDialog = ({
                 helperText={discountValueHint()}
                 required
               />
+              {form.discountType === 'PERCENT' && (
+                <TextField
+                  label="Suma maxima discount (lei)"
+                  type="number"
+                  value={form.maxDiscountAmount}
+                  onChange={(e) => setField('maxDiscountAmount', e.target.value)}
+                  fullWidth
+                  size="small"
+                  autoComplete="off"
+                  slotProps={{ htmlInput: { step: '0.01', min: '0', autoComplete: 'off' } }}
+                  helperText="Suma maxima pe care o poate ajunge discountul in lei (ex: 10% dar max 50 lei)."
+                  required
+                />
+              )}
             </Stack>
 
             <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>

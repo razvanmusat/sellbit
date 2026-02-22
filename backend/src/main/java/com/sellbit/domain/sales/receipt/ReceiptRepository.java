@@ -18,20 +18,15 @@ public interface ReceiptRepository extends JpaRepository<Receipt, Integer> {
          * Când dai click pe Tab "Gestiune 1", React va apela:
          * findByWarehouseIdAndStatus_Code(1, "OPEN")
          */
-        @Query("SELECT r FROM Receipt r WHERE r.warehouse.id = :warehouseId AND r.status.code = :statusCode ORDER BY r.createdAt ASC")
         List<Receipt> findByWarehouseIdAndStatus_Code(@Param("warehouseId") Integer warehouseId,
                         @Param("statusCode") String statusCode);
 
         /**
          * RAPORTARE (HISTORY):
-         * Când vrei să vezi ce s-a vândut pe Gestiunea 1 ieri:
+         * Când vrei să vezi ce s-a vândut pe Gestiunea 1 ieri.
+         * @BatchSize pe items previne N+1 pentru items.
          * findByWarehouseIdAndStatus_CodeAndClosedAtBetween(1, "CLOSED", start, end)
          */
-        @Query("SELECT r FROM Receipt r " +
-           "WHERE r.warehouse.id = :warehouseId " +
-           "AND r.status.code = :statusCode " +
-           "AND r.closedAt BETWEEN :start AND :end " +
-           "ORDER BY r.closedAt ASC")
     List<Receipt> findByWarehouseIdAndStatus_CodeAndClosedAtBetween(
             @Param("warehouseId") Integer warehouseId,
             @Param("statusCode") String statusCode,

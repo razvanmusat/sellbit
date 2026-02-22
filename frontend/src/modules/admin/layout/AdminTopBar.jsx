@@ -1,7 +1,7 @@
 import React from 'react';
-import { AppBar, Toolbar, Button, Box, IconButton, Badge } from '@mui/material';
+import { AppBar, Toolbar, Button, Box } from '@mui/material';
 import { useNavigate, useLocation } from 'react-router-dom';
-import NotificationsIcon from '@mui/icons-material/Notifications';
+import AlertsContainer from '../../../shared/components/alerts/AlertsContainer';
 
 // --- ICONIȚE PENTRU TABURI ADMIN ---
 import RestaurantMenuIcon from '@mui/icons-material/RestaurantMenu'; // Catalog
@@ -23,8 +23,6 @@ const ADMIN_MENU = [
 const AdminTopBar = () => {
   const navigate = useNavigate();
   const location = useLocation();
-
-  const notificationCount = 0; // Momentan 0, putem lega la notificări de sistem mai târziu
 
   return (
     <AppBar 
@@ -70,14 +68,8 @@ const AdminTopBar = () => {
           })}
         </Box>
 
-        {/* Zona de Notificări (Opțional, am adăugat-o să fie structura identică) */}
-        <Box>
-          <IconButton color="inherit">
-            <Badge badgeContent={notificationCount} color="error">
-              <NotificationsIcon />
-            </Badge>
-          </IconButton>
-        </Box>
+        {/* Zona de Alerte */}
+        <AlertsContainer />
 
       </Toolbar>
     </AppBar>

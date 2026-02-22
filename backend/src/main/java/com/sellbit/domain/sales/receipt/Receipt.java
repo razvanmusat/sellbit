@@ -8,6 +8,7 @@ import com.sellbit.domain.sales.receiptpayment.ReceiptPayment;
 import com.sellbit.domain.security.user.User;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.BatchSize;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.math.BigDecimal;
@@ -72,6 +73,7 @@ public class Receipt {
 
     // Relații bidirecționale cu gestionare în cascadă
     @OneToMany(mappedBy = "receipt", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @BatchSize(size = 50)
     @Builder.Default
     private List<ReceiptItem> items = new ArrayList<>();
 

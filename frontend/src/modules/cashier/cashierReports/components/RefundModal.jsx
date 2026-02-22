@@ -26,7 +26,7 @@ const RefundModal = ({ open, onClose, receipt, onRefundSuccess }) => {
   } = useRefundModal(open, receipt, onClose, onRefundSuccess);
 
   const { 
-      items, paymentMethods, loadingItems, submitting, error, 
+      items, paymentMethods, originalPayments, loadingItems, submitting, error, 
       refundMap, paymentMethodId, totalRefundAmount, hasSelection 
   } = state;
 
@@ -169,8 +169,15 @@ const RefundModal = ({ open, onClose, receipt, onRefundSuccess }) => {
 
       <Box sx={{ p: 2, borderTop: '1px solid #eee', display: 'flex', flexDirection: 'column', gap: 2 }}>
         
-        <Box display="flex" justifyContent="center" width="100%">
-            <FormControl size="small" sx={{ width: { xs: '100%', sm: '300px' } }}>
+        {/* Rând 1: Plăți originale (stânga) + Selector (dreapta) */}
+        <Box display="flex" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={2}>
+            <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                Plăți originale: {Array.isArray(originalPayments) && originalPayments.length > 0 
+                    ? originalPayments.map(p => `${p.paymentMethodName}: ${p.amount.toFixed(2)} RON`).join(', ')
+                    : 'Necunoscute'}
+            </Typography>
+
+            <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: '300px' } }}>
                 <InputLabel>Selectează metoda restituire</InputLabel>
                 <Select
                     value={paymentMethodId}
@@ -186,24 +193,26 @@ const RefundModal = ({ open, onClose, receipt, onRefundSuccess }) => {
             </FormControl>
         </Box>
 
-        <Box display="flex" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={2}>
+        {/* Rând 2: Total restituit */}
+        <Box>
             <Typography variant="h6">
                 Total Restituit: <span style={{ color: 'red' }}>{totalRefundAmount.toFixed(2)} RON</span>
             </Typography>
-
-            <DialogActions sx={{ p: 0 }}>
-                <Button onClick={onClose} color="inherit">Anulează</Button>
-                <Button 
-                    variant="contained" 
-                    color="error" 
-                    startIcon={submitting ? <CircularProgress size={20} color="inherit"/> : <SaveIcon />}
-                    disabled={!hasSelection || submitting || !paymentMethodId}
-                    onClick={handleSubmitRefund}
-                >
-                    Confirmă Retur
-                </Button>
-            </DialogActions>
         </Box>
+
+        {/* Rând 3: Butoane */}
+        <DialogActions sx={{ p: 0, justifyContent: 'flex-end' }}>
+            <Button onClick={onClose} color="inherit">Anulează</Button>
+            <Button 
+                variant="contained" 
+                color="error" 
+                startIcon={submitting ? <CircularProgress size={20} color="inherit"/> : <SaveIcon />}
+                disabled={!hasSelection || submitting || !paymentMethodId}
+                onClick={handleSubmitRefund}
+            >
+                {submitting ? 'Se procesează...' : 'Confirmă Retur'}
+            </Button>
+        </DialogActions>
       </Box>
     </Dialog>
   );

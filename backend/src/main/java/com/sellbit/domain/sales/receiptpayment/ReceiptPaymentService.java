@@ -54,14 +54,14 @@ public class ReceiptPaymentService {
         BigDecimal remainingToPay = receipt.getTotalAmount().subtract(alreadyPaid);
         BigDecimal amountToRecord = amount;
 
-        if ("CASH".equals(method.getCode())) {
-            // Dacă suma primită e mai mare decât restul, încasăm doar restul (restul
-            // banilor se dau înapoi clientului)
+        if ("CASH".equals(method.getCode()) || "VOUCHER".equals(method.getCode())) {
+            // Pentru CASH: suma primită e mai mare → încasăm doar restul (restul banilor se dau înapoi)
+            // Pentru VOUCHER: voucher mai mare → se consumă doar restul (clientul pierde diferența)
             if (amount.compareTo(remainingToPay) > 0) {
                 amountToRecord = remainingToPay;
             }
         } else {
-            // Pentru CARD/VOUCHER nu permitem depășirea totalului
+            // Pentru CARD/BANK_TRANSFER nu permitem depășirea totalului
             if (amount.compareTo(remainingToPay) > 0) {
                 throw new RuntimeException("ERROR.PAYMENT.EXCEEDS_TOTAL");
             }
@@ -154,6 +154,19 @@ public class ReceiptPaymentService {
 
         if (voucherAmount.compareTo(BigDecimal.ZERO) <= 0) {
             throw new RuntimeException("ERROR.VOUCHER.NO_APPLICABLE_ITEMS");
+        }
+
+        // 4.1. Verificăm cât s-a plătit deja
+        BigDecimal alreadyPaid = receipt.getPayments().stream()
+                .map(ReceiptPayment::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        
+        BigDecimal remainingToPay = receipt.getTotalAmount().subtract(alreadyPaid);
+        
+        // 4.2. Dacă există DEJA plăți pe bon și voucherul nu se poate folosi complet → EROARE
+        // Excepție: Dacă bonul e gol (alreadyPaid == 0), permit voucher mai mare (clientul își asumă pierderea)
+        if (alreadyPaid.compareTo(BigDecimal.ZERO) > 0 && voucherAmount.compareTo(remainingToPay) > 0) {
+            throw new RuntimeException("ERROR.VOUCHER.DELETE_PAYMENTS_FIRST");
         }
 
         // 5. Identificăm Metoda de Plată "VOUCHER" din nomenclator

@@ -1,5 +1,6 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { PaymentService } from '../api/PaymentService';
+import { VoucherCampaignService } from '../../../admin/vouchers/api/VoucherCampaignService';
 
 export const usePaymentModal = ({ 
     open, 
@@ -10,8 +11,11 @@ export const usePaymentModal = ({
     onRemovePayment, 
     onCloseReceipt 
 }) => {
+    const voucherBlockKey = `sellbit_blocked_vouchers_${receipt?.id || 'unknown'}`;
+
     // --- STATE ---
     const [amount, setAmount] = useState('');
+    const [voucherPrefix, setVoucherPrefix] = useState('');
     const [voucherCode, setVoucherCode] = useState('');
     const [paymentMethodId, setPaymentMethodId] = useState('');
     
@@ -19,6 +23,7 @@ export const usePaymentModal = ({
     const [lastChange, setLastChange] = useState(0);
 
     const [localPayments, setLocalPayments] = useState([]);
+    const [activePrefixes, setActivePrefixes] = useState([]);
     
     const [isInitialLoading, setIsInitialLoading] = useState(false);
     
@@ -26,6 +31,7 @@ export const usePaymentModal = ({
     const [toastOpen, setToastOpen] = useState(false);
     const [toastMessage, setToastMessage] = useState('');
     const [toastSeverity, setToastSeverity] = useState('success'); 
+    const blockedVoucherCodesRef = useRef(new Set());
 
     // --- FETCHING ---
     const refreshPayments = useCallback(async (showSpinner = false) => {
@@ -41,16 +47,46 @@ export const usePaymentModal = ({
         }
     }, [receipt?.id]);
 
+    // Track cu useRef dacă modalul tocmai s-a deschis (previne loop-uri)
+    const previousOpenRef = useRef(false);
+
     useEffect(() => {
-        if (open) {
+        if (!receipt?.id) return;
+        try {
+            const raw = sessionStorage.getItem(voucherBlockKey);
+            const parsed = raw ? JSON.parse(raw) : [];
+            blockedVoucherCodesRef.current = new Set(Array.isArray(parsed) ? parsed : []);
+        } catch {
+            blockedVoucherCodesRef.current = new Set();
+        }
+    }, [receipt?.id, voucherBlockKey]);
+
+    useEffect(() => {
+        if (open && !previousOpenRef.current) {
+            // Modal tocmai s-a deschis - resetăm totul
             refreshPayments(true);
             setChangeDue(0);
             setLastChange(0);
             setAmount('');
+            setVoucherPrefix('');
             setVoucherCode('');
             setToastOpen(false);
-            setPaymentMethodId(''); 
+            setPaymentMethodId('');
+            
+            // Fetch active prefixes pentru voucher
+            VoucherCampaignService.getActivePrefixes()
+                .then(prefixes => {
+                    setActivePrefixes(prefixes || []);
+                    // Dacă există un singur prefix, selectăm automat
+                    if (prefixes && prefixes.length === 1) {
+                        setVoucherPrefix(prefixes[0]);
+                    }
+                })
+                .catch(err => console.error('Eroare la încărcarea prefixelor:', err));
         }
+        
+        // Salvăm starea curentă pentru următorul render
+        previousOpenRef.current = open;
     }, [open, refreshPayments]);
 
     // --- CALCULATE ---
@@ -66,6 +102,13 @@ export const usePaymentModal = ({
     [paymentMethods, paymentMethodId]);
 
     const isVoucher = selectedMethod?.code === 'VOUCHER';
+
+    // Auto-selectează prefixul când user selectează metoda VOUCHER și există un singur prefix
+    useEffect(() => {
+        if (isVoucher && activePrefixes.length === 1 && !voucherPrefix) {
+            setVoucherPrefix(activePrefixes[0]);
+        }
+    }, [isVoucher, activePrefixes, voucherPrefix]);
 
     // Auto-fill Sumă
     useEffect(() => {
@@ -110,13 +153,31 @@ export const usePaymentModal = ({
         if (!paymentMethodId) { showToast("Te rog selectează metoda de plată!", "warning"); return; }
 
         if (isVoucher) {
-            if (!voucherCode) return;
-            await onApplyVoucher(voucherCode);
-            setVoucherCode('');
-            setPaymentMethodId('');
-            refreshPayments(false); 
-            // Aici poți lăsa mesajul dacă vrei confirmare specifică pt voucher, sau îl scoți și pe ăsta
-            showToast("Voucher aplicat cu succes.", "success");
+            if (!voucherPrefix || !voucherCode) return;
+            
+            // Combinăm prefix + cod
+            const fullVoucherCode = `${voucherPrefix}-${voucherCode}`;
+            const normalizedCode = fullVoucherCode.trim().toUpperCase();
+
+            if (blockedVoucherCodesRef.current.has(normalizedCode)) {
+                showToast('Acest voucher a fost deja folosit pe bonul curent și nu poate fi reaplicat.', 'warning');
+                return;
+            }
+            
+            try {
+                await onApplyVoucher(normalizedCode);
+                blockedVoucherCodesRef.current.add(normalizedCode);
+                sessionStorage.setItem(voucherBlockKey, JSON.stringify(Array.from(blockedVoucherCodesRef.current)));
+                // Doar la SUCCES resetăm câmpurile
+                setVoucherPrefix('');
+                setVoucherCode('');
+                setPaymentMethodId('');
+                refreshPayments(false);
+            } catch (err) {
+                // La EROARE nu resetăm nimic - utilizatorul poate corecta codul
+                console.error('Eroare aplicare voucher:', err);
+                // Opțional: focus pe câmpul de cod pentru editare rapidă
+            }
             return;
         }
 
@@ -156,7 +217,9 @@ export const usePaymentModal = ({
 
     return {
         amount, setAmount,
+        voucherPrefix, setVoucherPrefix,
         voucherCode, setVoucherCode,
+        activePrefixes,
         paymentMethodId, setPaymentMethodId,
         changeDue,
         lastChange,

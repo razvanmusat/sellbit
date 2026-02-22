@@ -54,6 +54,13 @@ public class VoucherCampaignService {
             if (request.discountValue().compareTo(new java.math.BigDecimal("100")) > 0) {
                 throw new RuntimeException("ERROR.VOUCHER_CAMPAIGN.PERCENT_OVER_100");
             }
+            // Pentru discount PERCENT, maxDiscountAmount este obligatoriu
+            if (request.maxDiscountAmount() == null) {
+                throw new RuntimeException("ERROR.VOUCHER_CAMPAIGN.MAX_DISCOUNT_REQUIRED");
+            }
+            if (request.maxDiscountAmount().compareTo(java.math.BigDecimal.ZERO) <= 0) {
+                throw new RuntimeException("ERROR.VOUCHER_CAMPAIGN.MAX_DISCOUNT_POSITIVE");
+            }
         }
 
         String finalPrefix = request.prefix() != null ? request.prefix() : "JOACA-";
@@ -69,6 +76,7 @@ public class VoucherCampaignService {
                 .validUntilDate(request.validUntilDate())
                 .discountType(request.discountType())
                 .discountValue(request.discountValue())
+                .maxDiscountAmount(request.maxDiscountAmount())
                 .minAmount(request.minAmount())
                 .minHoursPlayed(request.minHoursPlayed())
                 .requiredProductId(request.requiredProductId())
@@ -116,6 +124,13 @@ public class VoucherCampaignService {
             if (request.discountValue().compareTo(new java.math.BigDecimal("100")) > 0) {
                 throw new RuntimeException("ERROR.VOUCHER_CAMPAIGN.PERCENT_OVER_100");
             }
+            // Pentru discount PERCENT, maxDiscountAmount este obligatoriu
+            if (request.maxDiscountAmount() == null) {
+                throw new RuntimeException("ERROR.VOUCHER_CAMPAIGN.MAX_DISCOUNT_REQUIRED");
+            }
+            if (request.maxDiscountAmount().compareTo(java.math.BigDecimal.ZERO) <= 0) {
+                throw new RuntimeException("ERROR.VOUCHER_CAMPAIGN.MAX_DISCOUNT_POSITIVE");
+            }
         }
 
         String finalPrefix = request.prefix() != null ? request.prefix() : "JOACA-";
@@ -129,6 +144,7 @@ public class VoucherCampaignService {
         campaign.setValidUntilDate(request.validUntilDate());
         campaign.setDiscountType(request.discountType());
         campaign.setDiscountValue(request.discountValue());
+        campaign.setMaxDiscountAmount(request.maxDiscountAmount());
         campaign.setMinAmount(request.minAmount());
         campaign.setMinHoursPlayed(request.minHoursPlayed());
         campaign.setRequiredProductId(request.requiredProductId());
@@ -196,6 +212,7 @@ public class VoucherCampaignService {
                 c.getActive(),
                 c.getDiscountType(),
                 c.getDiscountValue(),
+                c.getMaxDiscountAmount(),
                 c.getMinAmount(),
                 c.getMinHoursPlayed(),
                 c.getApplicableDays(),

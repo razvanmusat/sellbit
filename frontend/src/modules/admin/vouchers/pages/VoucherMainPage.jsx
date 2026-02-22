@@ -13,7 +13,6 @@ import {
   Tabs,
   Typography,
 } from '@mui/material';
-import RefreshIcon from '@mui/icons-material/Refresh';
 import { useVoucherMainPage } from '../hooks/useVoucherMainPage';
 import VoucherCampaignFormDialog from '../components/VoucherCampaignFormDialog';
 import CampaignsPage from './CampaignsPage';
@@ -35,7 +34,6 @@ const VoucherMainPage = () => {
     activePrefixes,
     snackbar,
     confirmDialog,
-    refreshCampaigns,
     openCreateCampaign,
     openEditCampaign,
     closeCampaignDialog,
@@ -54,6 +52,7 @@ const VoucherMainPage = () => {
     searchLoading,
     validateVoucherCode,
     requestReactivateVoucherByCode,
+    requestDeactivateVoucherByCode,
     fromDate,
     toDate,
     updateDateRange,
@@ -61,15 +60,11 @@ const VoucherMainPage = () => {
   } = useVoucherMainPage();
 
   return (
-    <Box sx={{ p: 2 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, gap: 2 }}>
-        <Typography variant="h5" fontWeight="bold">Vouchere & Campanii</Typography>
-      </Box>
-
+    <Box>    
       <Tabs
         value={activeTab}
         onChange={(_, value) => setActiveTab(value)}
-        sx={{ mb: 2 }}
+        sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}
       >
         <Tab label="Campanii" value="campaigns" />
         <Tab label="Vouchere emise" value="vouchers" />
@@ -103,6 +98,7 @@ const VoucherMainPage = () => {
           searchResult={searchResult}
           onReactivate={requestReactivateVoucher}
           onReactivateByCode={requestReactivateVoucherByCode}
+          onDeactivateByCode={requestDeactivateVoucherByCode}
           fromDate={fromDate}
           toDate={toDate}
           onDateChange={updateDateRange}
@@ -112,11 +108,14 @@ const VoucherMainPage = () => {
 
       {/* Confirmation Dialog */}
       <Dialog open={confirmDialog.open} onClose={closeConfirmDialog} fullWidth maxWidth="xs">
-        <DialogTitle>Confirmare actiune</DialogTitle>
+        <DialogTitle>Confirmare acțiune</DialogTitle>
         <DialogContent>
           <Typography>
             {(confirmDialog.type === 'reactivate-voucher' || confirmDialog.type === 'reactivate-voucher-code') && (
-              <>Reactivare voucherul {confirmDialog.payload?.code}?</>
+              <>Reactivezi voucherul {confirmDialog.payload?.code}? Folosește această acțiune doar dacă a fost marcat greșit ca utilizat.</>
+            )}
+            {confirmDialog.type === 'deactivate-voucher-code' && (
+              <>Dezactivezi manual voucherul {confirmDialog.payload?.code}? Recomandat în caz de fraudă sau cod compromis.</>
             )}
             {(confirmDialog.type === 'deactivate-campaign' || confirmDialog.type === 'activate-campaign') && (
               <>Schimbi statusul campaniei {confirmDialog.payload?.name}?</>
@@ -125,9 +124,9 @@ const VoucherMainPage = () => {
           <Divider sx={{ mt: 2 }} />
         </DialogContent>
         <DialogActions>
-          <Button onClick={closeConfirmDialog} color="inherit" disabled={saving}>Anuleaza</Button>
+          <Button onClick={closeConfirmDialog} color="inherit" disabled={saving}>Anulează</Button>
           <Button onClick={confirmAction} variant="contained" disabled={saving}>
-            Confirma
+            Confirmă
           </Button>
         </DialogActions>
       </Dialog>

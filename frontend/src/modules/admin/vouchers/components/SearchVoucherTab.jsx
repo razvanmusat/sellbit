@@ -10,6 +10,7 @@ import {
   Typography,
 } from '@mui/material';
 import RestoreIcon from '@mui/icons-material/Restore';
+import BlockIcon from '@mui/icons-material/Block';
 import { getFriendlyErrorMessage } from '../../../../shared/utils/errorHandler';
 
 const formatDateTime = (value) => {
@@ -19,11 +20,30 @@ const formatDateTime = (value) => {
   return date.toLocaleString('ro-RO');
 };
 
+const formatDate = (value) => {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString('ro-RO');
+};
+
 const getDiscountLabel = (type, value) => {
   if (value === null || value === undefined) return '-';
   if (type === 'PERCENT') return `${Number(value).toFixed(2)}%`;
   if (type === 'FREE_HOURS') return `${Number(value)} ore`;
   return `${Number(value).toFixed(2)} lei`;
+};
+
+const getStatusLabel = (status) => {
+  if (status === 'USED') return 'Utilizat';
+  if (status === 'EXPIRED') return 'Expirat';
+  return 'Activ';
+};
+
+const getStatusColor = (status) => {
+  if (status === 'USED') return 'default';
+  if (status === 'EXPIRED') return 'warning';
+  return 'success';
 };
 
 const SearchVoucherTab = ({
@@ -37,6 +57,7 @@ const SearchVoucherTab = ({
   searchResult,
   saving,
   onReactivateByCode,
+  onDeactivateByCode,
 }) => {
   return (
     <>
@@ -82,15 +103,17 @@ const SearchVoucherTab = ({
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
               <Chip label={searchResult.code} />
               <Chip label={getDiscountLabel(searchResult.discountType, searchResult.discountValue)} />
-              <Chip label={`Expira: ${formatDateTime(searchResult.expiresAt)}`} />
+              <Chip label={`Emis: ${formatDateTime(searchResult.createdAt)}`} />
+              {searchResult.usedAt && <Chip label={`Utilizat: ${formatDateTime(searchResult.usedAt)}`} />}
+              <Chip label={`Expira: ${formatDate(searchResult.expiresAt)}`} />
               <Chip
-                color={searchResult.isValid ? 'success' : 'default'}
-                label={searchResult.isValid ? 'Valid' : 'Invalid'}
+                color={getStatusColor(searchResult.status)}
+                label={getStatusLabel(searchResult.status)}
               />
-              {searchResult.errorCode && (
+              {searchResult.errorCode && !['USED', 'EXPIRED'].includes(searchResult.status) && (
                 <Chip color="warning" label={getFriendlyErrorMessage(searchResult.errorCode)} />
               )}
-              {searchResult.errorCode?.includes('ALREADY_USED') && (
+              {searchResult.status === 'USED' && (
                 <Button
                   size="small"
                   variant="outlined"
@@ -98,7 +121,19 @@ const SearchVoucherTab = ({
                   onClick={() => onReactivateByCode(searchResult.code)}
                   disabled={saving}
                 >
-                  Reactiveaza
+                  Reactivează
+                </Button>
+              )}
+              {searchResult.status === 'AVAILABLE' && (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  color="warning"
+                  startIcon={<BlockIcon />}
+                  onClick={() => onDeactivateByCode(searchResult.code)}
+                  disabled={saving}
+                >
+                  Dezactivează
                 </Button>
               )}
             </Box>

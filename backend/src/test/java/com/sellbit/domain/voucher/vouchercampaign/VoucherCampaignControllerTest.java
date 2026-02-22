@@ -47,9 +47,60 @@ class VoucherCampaignControllerTest {
         
         mockMvc.perform(post("/api/voucher/voucher-campaigns")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"name\":\"Test\"}"))
+                                .content("""
+                                                {
+                                                    "name": "Test",
+                                                    "validFromDate": "2026-02-01",
+                                                    "validUntilDate": "2026-03-01",
+                                                    "discountType": "FIXED",
+                                                    "discountValue": 10.00,
+                                                    "maxDiscountAmount": 50.00,
+                                                    "minAmount": 50.00,
+                                                    "validDays": 30
+                                                }
+                                                """))
                 .andExpect(status().isOk());
     }
+
+            @Test
+            @DisplayName("POST /api/voucher/voucher-campaigns - Payload invalid => 400")
+            void create_Endpoint_InvalidPayload_ReturnsBadRequest() throws Exception {
+            mockMvc.perform(post("/api/voucher/voucher-campaigns")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                                            "name": "Test",
+                                            "validUntilDate": "2026-03-01",
+                                            "discountType": "FIXED",
+                                            "discountValue": 10.00,
+                                            "maxDiscountAmount": 50.00,
+                                            "minAmount": 50.00,
+                                            "validDays": 30
+                    }
+                    """))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.message").value("ERROR.VOUCHER_CAMPAIGN.START_DATE_REQUIRED"));
+            }
+
+                    @Test
+                    @DisplayName("PUT /api/voucher/voucher-campaigns/{id} - Payload invalid => 400")
+                    void update_Endpoint_InvalidPayload_ReturnsBadRequest() throws Exception {
+                    mockMvc.perform(put("/api/voucher/voucher-campaigns/1")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""
+                        {
+                                            "name": "Test",
+                                            "validFromDate": "2026-02-01",
+                                            "validUntilDate": "2026-03-01",
+                                            "discountType": "FIXED",
+                                            "discountValue": 10.00,
+                                            "maxDiscountAmount": 50.00,
+                                            "minAmount": 50.00,
+                                            "validDays": 30
+                        }
+                        """))
+                        .andExpect(status().isOk());
+                    }
 
     // --- getAll ---
     @Test 

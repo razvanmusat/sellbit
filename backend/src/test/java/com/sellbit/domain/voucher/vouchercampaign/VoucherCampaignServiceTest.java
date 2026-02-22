@@ -29,7 +29,8 @@ class VoucherCampaignServiceTest {
     private VoucherCampaignDTOs.Request createValidRequest() {
         return new VoucherCampaignDTOs.Request(
                 "Campanie Vara", LocalDate.now(), LocalDate.now().plusMonths(1),
-                "PERCENT", new BigDecimal("10.00"), new BigDecimal("50.00"),
+                "PERCENT", new BigDecimal("10.00"), new BigDecimal("50.00"), // discountValue, maxDiscountAmount
+                new BigDecimal("50.00"), // minAmount
                 1, // minHoursPlayed
                 1, // requiredProductId (Există în request-ul valid)
                 null, // applicableProductId
@@ -62,7 +63,8 @@ class VoucherCampaignServiceTest {
     void create_InvalidDates_ThrowsException() {
         VoucherCampaignDTOs.Request req = new VoucherCampaignDTOs.Request(
                 "Nume", LocalDate.now().plusDays(10), LocalDate.now(), // End < Start
-                "FIXED", BigDecimal.TEN, BigDecimal.ZERO, 0, null, null, 30, "1", "P", 4, ""
+                "FIXED", BigDecimal.TEN, BigDecimal.valueOf(5), // discountValue, maxDiscountAmount
+                BigDecimal.ZERO, 0, null, null, 30, "1", "P", 4, ""
         );
 
         assertThatThrownBy(() -> service.create(req))
@@ -88,7 +90,8 @@ class VoucherCampaignServiceTest {
         // Creăm un request care are applicableProductId = 99
         VoucherCampaignDTOs.Request req = new VoucherCampaignDTOs.Request(
                 "Nume", LocalDate.now(), LocalDate.now().plusDays(1),
-                "FIXED", BigDecimal.TEN, BigDecimal.ZERO, 0, 
+                "FIXED", BigDecimal.TEN, BigDecimal.valueOf(5), // discountValue, maxDiscountAmount
+                BigDecimal.ZERO, 0, 
                 null, 99, // ID Inexistent
                 30, "1", "P", 4, ""
         );
@@ -105,7 +108,7 @@ class VoucherCampaignServiceTest {
     void create_NegativeDiscount_ThrowsException() {
         VoucherCampaignDTOs.Request req = new VoucherCampaignDTOs.Request(
                 "Nume", LocalDate.now(), LocalDate.now().plusDays(1),
-                "FIXED", new BigDecimal("-5.00"), // Negativ
+                "FIXED", new BigDecimal("-5.00"), BigDecimal.valueOf(5), // discountValue (negativ), maxDiscountAmount
                 BigDecimal.ZERO, 0, null, null, 30, "1", "P", 4, ""
         );
 
@@ -119,7 +122,7 @@ class VoucherCampaignServiceTest {
     void create_PercentOver100_ThrowsException() {
         VoucherCampaignDTOs.Request req = new VoucherCampaignDTOs.Request(
                 "Nume", LocalDate.now(), LocalDate.now().plusDays(1),
-                "PERCENT", new BigDecimal("105.00"), // > 100
+                "PERCENT", new BigDecimal("105.00"), BigDecimal.valueOf(5), // discountValue (>100), maxDiscountAmount
                 BigDecimal.ZERO, 0, null, null, 30, "1", "P", 4, ""
         );
 
@@ -141,6 +144,44 @@ class VoucherCampaignServiceTest {
         assertThatThrownBy(() -> service.create(req))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessage("ERROR.VOUCHER_CAMPAIGN.PREFIX_ALREADY_ACTIVE");
+    }
+
+    @Test
+    @DisplayName("create: Succes FIXED discount fără maxDiscountAmount")
+    void create_FixedDiscount_WithoutMaxDiscountAmount_Success() {
+        // Crează request cu FIXED discount și maxDiscountAmount = null
+        VoucherCampaignDTOs.Request req = new VoucherCampaignDTOs.Request(
+                "Campanie FIXED", LocalDate.now(), LocalDate.now().plusMonths(1),
+                "FIXED", new BigDecimal("50.00"), null, // discountValue=50, maxDiscountAmount=null
+                new BigDecimal("50.00"), 1, 1, null, 30, "12345", "F-", 4, "Template"
+        );
+
+        when(productRepository.existsById(1)).thenReturn(true);
+        when(repository.existsByPrefixAndActiveTrue("F-")).thenReturn(false);
+        when(repository.save(any(VoucherCampaign.class))).thenAnswer(i -> i.getArguments()[0]);
+
+        // Ar trebui să treacă fără eroare (maxDiscountAmount nu e necesar pentru FIXED)
+        var response = service.create(req);
+        assertThat(response.name()).isEqualTo("Campanie FIXED");
+        verify(repository).save(any());
+    }
+
+    @Test
+    @DisplayName("create: Eroare PERCENT discount fără maxDiscountAmount")
+    void create_PercentDiscount_WithoutMaxDiscountAmount_ThrowsException() {
+        // Crează request cu PERCENT discount și maxDiscountAmount = null
+        VoucherCampaignDTOs.Request req = new VoucherCampaignDTOs.Request(
+                "Campanie PERCENT", LocalDate.now(), LocalDate.now().plusMonths(1),
+                "PERCENT", new BigDecimal("10.00"), null, // discountValue=10%, maxDiscountAmount=null
+                new BigDecimal("50.00"), 1, 1, null, 30, "12345", "P-", 4, "Template"
+        );
+
+        when(productRepository.existsById(1)).thenReturn(true);
+
+        // Ar trebui să arunce eroare (maxDiscountAmount e obligatoriu pentru PERCENT)
+        assertThatThrownBy(() -> service.create(req))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("ERROR.VOUCHER_CAMPAIGN.MAX_DISCOUNT_REQUIRED");
     }
 
     // --- 2. getAll ---

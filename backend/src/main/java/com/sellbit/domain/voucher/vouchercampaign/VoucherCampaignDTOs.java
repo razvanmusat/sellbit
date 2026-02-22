@@ -26,6 +26,9 @@ public class VoucherCampaignDTOs {
         @Digits(integer = 8, fraction = 2, message = "ERROR.VOUCHER_CAMPAIGN.INVALID_FORMAT") // Previne overflow DB
         BigDecimal discountValue,
 
+        @Digits(integer = 8, fraction = 2, message = "ERROR.VOUCHER_CAMPAIGN.INVALID_FORMAT")
+        BigDecimal maxDiscountAmount, // Obligatoriu doar pentru discount de tip PERCENT; validare se face in service
+
         @NotNull(message = "ERROR.VOUCHER_CAMPAIGN.MIN_AMOUNT_REQUIRED")
         @DecimalMin(value = "0.0", message = "ERROR.VOUCHER_CAMPAIGN.MIN_AMOUNT_POSITIVE")
         @Digits(integer = 8, fraction = 2)
@@ -64,6 +67,7 @@ public class VoucherCampaignDTOs {
         Boolean active,
         String discountType,
         BigDecimal discountValue,
+        BigDecimal maxDiscountAmount,
         BigDecimal minAmount,
         Integer minHoursPlayed,
         String applicableDays,

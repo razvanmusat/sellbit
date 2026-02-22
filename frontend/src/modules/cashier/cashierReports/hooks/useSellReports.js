@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import dayjs from 'dayjs';
 import { SalesService } from '../../sales/api/SalesService';
 
@@ -7,27 +7,45 @@ export const useSellReports = (warehouseId) => {
   const [receipts, setReceipts] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  
+  // Cache: (warehouseId_YYYY-MM-DD) → receipts
+  const cacheRef = useRef({});
 
-  const fetchReportData = async () => {
-    if (!warehouseId || !selectedDate) return;
+  const fetchReportData = async (dateToFetch, warehouseToFetch) => {
+    if (!warehouseToFetch || !dateToFetch) return;
     
+    const cacheKey = `${warehouseToFetch}_${dateToFetch.format('YYYY-MM-DD')}`;
+    
+    // CHECK CACHE FIRST - BEFORE SETTING LOADING!
+    // Aceasta e diferența care face ca rapoartele să fie instant
+    if (cacheRef.current[cacheKey]) {
+      console.log(`[Cache HIT] ${cacheKey} - instant load`);
+      setReceipts(cacheRef.current[cacheKey]);
+      setLoading(false);
+      setError(null);
+      return; // EXIT EARLY - nu mai facem API call!
+    }
+    
+    // Doar dacă NU avem în cache, atunci setez loading
+    console.log(`[Cache MISS] ${cacheKey} - API call`);
     setLoading(true);
-    setReceipts([]); // Resetare date (UX Consistency)
     setError(null);
 
     try {
-      const start = selectedDate.startOf('day').format('YYYY-MM-DDTHH:mm:ss');
-      const end = selectedDate.endOf('day').format('YYYY-MM-DDTHH:mm:ss');
+      const start = dateToFetch.startOf('day').format('YYYY-MM-DDTHH:mm:ss');
+      const end = dateToFetch.endOf('day').format('YYYY-MM-DDTHH:mm:ss');
 
       const data = await SalesService.getReceiptsReport(
-        warehouseId, 
+        warehouseToFetch, 
         'CLOSED', 
         start, 
         end
       );
       
       // Safety check
-      setReceipts(data || []);
+      const receiptsData = data || [];
+      cacheRef.current[cacheKey] = receiptsData; // Cache pe date + warehouse
+      setReceipts(receiptsData);
       
     } catch (err) {
       console.error("Eroare raport:", err);
@@ -38,7 +56,7 @@ export const useSellReports = (warehouseId) => {
   };
 
   useEffect(() => {
-    fetchReportData();
+    fetchReportData(selectedDate, warehouseId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [warehouseId, selectedDate]);
 

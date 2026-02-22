@@ -64,10 +64,10 @@ export const useCompanySettingsPage = () => {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
-  const save = async () => {
+  const saveAll = async (payload) => {
     setSaving(true);
     try {
-      const saved = await StoreService.saveOrUpdateStore(form);
+      const saved = await StoreService.saveOrUpdateStore(payload);
       setForm(mapStoreToForm(saved));
       setIsConfigured(true);
       setSnackbar({
@@ -75,16 +75,20 @@ export const useCompanySettingsPage = () => {
         severity: 'success',
         message: 'Datele companiei au fost salvate cu succes.',
       });
+      return true;
     } catch (error) {
       setSnackbar({
         open: true,
         severity: 'error',
         message: getFriendlyErrorMessage(error),
       });
+      return false;
     } finally {
       setSaving(false);
     }
   };
+
+  const save = async () => saveAll(form);
 
   const saveField = async (field, value) => {
     setSaving(true);
@@ -125,8 +129,10 @@ export const useCompanySettingsPage = () => {
     isConfigured,
     setField,
     save,
+    saveAll,
     saveField,
     snackbar,
     closeSnackbar,
+    reload: load,
   };
 };

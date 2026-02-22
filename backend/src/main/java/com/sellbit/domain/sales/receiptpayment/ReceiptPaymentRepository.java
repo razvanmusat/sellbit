@@ -13,7 +13,7 @@ import org.springframework.stereotype.Repository;
 public interface ReceiptPaymentRepository extends JpaRepository<ReceiptPayment, Integer> {
 	List<ReceiptPayment> findByReceiptId(Integer receiptId);
 
-	@Query("SELECT COALESCE(SUM(rp.amount), 0) FROM ReceiptPayment rp " +
+	@Query("SELECT COALESCE(SUM(rp.amount * (rp.receipt.totalNet / rp.receipt.totalAmount)), 0) FROM ReceiptPayment rp " +
 			"WHERE rp.paymentMethod.code = 'VOUCHER' " +
 			"AND rp.receipt.status.code = 'CLOSED' " +
 			"AND rp.receipt.closedAt BETWEEN :start AND :end " +

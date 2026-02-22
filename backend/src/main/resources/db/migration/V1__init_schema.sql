@@ -1,5 +1,5 @@
 -------------------------------------------------------------------------------
--- 1. TABELE DE NOMENCLATOR (Fără dependințe)
+-- 1. TABELE DE NOMENCLATOR (Fara dependinte)
 -------------------------------------------------------------------------------
 
 CREATE TABLE store (
@@ -124,7 +124,7 @@ CREATE TABLE playground_reservations (
 CREATE INDEX idx_playground_res_dates ON playground_reservations (start_at, end_at);
 
 -------------------------------------------------------------------------------
--- 2. TABELE CU IERARHIE SAU DEPENDENȚE SIMPLE
+-- 2. TABELE CU IERARHIE SAU DEPENDENTE SIMPLE
 -------------------------------------------------------------------------------
 
 CREATE TABLE categories (
@@ -150,7 +150,7 @@ CREATE TABLE users (
 );
 
 -------------------------------------------------------------------------------
--- 3. PRODUSE ȘI ENTITĂȚI CORE (Inclusiv Rețetar)
+-- 3. PRODUSE SI ENTITATI CORE (Inclusiv Retetar)
 -------------------------------------------------------------------------------
 
 CREATE TABLE products (
@@ -173,7 +173,7 @@ CREATE INDEX idx_products_category ON products(category_id);
 CREATE INDEX idx_products_type ON products(product_type_id);
 CREATE INDEX idx_products_vat ON products(vat_rate_id);
 
--- NOU: Tabela de rețetar (Product Components)
+-- NOU: Tabela de retetar (Product Components)
 CREATE TABLE product_components (
     id SERIAL PRIMARY KEY,
     parent_product_id INTEGER NOT NULL REFERENCES products(id),
@@ -185,7 +185,7 @@ CREATE TABLE product_components (
 );
 
 -------------------------------------------------------------------------------
--- 4. GESTIUNE ȘI CASH
+-- 4. GESTIUNE SI CASH
 -------------------------------------------------------------------------------
 
 CREATE TABLE cash_drawer (
@@ -238,7 +238,7 @@ CREATE TABLE stock_adjustments (
 );
 
 -------------------------------------------------------------------------------
--- 5. TRANZACȚII (BONURI FISCALE)
+-- 5. TRANZACTII (BONURI FISCALE)
 -------------------------------------------------------------------------------
 
 CREATE TABLE receipts (
@@ -281,7 +281,7 @@ CREATE TABLE receipt_payments (
 );
 
 -------------------------------------------------------------------------------
--- 6. VOUCHERE ȘI COMENZI CATERING
+-- 6. VOUCHERE SI COMENZI CATERING
 -------------------------------------------------------------------------------
 
 CREATE TABLE voucher_campaigns (
@@ -292,6 +292,7 @@ CREATE TABLE voucher_campaigns (
     active BOOLEAN DEFAULT TRUE,
     discount_type VARCHAR,
     discount_value DECIMAL(10,2),
+    max_discount_amount DECIMAL(10,2),
     min_hours_played INT,
     min_amount DECIMAL(10,2),
     required_product_id INT,
@@ -315,6 +316,7 @@ CREATE TABLE customer_vouchers (
     issued_receipt_id INT REFERENCES receipts(id) ON DELETE RESTRICT,
     used_receipt_id INT UNIQUE REFERENCES receipts(id) ON DELETE RESTRICT,
     used BOOLEAN DEFAULT FALSE,
+    used_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT NOW()
 );
 
@@ -330,7 +332,7 @@ CREATE TABLE catering_orders (
 );
 
 -------------------------------------------------------------------------------
--- 7. INDEXURI ADIȚIONALE
+-- 7. INDEXURI ADITIONALE
 -------------------------------------------------------------------------------
 CREATE INDEX idx_receipts_warehouse ON receipts(warehouse_id);
 CREATE INDEX idx_receipts_created ON receipts(created_at);

@@ -61,7 +61,10 @@ const OpenedReceiptCard = ({
     setCurrentTab(newValue);
   };
 
-  const items = (receipt.items || []).filter(item => item != null); 
+  const items = (receipt.items || [])
+    .filter(item => item != null)
+    .slice()
+    .sort((a, b) => (a.receiptItemId || 0) - (b.receiptItemId || 0)); 
 
   return (
     <Paper 
@@ -165,7 +168,7 @@ const OpenedReceiptCard = ({
         ) : (
           items.map((item) => (
             <ProductCard
-              key={item.receiptItemId} 
+              key={`${item.receiptItemId}-${item.productId}`} 
               item={item}
               onQuantityChange={(productId, newQuantity) => onUpdateItem(receipt.id, productId, newQuantity)}
               onRemove={() => onRemoveItem(item.receiptItemId)} 

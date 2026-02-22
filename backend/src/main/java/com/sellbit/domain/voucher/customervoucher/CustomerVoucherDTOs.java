@@ -13,6 +13,9 @@ public class CustomerVoucherDTOs {
         String discountType,
         BigDecimal discountValue,
         LocalDateTime expiresAt,
+        LocalDateTime createdAt,
+        LocalDateTime usedAt,
+        String status,
         Boolean isValid,
         String errorCode
     ) {}
@@ -36,7 +39,11 @@ public class CustomerVoucherDTOs {
         String discountType,
         BigDecimal discountValue,
         LocalDateTime expiresAt,
+        String status,
         Boolean used,
-        LocalDateTime createdAt
+        LocalDateTime createdAt,
+        LocalDateTime usedAt,
+        Integer issuedReceiptId,
+        Integer usedReceiptId
     ) {}
 }

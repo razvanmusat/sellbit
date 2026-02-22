@@ -6,6 +6,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -255,6 +256,7 @@ public class ReceiptService {
         // Mapper pentru Response DTO.
         public ReceiptDTOs.Response mapToResponse(Receipt receipt) {
                 List<ReceiptDTOs.ItemResponse> itemDTOs = receipt.getItems().stream()
+                                .sorted(Comparator.comparing(ReceiptItem::getId))
                                 .map(item -> new ReceiptDTOs.ItemResponse(
                                                 item.getId(),
                                                 item.getProduct().getId(),

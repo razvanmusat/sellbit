@@ -7,7 +7,6 @@ import {
   fetchOpenReceipts,
   createNewReceipt,
   fetchActivePaymentMethods,
-  fetchAllActivePaymentMethods,
   registerAdvancePayment,
   addOrUpdateReceiptItem,
   removeReceiptItem,
@@ -19,6 +18,8 @@ import {
   closeReceipt,
   applyVoucherToReceipt
 } from '../state/sellPageSlice';
+
+import { invalidateCache } from '../../cashierReports/store/sellReportsSlice';
 
 // 1. IMPORTĂM UTILITARUL CENTRAL
 import { getFriendlyErrorMessage } from '../../../../shared/utils/errorHandler';
@@ -35,8 +36,6 @@ export const useSellPage = () => {
     receipts,
     receiptsLoading,
     paymentMethods,
-    allPaymentMethods,
-    allPaymentMethodsLoading,
     paymentMethodsLoading,
     warehousesLoading,
     error, // <--- Aceasta este eroarea care vine din Backend (ex: Stoc insuficient)
@@ -82,7 +81,6 @@ export const useSellPage = () => {
   useEffect(() => {
     if (warehouses.length === 0) dispatch(fetchActiveWarehouses());
     dispatch(fetchActivePaymentMethods());
-    dispatch(fetchAllActivePaymentMethods());
     dispatch(fetchCancelReasons());
   }, [dispatch, warehouses.length]);
 
@@ -168,6 +166,8 @@ export const useSellPage = () => {
         if (addPaymentToReceipt.fulfilled.match(result)) {
           dispatch(fetchOpenReceipts(warehouseId));
           showFeedback('Plată adăugată.', 'success');
+        } else if (addPaymentToReceipt.rejected.match(result)) {
+          throw new Error(result.payload || 'Eroare la adăugarea plății.');
         }
       }
     },
@@ -178,6 +178,8 @@ export const useSellPage = () => {
         if (removePaymentFromReceipt.fulfilled.match(result)) {
           dispatch(fetchOpenReceipts(warehouseId));
           showFeedback('Plata a fost ștearsă.', 'success');
+        } else if (removePaymentFromReceipt.rejected.match(result)) {
+          throw new Error(result.payload || 'Eroare la ștergerea plății.');
         }
       }
     },
@@ -188,6 +190,9 @@ export const useSellPage = () => {
         if (applyVoucherToReceipt.fulfilled.match(result)) {
           dispatch(fetchOpenReceipts(warehouseId));
           showFeedback('Voucher aplicat cu succes!', 'success');
+        } else if (applyVoucherToReceipt.rejected.match(result)) {
+          // La rejected, aruncăm throw pentru ca catch-ul din usePaymentModal să funcționeze
+          throw new Error(result.payload || 'Eroare aplicare voucher');
         }
       }
     },
@@ -196,6 +201,7 @@ export const useSellPage = () => {
       if (receiptId) {
         const result = await dispatch(closeReceipt(receiptId));
         if (closeReceipt.fulfilled.match(result)) {
+          dispatch(invalidateCache());
           toggleModal('addPayment', false);
           showFeedback('Bon închis cu succes!', 'success');
           actions.backToDashboard();
@@ -208,6 +214,7 @@ export const useSellPage = () => {
       if (receiptId) {
         const result = await dispatch(cancelReceipt({ receiptId, reasonId }));
         if (cancelReceipt.fulfilled.match(result)) {
+          dispatch(invalidateCache());
           toggleModal('cancel', false);
           showFeedback('Bonul a fost anulat cu succes.', 'success');
           actions.backToDashboard();
@@ -228,7 +235,6 @@ export const useSellPage = () => {
     receipts,
     editingReceipt,
     paymentMethods,
-    allPaymentMethods,
     cancelReasons,
     user,
     
@@ -236,7 +242,6 @@ export const useSellPage = () => {
     loading: {
       receipts: receiptsLoading,
       paymentMethods: paymentMethodsLoading,
-      allPaymentMethods: allPaymentMethodsLoading,
       cancelReasons: cancelReasonsLoading,
       warehouses: warehousesLoading
     },

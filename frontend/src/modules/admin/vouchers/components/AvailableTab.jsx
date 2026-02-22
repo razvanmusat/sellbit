@@ -21,6 +21,13 @@ const formatDateTime = (value) => {
   return date.toLocaleString('ro-RO');
 };
 
+const formatDate = (value) => {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString('ro-RO');
+};
+
 const getDiscountLabel = (type, value) => {
   if (value === null || value === undefined) return '-';
   if (type === 'PERCENT') return `${Number(value).toFixed(2)}%`;
@@ -31,18 +38,16 @@ const getDiscountLabel = (type, value) => {
 const AvailableTab = ({
   vouchersLoading,
   vouchers,
-  saving,
-  onReactivate,
 }) => {
-  // Grupez vouchere pe zile de expirare
+  // Grupez vouchere pe zile de emitere
   const groupedByDay = useMemo(() => {
     if (!vouchers.length) return [];
     
     const groups = {};
     vouchers.forEach((voucher) => {
-      const expiryDate = voucher.expiresAt ? new Date(voucher.expiresAt) : null;
-      const dayKey = expiryDate 
-        ? dayjs(expiryDate).format('YYYY-MM-DD')
+      const createdDate = voucher.createdAt ? new Date(voucher.createdAt) : null;
+      const dayKey = createdDate
+        ? dayjs(createdDate).format('YYYY-MM-DD')
         : 'fara-data';
       
       if (!groups[dayKey]) {
@@ -73,7 +78,7 @@ const AvailableTab = ({
     return (
       <Paper variant="outlined" sx={{ p: 3, textAlign: 'center' }}>
         <Typography variant="body2" color="text.secondary">
-          Nu exista vouchere disponibile.
+          Nu exista vouchere active.
         </Typography>
       </Paper>
     );
@@ -114,7 +119,8 @@ const AvailableTab = ({
                       </Stack>
                       <Stack direction="row" spacing={1} sx={{ mt: 0.5 }}>
                         <Chip size="small" label={getDiscountLabel(voucher.discountType, voucher.discountValue)} />
-                        <Chip size="small" label={`Expira: ${formatDateTime(voucher.expiresAt)}`} />
+                        <Chip size="small" label={`Emis: ${formatDateTime(voucher.createdAt)}`} />
+                        <Chip size="small" label={`Expira: ${formatDate(voucher.expiresAt)}`} />
                       </Stack>
                     </Box>
                   </Box>

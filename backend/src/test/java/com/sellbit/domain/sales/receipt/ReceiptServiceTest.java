@@ -353,22 +353,22 @@ class ReceiptServiceTest {
     }
 
     @Test
-    @DisplayName("getGrossProfitReport - Succes: Net 200 - Purchase 80 - Voucher 20 = Profit 100")
+    @DisplayName("getGrossProfitReport - Succes: Net 200 - Purchase 80 - Voucher 20 (16.53 NET) = Profit 103.47")
     void getGrossProfitReport_Success_WithVoucher() {
         LocalDateTime start = LocalDateTime.now().minusDays(7);
         LocalDateTime end = LocalDateTime.now();
         Integer warehouseId = 2;
         
-        // Scenario: Net=200, Purchase=80, Voucher=20 => Profit=100
+        // Scenario: Net=200, Purchase=80, Voucher=20 brut (16.53 net cu TVA 21%) => Profit=103.47
         // itemRepository.calculateTotalProfit = 200 - 80 = 120
-        // paymentRepository.getTotalVoucherDiscounts = 20
-        // Result = 120 - 20 = 100
+        // paymentRepository.getTotalVoucherDiscounts = 16.53 (voucher cu proportie NET aplicata)
+        // Result = 120 - 16.53 = 103.47
         when(itemRepository.calculateTotalProfit(start, end, warehouseId)).thenReturn(new BigDecimal("120.00"));
-        when(paymentRepository.getTotalVoucherDiscounts(start, end, warehouseId)).thenReturn(new BigDecimal("20.00"));
+        when(paymentRepository.getTotalVoucherDiscounts(start, end, warehouseId)).thenReturn(new BigDecimal("16.53"));
         
         BigDecimal profit = receiptService.getGrossProfitReport(start, end, warehouseId);
         
-        assertEquals(0, new BigDecimal("100.00").compareTo(profit));
+        assertEquals(0, new BigDecimal("103.47").compareTo(profit));
     }
 
     @Test
@@ -411,32 +411,32 @@ class ReceiptServiceTest {
         LocalDateTime end = LocalDateTime.now();
         Integer warehouseId = 3;
         
-        // Scenario: Net=500, Purchase=200, Vouchers=50+30=80 => Profit=220
+        // Scenario: Net=500, Purchase=200, Vouchers=50+30=80 brut (66.12 net cu TVA 21%) => Profit=233.88
         // itemRepository.calculateTotalProfit = 500 - 200 = 300
-        // paymentRepository.getTotalVoucherDiscounts = 80 (suma voucher-elor)
-        // Result = 300 - 80 = 220
+        // paymentRepository.getTotalVoucherDiscounts = 66.12 (suma voucher-elor cu proportie NET aplicata)
+        // Result = 300 - 66.12 = 233.88
         when(itemRepository.calculateTotalProfit(start, end, warehouseId)).thenReturn(new BigDecimal("300.00"));
-        when(paymentRepository.getTotalVoucherDiscounts(start, end, warehouseId)).thenReturn(new BigDecimal("80.00"));
+        when(paymentRepository.getTotalVoucherDiscounts(start, end, warehouseId)).thenReturn(new BigDecimal("66.12"));
         
         BigDecimal profit = receiptService.getGrossProfitReport(start, end, warehouseId);
         
-        assertEquals(0, new BigDecimal("220.00").compareTo(profit));
+        assertEquals(0, new BigDecimal("233.88").compareTo(profit));
     }
 
     @Test
-    @DisplayName("getGrossProfitReport - Succes: High Volume (Net 5000 - Purchase 2000 - Voucher 500 = Profit 2500)")
+    @DisplayName("getGrossProfitReport - Succes: High Volume (Net 5000 - Purchase 2000 - Voucher 500 brut = Profit 2586.78)")
     void getGrossProfitReport_Success_HighVolume() {
         LocalDateTime start = LocalDateTime.now().minusDays(365);
         LocalDateTime end = LocalDateTime.now();
         Integer warehouseId = 1;
         
-        // Scenario realista: Vanzari 5000, Achizitii 2000, Vouchere 500 => Profit 2500
+        // Scenario realista: Vanzari 5000, Achizitii 2000, Vouchere 500 brut (413.22 net cu TVA 21%) => Profit 2586.78
         when(itemRepository.calculateTotalProfit(start, end, warehouseId)).thenReturn(new BigDecimal("3000.00"));
-        when(paymentRepository.getTotalVoucherDiscounts(start, end, warehouseId)).thenReturn(new BigDecimal("500.00"));
+        when(paymentRepository.getTotalVoucherDiscounts(start, end, warehouseId)).thenReturn(new BigDecimal("413.22"));
         
         BigDecimal profit = receiptService.getGrossProfitReport(start, end, warehouseId);
         
-        assertEquals(0, new BigDecimal("2500.00").compareTo(profit));
+        assertEquals(0, new BigDecimal("2586.78").compareTo(profit));
     }
     
     // --- 8. getActiveReceipts ---

@@ -30,7 +30,7 @@ public class CustomerVoucherController {
     @PreAuthorize("hasAnyAuthority('50', '100')")
     @PostMapping("/consume")
     public ResponseEntity<Void> consume(@RequestBody CustomerVoucherDTOs.ConsumeRequest request) {
-        customerVoucherService.consumeVoucher(request.code(), null);
+        customerVoucherService.consumeVoucher(request.code(), request.receiptId());
         return ResponseEntity.ok().build();
     }
 

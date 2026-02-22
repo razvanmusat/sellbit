@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useMemo } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
 import {
   Box, Paper, Typography, Card, CardContent,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-  LinearProgress, Chip, Stack, Alert
+  Chip, Stack, Alert
 } from '@mui/material';
 
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
@@ -18,8 +19,8 @@ import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import CardGiftcardIcon from '@mui/icons-material/CardGiftcard';
 import EventIcon from '@mui/icons-material/Event';
 
-// Hook
-import { useSellReports } from '../hooks/useSellReports';
+// Redux
+import { fetchSellReports, invalidateCache } from '../store/sellReportsSlice';
 
 const METHOD_CONFIG = {
     CASH: { label: 'Numerar', icon: <AttachMoneyIcon />, color: '#2e7d32', bg: '#e8f5e9' },
@@ -30,19 +31,59 @@ const METHOD_CONFIG = {
 };
 
 const SellReports = ({ warehouseId, warehouseName }) => {
-  const {
-    selectedDate,
-    setSelectedDate,
-    receipts,
-    loading,
-    error,
-    totals
-  } = useSellReports(warehouseId);
+  const dispatch = useDispatch();
+  const [selectedDate, setSelectedDate] = React.useState(dayjs());
+  
+  // Redux state
+  const { receipts, loading, error } = useSelector((state) => state.sellReports);
+  
+  // Track cache status pentru a detecta invalidation
+  const [cacheVersion, setCacheVersion] = React.useState(0);
+  
+  // Ascultă la invalidateCache prin pollingul Redux state
+  const cached = useSelector((state) => state.sellReports?.cached || {});
+  React.useEffect(() => {
+    // Cand cached object se schimbă (ex: invalidateCache a șters keys), refetch
+    setCacheVersion(prev => prev + 1);
+  }, [cached]);
+
+  // Dispatch fetch cand se schimbă date, warehouse SAU cand cache e invalidat
+  React.useEffect(() => {
+    if (warehouseId) {
+      dispatch(fetchSellReports({ warehouseId, date: selectedDate }));
+    }
+  }, [warehouseId, selectedDate, cacheVersion, dispatch]);
 
   // --- STILURI IDENTICE CU REFUND PAGE ---
   // Acestea asigură că rândurile sunt mici și compacte
   const compactCellStyle = { padding: '4px 8px', width: '1%', whiteSpace: 'nowrap' };
   const fluidCellStyle = { padding: '4px 8px', width: 'auto' };
+
+  // Calculate totals din receipts
+  const totals = useMemo(() => {
+    const stats = {
+      CASH: 0, CARD: 0, VOUCHER: 0, BANK_TRANSFER: 0, ADVANCE: 0,
+      grandTotal: 0
+    };
+
+    const REAL_MONEY_METHODS = ['CASH', 'CARD', 'BANK_TRANSFER'];
+
+    receipts.forEach(receipt => {
+      if (receipt.payments) {
+        receipt.payments.forEach(payment => {
+          if (stats.hasOwnProperty(payment.methodCode)) {
+             stats[payment.methodCode] += payment.amount;
+             
+             // Adunăm la grandTotal doar dacă este metodă de încasare reală
+             if (REAL_MONEY_METHODS.includes(payment.methodCode)) {
+                stats.grandTotal += payment.amount;
+             }
+          }
+        });
+      }
+    });
+    return stats;
+  }, [receipts]);
 
   const MiniStatCard = ({ typeKey, value }) => {
       const config = METHOD_CONFIG[typeKey] || { label: typeKey, color: '#666', icon: null };
@@ -85,13 +126,12 @@ const SellReports = ({ warehouseId, warehouseName }) => {
                         format="DD/MM/YYYY"
                     />
                 </Box>
-                {loading && <LinearProgress sx={{ width: 60, ml: 2, borderRadius: 1 }} />}
 
                 <Box sx={{ flexGrow: 1, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                     <Typography variant="body1" color="text.secondary" mr={1}>
                         Total zi în <b>{warehouseName}</b>:
                     </Typography>
-                    <Typography variant="h5" fontWeight="bold" color="primary.main">
+                    <Typography variant="h5" fontWeight="bold" color="primary.main" sx={{ minWidth: '140px' }}>
                         {totals.grandTotal.toFixed(2)} <span style={{fontSize:'1rem'}}>RON</span>
                     </Typography>
                 </Box>

@@ -2,6 +2,7 @@ package com.sellbit.domain.voucher.customervoucher;
 
 import com.sellbit.domain.catalog.product.Product;
 import com.sellbit.domain.sales.receipt.Receipt;
+import com.sellbit.domain.sales.receipt.ReceiptRepository;
 import com.sellbit.domain.sales.receiptitem.ReceiptItem;
 import com.sellbit.domain.voucher.vouchercampaign.VoucherCampaign;
 import com.sellbit.domain.voucher.vouchercampaign.VoucherCampaignRepository;
@@ -10,7 +11,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.Mockito.*;
 
 import java.math.BigDecimal;
@@ -27,6 +29,7 @@ class CustomerVoucherServiceTest {
 
     @Mock private CustomerVoucherRepository voucherRepository;
     @Mock private VoucherCampaignRepository campaignRepository;
+    @Mock private ReceiptRepository receiptRepository;
     @InjectMocks private CustomerVoucherService voucherService;
 
     // Helper pentru a crea un voucher valid cu campanie atașată (evită NPE)
@@ -37,6 +40,7 @@ class CustomerVoucherServiceTest {
                 .prefix("V")
                 .codeLength(5)
                 .validDays(7)
+                .maxDiscountAmount(new BigDecimal("100.00")) // Setare implicit pentru teste
                 .build();
         return CustomerVoucher.builder()
                 .code(code)
@@ -60,11 +64,11 @@ class CustomerVoucherServiceTest {
 
     // --- 2. getUsedVouchers ---
     @Test void getUsedVouchers_Valid() {
-        when(voucherRepository.findAllByUsedTrue()).thenReturn(List.of(createBaseVoucher("V1")));
+        when(voucherRepository.findAllByUsedTrueOrderByUsedAtDesc()).thenReturn(List.of(createBaseVoucher("V1")));
         assertThat(voucherService.getUsedVouchers()).hasSize(1);
     }
     @Test void getUsedVouchers_Empty() {
-        when(voucherRepository.findAllByUsedTrue()).thenReturn(List.of());
+        when(voucherRepository.findAllByUsedTrueOrderByUsedAtDesc()).thenReturn(List.of());
         assertThat(voucherService.getUsedVouchers()).isEmpty();
     }
 
@@ -115,7 +119,35 @@ class CustomerVoucherServiceTest {
         v.setUsed(true);
         when(voucherRepository.findByCode("C1")).thenReturn(Optional.of(v));
         assertThatThrownBy(() -> voucherService.consumeVoucher("C1", new Receipt()))
-                .isInstanceOf(RuntimeException.class);
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("ERROR.CUSTOMER_VOUCHER.ALREADY_USED");
+    }
+
+    @Test
+    void consumeVoucher_WithReceiptId_SetsUsedAtFromReceiptClosedAt() {
+        CustomerVoucher v = createBaseVoucher("C1");
+        Receipt receipt = new Receipt();
+        LocalDateTime closedAt = LocalDateTime.now().minusMinutes(5);
+        receipt.setClosedAt(closedAt);
+
+        when(receiptRepository.findById(123)).thenReturn(Optional.of(receipt));
+        when(voucherRepository.findByCode("C1")).thenReturn(Optional.of(v));
+
+        voucherService.consumeVoucher("C1", 123);
+
+        assertThat(v.getUsed()).isTrue();
+        assertThat(v.getUsedReceipt()).isSameAs(receipt);
+        assertThat(v.getUsedAt()).isEqualTo(closedAt);
+        verify(voucherRepository).save(v);
+    }
+
+    @Test
+    void consumeVoucher_WithReceiptId_NotFound_ThrowsException() {
+        when(receiptRepository.findById(999)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> voucherService.consumeVoucher("C1", 999))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("ERROR.RECEIPT.NOT_FOUND");
     }
 
     // --- 6. calculateVoucherValue (FIXED, PERCENT, FREE_HOURS) ---
@@ -169,9 +201,11 @@ class CustomerVoucherServiceTest {
     @Test void cancelVoucherUsage_Success() {
         CustomerVoucher v = createBaseVoucher("C1");
         v.setUsed(true);
+        v.setUsedAt(LocalDateTime.now());
         when(voucherRepository.findByUsedReceiptId(100)).thenReturn(Optional.of(v));
         voucherService.cancelVoucherUsage(100);
         assertThat(v.getUsed()).isFalse();
+        assertThat(v.getUsedAt()).isNull();
         verify(voucherRepository).save(v);
     }
     @Test void cancelVoucherUsage_NoVoucher_DoesNothing() {
@@ -197,6 +231,7 @@ class CustomerVoucherServiceTest {
         // THEN
         assertFalse(voucher.getUsed());
         assertNull(voucher.getUsedReceipt());
+        assertNull(voucher.getUsedAt());
         verify(voucherRepository).save(voucher);
     }
 
@@ -210,6 +245,8 @@ class CustomerVoucherServiceTest {
         when(voucherRepository.findByCode(code)).thenReturn(Optional.of(voucher));
 
         // WHEN & THEN
-        assertThrows(RuntimeException.class, () -> voucherService.reactivateVoucherByCode(code));
+        assertThatThrownBy(() -> voucherService.reactivateVoucherByCode(code))
+            .isInstanceOf(RuntimeException.class)
+            .hasMessage("ERROR.VOUCHER.ALREADY_ACTIVE");
     }
 }

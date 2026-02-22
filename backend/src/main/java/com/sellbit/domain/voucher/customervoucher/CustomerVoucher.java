@@ -46,6 +46,9 @@ public class CustomerVoucher {
     @JoinColumn(name = "used_receipt_id", unique = true)
     private Receipt usedReceipt;
 
+    @Column(name = "used_at")
+    private LocalDateTime usedAt;
+
     @Builder.Default
     @Column(nullable = false)
     private Boolean used = false;

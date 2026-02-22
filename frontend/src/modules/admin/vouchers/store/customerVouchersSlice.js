@@ -32,24 +32,12 @@ const initialState = {
   loadingUsed: false,
   errorAvailable: null,
   errorUsed: null,
-  lastFetchParams: {
-    availableFromDate: null,
-    availableToDate: null,
-    usedFromDate: null,
-    usedToDate: null,
-  },
 };
 
 const customerVouchersSlice = createSlice({
   name: 'customerVouchers',
   initialState,
-  reducers: {
-    invalidateVouchers: (state) => {
-      state.available = [];
-      state.used = [];
-      state.lastFetchParams = initialState.lastFetchParams;
-    },
-  },
+  reducers: {},
   extraReducers: (builder) => {
     builder
       .addCase(fetchAvailableVouchers.pending, (state) => {
@@ -59,8 +47,6 @@ const customerVouchersSlice = createSlice({
       .addCase(fetchAvailableVouchers.fulfilled, (state, action) => {
         state.loadingAvailable = false;
         state.available = action.payload;
-        state.lastFetchParams.availableFromDate = action.meta.arg.fromDate;
-        state.lastFetchParams.availableToDate = action.meta.arg.toDate;
       })
       .addCase(fetchAvailableVouchers.rejected, (state, action) => {
         state.loadingAvailable = false;
@@ -73,8 +59,6 @@ const customerVouchersSlice = createSlice({
       .addCase(fetchUsedVouchers.fulfilled, (state, action) => {
         state.loadingUsed = false;
         state.used = action.payload;
-        state.lastFetchParams.usedFromDate = action.meta.arg.fromDate;
-        state.lastFetchParams.usedToDate = action.meta.arg.toDate;
       })
       .addCase(fetchUsedVouchers.rejected, (state, action) => {
         state.loadingUsed = false;
@@ -83,5 +67,4 @@ const customerVouchersSlice = createSlice({
   },
 });
 
-export const { invalidateVouchers } = customerVouchersSlice.actions;
 export default customerVouchersSlice.reducer;

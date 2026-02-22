@@ -41,6 +41,9 @@ public class VoucherCampaign {
     @Column(name = "discount_value", precision = 10, scale = 2)
     private BigDecimal discountValue;
 
+    @Column(name = "max_discount_amount", precision = 10, scale = 2)
+    private BigDecimal maxDiscountAmount; // Nullable; obligatoriu doar pentru PERCENT discount (validare in service)
+
     // --- CONDIȚII EMITERE ---
     @Column(name = "min_hours_played")
     private Integer minHoursPlayed;

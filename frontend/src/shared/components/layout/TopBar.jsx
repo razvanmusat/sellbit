@@ -1,7 +1,7 @@
 import React from 'react';
-import { AppBar, Toolbar, Button, Box, IconButton, Badge } from '@mui/material';
+import { AppBar, Toolbar, Button, Box } from '@mui/material';
 import { useNavigate, useLocation } from 'react-router-dom';
-import NotificationsIcon from '@mui/icons-material/Notifications';
+import AlertsContainer from '../alerts/AlertsContainer';
 
 import PointOfSaleIcon from '@mui/icons-material/PointOfSale';
 import LocalAtmIcon from '@mui/icons-material/LocalAtm';
@@ -20,8 +20,6 @@ const MENU_ITEMS = [
 const TopBar = () => {
   const navigate = useNavigate();
   const location = useLocation();
-
-  const notificationCount = 2; 
 
   return (
     <AppBar position="static" color="primary" elevation={2}>
@@ -58,14 +56,8 @@ const TopBar = () => {
           })}
         </Box>
 
-        {/* Zona de Notificări */}
-        <Box>
-          <IconButton color="inherit">
-            <Badge badgeContent={notificationCount} color="error">
-              <NotificationsIcon />
-            </Badge>
-          </IconButton>
-        </Box>
+        {/* Zona de Alerte */}
+        <AlertsContainer />
       </Toolbar>
     </AppBar>
   );

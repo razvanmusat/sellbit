@@ -1,10 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useDispatch, useSelector } from 'react-redux';
-import { getFriendlyErrorMessage } from '../../../../shared/utils/errorHandler';
-import { VoucherCampaignService } from '../api/VoucherCampaignService';
-import { CustomerVoucherService } from '../api/CustomerVoucherService';
-import { fetchAvailableVouchers, fetchUsedVouchers, invalidateVouchers } from '../store/customerVouchersSlice';
+import { useCampaignManagement } from './useCampaignManagement';
+import { useVoucherFilters } from './useVoucherFilters';
+import { useVoucherSearch } from './useVoucherSearch';
 
 const INITIAL_CAMPAIGN_FORM = {
   id: null,
@@ -13,6 +11,7 @@ const INITIAL_CAMPAIGN_FORM = {
   validUntilDate: '',
   discountType: '',
   discountValue: '',
+  maxDiscountAmount: '',
   minAmount: '',
   minHoursPlayed: '',
   requiredProductId: '',
@@ -29,77 +28,22 @@ const INITIAL_CAMPAIGN_FORM = {
   oldValidUntilDate: null,
 };
 
-const parseNumberOrNull = (value) => {
-  if (value === '' || value === null || value === undefined) return null;
-  const parsed = Number(value);
-  return Number.isNaN(parsed) ? null : parsed;
-};
-
-const parseIntOrNull = (value) => {
-  if (value === '' || value === null || value === undefined) return null;
-  const parsed = Number.parseInt(value, 10);
-  return Number.isNaN(parsed) ? null : parsed;
-};
-
 export const useVoucherMainPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const dispatch = useDispatch();
-  const reduxVouchers = useSelector((state) => state.customerVouchers);
-  const { available: reduxAvailable, used: reduxUsed, loadingAvailable, loadingUsed } = reduxVouchers;
-  
-  // Initialize date defaults (1st of current month to today)
-  const getDefaultFromDate = () => {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    return `${year}-${month}-01`;
-  };
-  const getDefaultToDate = () => {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const day = String(today.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
-
-  // Check URL params, fallback to defaults
-  const fromDateParam = searchParams.get('fromDate') || getDefaultFromDate();
-  const toDateParam = searchParams.get('toDate') || getDefaultToDate();
   const tabParam = searchParams.get('tab') || 'campaigns';
-  const filterParam = searchParams.get('filter') || ''; // Empty string means no filter selected
-
   const [activeTab, setActiveTabState] = useState(tabParam);
-  const [campaigns, setCampaigns] = useState([]);
-  const [vouchers, setVouchers] = useState([]);
-  const [campaignsLoading, setCampaignsLoading] = useState(true);
-  const [vouchersLoading, setVouchersLoading] = useState(true);
-  const [voucherFilter, setVoucherFilterState] = useState(filterParam);
-  const [fromDate, setFromDate] = useState(fromDateParam);
-  const [toDate, setToDate] = useState(toDateParam);
+
+  const campaigns = useCampaignManagement();
+  const voucherFilters = useVoucherFilters();
+  const voucherSearch = useVoucherSearch();
+
   const [saving, setSaving] = useState(false);
   const [openCampaignDialog, setOpenCampaignDialog] = useState(false);
   const [campaignForm, setCampaignForm] = useState(INITIAL_CAMPAIGN_FORM);
   const [activePrefixes, setActivePrefixes] = useState([]);
   const [snackbar, setSnackbar] = useState({ open: false, severity: 'success', message: '' });
   const [confirmDialog, setConfirmDialog] = useState({ open: false, type: null, payload: null });
-  const [searchPrefix, setSearchPrefix] = useState('');
-  const [searchCode, setSearchCode] = useState('');
-  const [searchResult, setSearchResult] = useState(null);
-  const [searchLoading, setSearchLoading] = useState(false);
 
-  // Sync date changes to URL
-  const updateDateRange = useCallback((newFromDate, newToDate) => {
-    setFromDate(newFromDate);
-    setToDate(newToDate);
-    setSearchParams((prev) => {
-      const newParams = new URLSearchParams(prev);
-      newParams.set('fromDate', newFromDate);
-      newParams.set('toDate', newToDate);
-      return newParams;
-    });
-  }, [setSearchParams]);
-
-  // Sync tab changes to URL
   const setActiveTab = useCallback((newTab) => {
     setActiveTabState(newTab);
     setSearchParams((prev) => {
@@ -109,147 +53,31 @@ export const useVoucherMainPage = () => {
     });
   }, [setSearchParams]);
 
-  // Sync filter changes to URL
-  const setVoucherFilter = useCallback((newFilter) => {
-    setVoucherFilterState(newFilter);
-    setSearchParams((prev) => {
-      const newParams = new URLSearchParams(prev);
-      newParams.set('filter', newFilter);
-      // Remove date params when switching to search tab
-      if (newFilter === 'search') {
-        newParams.delete('fromDate');
-        newParams.delete('toDate');
-      }
-      return newParams;
-    });
-  }, [setSearchParams]);
-
-  // Sync URL params on mount if not already set
   useEffect(() => {
-    // Only add date params if we're on the vouchers tab
-    if (tabParam === 'vouchers') {
-      const hasDateParams = searchParams.has('fromDate') && searchParams.has('toDate');
-      if (!hasDateParams) {
-        setSearchParams((prev) => {
-          const newParams = new URLSearchParams(prev);
-          newParams.set('fromDate', getDefaultFromDate());
-          newParams.set('toDate', getDefaultToDate());
-          return newParams;
-        });
-      }
-    }
+    campaigns.loadCampaigns();
   }, []);
 
-  // Preload available vouchers when entering vouchers tab (with defaults)
   useEffect(() => {
-    if (activeTab === 'vouchers' && fromDate && toDate) {
-      // Check if we already have available vouchers cached with current date range
-      const isCached = 
-        reduxVouchers.lastFetchParams.availableFromDate === fromDate &&
-        reduxVouchers.lastFetchParams.availableToDate === toDate;
-      if (!isCached) {
-        dispatch(fetchAvailableVouchers({ fromDate, toDate }));
-      }
+    if (voucherFilters.filter === 'search') {
+      voucherSearch.clearResult();
+      loadActivePrefixes();
     }
-  }, [activeTab, fromDate, toDate, dispatch, reduxVouchers.lastFetchParams]);
+  }, [voucherFilters.filter]);
 
-  // Preload used vouchers when entering vouchers tab (with defaults)
-  useEffect(() => {
-    if (activeTab === 'vouchers' && fromDate && toDate) {
-      // Check if we already have used vouchers cached with current date range
-      const isCached = 
-        reduxVouchers.lastFetchParams.usedFromDate === fromDate &&
-        reduxVouchers.lastFetchParams.usedToDate === toDate;
-      if (!isCached) {
-        dispatch(fetchUsedVouchers({ fromDate, toDate }));
-      }
+  const loadActivePrefixes = async () => {
+    const prefixes = await campaigns.getActivePrefixes();
+    setActivePrefixes(prefixes);
+    if (prefixes.length === 1) {
+      voucherSearch.setPrefix(prefixes[0]);
     }
-  }, [activeTab, fromDate, toDate, dispatch, reduxVouchers.lastFetchParams]);
-
-  // Cleanup: invalidate vouchers when leaving the vouchers tab
-  useEffect(() => {
-    return () => {
-      if (activeTab !== 'vouchers') {
-        dispatch(invalidateVouchers());
-      }
-    };
-  }, [activeTab, dispatch]);
-
-  // Load vouchers in background when filter changes (only if parameters changed)
-  useEffect(() => {
-    if (voucherFilter === 'available' && fromDate && toDate) {
-      // Check if we already have these params cached
-      const isCached = 
-        reduxVouchers.lastFetchParams.availableFromDate === fromDate &&
-        reduxVouchers.lastFetchParams.availableToDate === toDate;
-      if (!isCached) {
-        dispatch(fetchAvailableVouchers({ fromDate, toDate }));
-      }
-    } else if (voucherFilter === 'used' && fromDate && toDate) {
-      // Check if we already have these params cached
-      const isCached = 
-        reduxVouchers.lastFetchParams.usedFromDate === fromDate &&
-        reduxVouchers.lastFetchParams.usedToDate === toDate;
-      if (!isCached) {
-        dispatch(fetchUsedVouchers({ fromDate, toDate }));
-      }
-    }
-  }, [voucherFilter, fromDate, toDate, dispatch, reduxVouchers.lastFetchParams]);
+  };
 
   const sortedCampaigns = useMemo(() => {
-    return [...campaigns].sort((a, b) => {
+    return [...campaigns.campaigns].sort((a, b) => {
       if (a.active !== b.active) return a.active ? -1 : 1;
       return String(a.name || '').localeCompare(String(b.name || ''));
     });
-  }, [campaigns]);
-
-  const loadCampaigns = useCallback(async () => {
-    setCampaignsLoading(true);
-    try {
-      const data = await VoucherCampaignService.getAll();
-      setCampaigns(data || []);
-    } catch (error) {
-      setSnackbar({ open: true, severity: 'error', message: getFriendlyErrorMessage(error) });
-    } finally {
-      setCampaignsLoading(false);
-    }
-  }, []);
-
-  const loadActivePrefixes = useCallback(async () => {
-    try {
-      const prefixes = await VoucherCampaignService.getActivePrefixes();
-      setActivePrefixes(prefixes || []);
-      if ((prefixes || []).length === 1) {
-        setSearchPrefix(prefixes[0]);
-      }
-    } catch (error) {
-      setActivePrefixes([]);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadCampaigns();
-  }, [loadCampaigns]);
-
-  // Sync Redux vouchers to local state when they change
-  useEffect(() => {
-    if (voucherFilter === 'available') {
-      setVouchers(reduxAvailable);
-    } else if (voucherFilter === 'used') {
-      setVouchers(reduxUsed);
-    }
-  }, [reduxAvailable, reduxUsed, voucherFilter]);
-
-  useEffect(() => {
-    if (voucherFilter === 'search') {
-      loadActivePrefixes();
-      setSearchResult(null);
-    }
-  }, [voucherFilter, loadActivePrefixes]);
-
-  const refreshCampaigns = async () => {
-    await loadCampaigns();
-  };
+  }, [campaigns.campaigns]);
 
   const openCreateCampaign = async () => {
     setCampaignForm(INITIAL_CAMPAIGN_FORM);
@@ -258,7 +86,6 @@ export const useVoucherMainPage = () => {
   };
 
   const openEditCampaign = async (campaign) => {
-    // Detectez daca campania e expirata dar nu dezactivata inca (reactivare)
     const today = new Date().toISOString().split('T')[0];
     const isExpired = campaign.validUntilDate && campaign.validUntilDate < today;
     
@@ -269,6 +96,7 @@ export const useVoucherMainPage = () => {
       validUntilDate: campaign.validUntilDate || '',
       discountType: campaign.discountType || '',
       discountValue: campaign.discountValue ?? '',
+      maxDiscountAmount: campaign.maxDiscountAmount ?? '',
       minAmount: campaign.minAmount ?? '',
       minHoursPlayed: campaign.minHoursPlayed ?? '',
       requiredProductId: campaign.requiredProductId ?? '',
@@ -307,7 +135,6 @@ export const useVoucherMainPage = () => {
       setSnackbar({ open: true, severity: 'warning', message: 'Completeaza intervalul de valabilitate.' });
       return;
     }
-    // Validare reactivare - date trebuie diferite de cea anterioara
     if (campaignForm.isReactivating) {
       if (campaignForm.validFromDate === campaignForm.oldValidFromDate && 
           campaignForm.validUntilDate === campaignForm.oldValidUntilDate) {
@@ -321,6 +148,10 @@ export const useVoucherMainPage = () => {
     }
     if (!campaignForm.discountType || campaignForm.discountValue === '') {
       setSnackbar({ open: true, severity: 'warning', message: 'Completeaza tipul si valoarea discountului.' });
+      return;
+    }
+    if (campaignForm.discountType === 'PERCENT' && campaignForm.maxDiscountAmount === '') {
+      setSnackbar({ open: true, severity: 'warning', message: 'Completeaza suma maxima a discountului pentru discount procentual.' });
       return;
     }
     if (campaignForm.minAmount === '') {
@@ -346,37 +177,16 @@ export const useVoucherMainPage = () => {
 
     setSaving(true);
     try {
-      const payload = {
-        name: campaignForm.name.trim(),
-        validFromDate: campaignForm.validFromDate,
-        validUntilDate: campaignForm.validUntilDate,
-        discountType: campaignForm.discountType,
-        discountValue: parseNumberOrNull(campaignForm.discountValue),
-        minAmount: parseNumberOrNull(campaignForm.minAmount),
-        minHoursPlayed: parseIntOrNull(campaignForm.minHoursPlayed),
-        requiredProductId: parseIntOrNull(campaignForm.requiredProductId),
-        applicableProductId: parseIntOrNull(campaignForm.applicableProductId),
-        validDays: parseIntOrNull(campaignForm.validDays),
-        applicableDays: campaignForm.applicableDays?.trim() || null,
-        prefix: campaignForm.prefix?.trim() ? campaignForm.prefix.trim().toUpperCase() : null,
-        codeLength: parseIntOrNull(campaignForm.codeLength),
-        receiptTemplate: campaignForm.receiptTemplate?.trim() || null,
-      };
-
       if (campaignForm.id) {
-        await VoucherCampaignService.update(campaignForm.id, payload);
+        await campaigns.updateCampaign(campaignForm.id, campaignForm);
+        setSnackbar({ open: true, severity: 'success', message: 'Campania de vouchere a fost actualizata.' });
       } else {
-        await VoucherCampaignService.create(payload);
+        await campaigns.createCampaign(campaignForm);
+        setSnackbar({ open: true, severity: 'success', message: 'Campania de vouchere a fost creata.' });
       }
-      await loadCampaigns();
       closeCampaignDialog();
-      setSnackbar({
-        open: true,
-        severity: 'success',
-        message: campaignForm.id ? 'Campania de vouchere a fost actualizata.' : 'Campania de vouchere a fost creata.',
-      });
     } catch (error) {
-      setSnackbar({ open: true, severity: 'error', message: getFriendlyErrorMessage(error) });
+      setSnackbar({ open: true, severity: 'error', message: error.message });
     } finally {
       setSaving(false);
     }
@@ -391,13 +201,17 @@ export const useVoucherMainPage = () => {
     setConfirmDialog({ open: true, type: 'reactivate-voucher', payload: voucher });
   };
 
+  const requestReactivateVoucherByCode = (code) => {
+    setConfirmDialog({ open: true, type: 'reactivate-voucher-code', payload: { code } });
+  };
+
+  const requestDeactivateVoucherByCode = (code) => {
+    setConfirmDialog({ open: true, type: 'deactivate-voucher-code', payload: { code } });
+  };
+
   const closeConfirmDialog = () => {
     if (saving) return;
     setConfirmDialog({ open: false, type: null, payload: null });
-  };
-
-  const requestReactivateVoucherByCode = (code) => {
-    setConfirmDialog({ open: true, type: 'reactivate-voucher-code', payload: { code } });
   };
 
   const confirmAction = async () => {
@@ -405,26 +219,21 @@ export const useVoucherMainPage = () => {
     setSaving(true);
     try {
       if (confirmDialog.type === 'deactivate-campaign' || confirmDialog.type === 'activate-campaign') {
-        await VoucherCampaignService.toggleStatus(confirmDialog.payload.id);
-        await loadCampaigns();
+        await campaigns.toggleCampaignStatus(confirmDialog.payload.id);
         setSnackbar({ open: true, severity: 'success', message: 'Statusul campaniei a fost actualizat.' });
       }
       if (confirmDialog.type === 'reactivate-voucher' || confirmDialog.type === 'reactivate-voucher-code') {
-        await CustomerVoucherService.reactivate(confirmDialog.payload.code);
-        // Re-fetch vouchers from Redux
-        if (voucherFilter === 'available' && fromDate && toDate) {
-          dispatch(fetchAvailableVouchers({ fromDate, toDate }));
-        } else if (voucherFilter === 'used' && fromDate && toDate) {
-          dispatch(fetchUsedVouchers({ fromDate, toDate }));
-        }
+        await voucherSearch.reactivateVoucher(confirmDialog.payload.code);
+        await voucherFilters.refreshVouchers();
         setSnackbar({ open: true, severity: 'success', message: 'Voucherul a fost reactivat.' });
-        if (confirmDialog.type === 'reactivate-voucher-code') {
-          setSearchResult(null);
-          setSearchCode('');
-        }
+      }
+      if (confirmDialog.type === 'deactivate-voucher-code') {
+        await voucherSearch.deactivateVoucher(confirmDialog.payload.code);
+        await voucherFilters.refreshVouchers();
+        setSnackbar({ open: true, severity: 'success', message: 'Voucherul a fost dezactivat manual.' });
       }
     } catch (error) {
-      setSnackbar({ open: true, severity: 'error', message: getFriendlyErrorMessage(error) });
+      setSnackbar({ open: true, severity: 'error', message: error.message });
     } finally {
       setSaving(false);
       setConfirmDialog({ open: false, type: null, payload: null });
@@ -436,54 +245,35 @@ export const useVoucherMainPage = () => {
   };
 
   const validateVoucherCode = async () => {
-    const suffix = searchCode.trim().toUpperCase();
-    if (!suffix) {
-      setSnackbar({ open: true, severity: 'warning', message: 'Introdu un cod de voucher.' });
-      return;
-    }
-    if (activePrefixes.length > 1 && !searchPrefix) {
-      setSnackbar({ open: true, severity: 'warning', message: 'Selecteaza un prefix de campanie.' });
-      return;
-    }
-
-    const prefixValue = (searchPrefix || '').trim();
-    const normalizedPrefix = prefixValue ? prefixValue.replace(/-+$/g, '') : '';
-    const code = normalizedPrefix ? `${normalizedPrefix}-${suffix}` : suffix;
-    setSearchLoading(true);
     try {
-      const result = await CustomerVoucherService.validate(code);
-      setSearchResult(result || null);
+      await voucherSearch.validateCode(activePrefixes);
     } catch (error) {
-      setSearchResult(null);
-      setSnackbar({ open: true, severity: 'error', message: getFriendlyErrorMessage(error) });
-    } finally {
-      setSearchLoading(false);
+      setSnackbar({ open: true, severity: 'error', message: error.message });
     }
   };
 
   const getDefaultDateRange = useCallback(() => {
     return {
-      fromDate: getDefaultFromDate(),
-      toDate: getDefaultToDate(),
+      fromDate: voucherFilters.getDefaultFromDate(),
+      toDate: voucherFilters.getDefaultToDate(),
     };
   }, []);
 
   return {
     activeTab,
     setActiveTab,
-    campaignsLoading,
-    vouchersLoading: loadingAvailable || loadingUsed,
+    campaignsLoading: campaigns.loading,
+    vouchersLoading: voucherFilters.loading,
     sortedCampaigns,
-    vouchers,
-    voucherFilter,
-    setVoucherFilter,
+    vouchers: voucherFilters.vouchers,
+    voucherFilter: voucherFilters.filter,
+    setVoucherFilter: voucherFilters.setFilter,
     saving,
     openCampaignDialog,
     campaignForm,
     activePrefixes,
     snackbar,
     confirmDialog,
-    refreshCampaigns,
     openCreateCampaign,
     openEditCampaign,
     closeCampaignDialog,
@@ -494,17 +284,18 @@ export const useVoucherMainPage = () => {
     closeConfirmDialog,
     confirmAction,
     closeSnackbar,
-    searchPrefix,
-    setSearchPrefix,
-    searchCode,
-    setSearchCode,
-    searchResult,
-    searchLoading,
+    searchPrefix: voucherSearch.prefix,
+    setSearchPrefix: voucherSearch.setPrefix,
+    searchCode: voucherSearch.code,
+    setSearchCode: voucherSearch.setCode,
+    searchResult: voucherSearch.result,
+    searchLoading: voucherSearch.loading,
     validateVoucherCode,
     requestReactivateVoucherByCode,
-    fromDate,
-    toDate,
-    updateDateRange,
+    requestDeactivateVoucherByCode,
+    fromDate: voucherFilters.fromDate,
+    toDate: voucherFilters.toDate,
+    updateDateRange: voucherFilters.updateDateRange,
     getDefaultDateRange,
   };
 };

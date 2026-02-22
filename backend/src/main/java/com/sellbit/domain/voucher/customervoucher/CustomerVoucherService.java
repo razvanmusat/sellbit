@@ -1,6 +1,7 @@
 package com.sellbit.domain.voucher.customervoucher;
 
 import com.sellbit.domain.sales.receipt.Receipt;
+import com.sellbit.domain.sales.receipt.ReceiptRepository;
 import com.sellbit.domain.sales.receiptitem.ReceiptItem;
 import com.sellbit.domain.voucher.vouchercampaign.VoucherCampaign;
 import com.sellbit.domain.voucher.vouchercampaign.VoucherCampaignRepository;
@@ -22,6 +23,7 @@ public class CustomerVoucherService {
 
     private final CustomerVoucherRepository voucherRepository;
     private final VoucherCampaignRepository campaignRepository;
+    private final ReceiptRepository receiptRepository;
     
     private static final String CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     private final SecureRandom random = new SecureRandom();
@@ -37,7 +39,7 @@ public class CustomerVoucherService {
 
     @Transactional(readOnly = true)
     public List<CustomerVoucherDTOs.SummaryResponse> getUsedVouchers() {
-        return voucherRepository.findAllByUsedTrue().stream()
+        return voucherRepository.findAllByUsedTrueOrderByUsedAtDesc().stream()
                 .map(this::mapToSummary)
                 .collect(Collectors.toList());
     }
@@ -92,9 +94,22 @@ public class CustomerVoucherService {
                 voucher.getDiscountType(),
                 voucher.getDiscountValue(),
                 voucher.getExpiresAt(),
+                voucher.getCreatedAt(),
+            resolveUsedAt(voucher),
+                getStatus(voucher),
                 isValid,
                 errorCode
         );
+    }
+
+    @Transactional
+    public void consumeVoucher(String code, Integer receiptId) {
+        Receipt receipt = null;
+        if (receiptId != null) {
+            receipt = receiptRepository.findById(receiptId)
+                    .orElseThrow(() -> new RuntimeException("ERROR.RECEIPT.NOT_FOUND"));
+        }
+        consumeVoucher(code, receipt);
     }
 
     @Transactional
@@ -111,6 +126,7 @@ public class CustomerVoucherService {
 
         voucher.setUsed(true);
         voucher.setUsedReceipt(receipt);
+        voucher.setUsedAt(receipt != null && receipt.getClosedAt() != null ? receipt.getClosedAt() : LocalDateTime.now());
         voucherRepository.save(voucher);
     }
     
@@ -152,9 +168,33 @@ public class CustomerVoucherService {
                 v.getDiscountType(),
                 v.getDiscountValue(),
                 v.getExpiresAt(),
+                getStatus(v),
                 v.getUsed(),
-                v.getCreatedAt()
+                v.getCreatedAt(),
+                resolveUsedAt(v),
+                v.getIssuedReceipt() != null ? v.getIssuedReceipt().getId() : null,
+                v.getUsedReceipt() != null ? v.getUsedReceipt().getId() : null
         );
+    }
+
+    private LocalDateTime resolveUsedAt(CustomerVoucher voucher) {
+        if (voucher.getUsedAt() != null) {
+            return voucher.getUsedAt();
+        }
+        if (voucher.getUsedReceipt() != null) {
+            return voucher.getUsedReceipt().getClosedAt();
+        }
+        return null;
+    }
+
+    private String getStatus(CustomerVoucher voucher) {
+        if (Boolean.TRUE.equals(voucher.getUsed())) {
+            return "USED";
+        }
+        if (voucher.getExpiresAt() != null && voucher.getExpiresAt().isBefore(LocalDateTime.now())) {
+            return "EXPIRED";
+        }
+        return "AVAILABLE";
     }
     
     /**
@@ -166,9 +206,20 @@ public class CustomerVoucherService {
         BigDecimal val = voucher.getDiscountValue();
         Integer targetProductId = voucher.getCampaign().getApplicableProductId();
 
-        // CAZ 1: Sumă fixă (Cel mai simplu)
+        // CAZ 1: Sumă fixă
         if ("FIXED".equals(type)) {
-            // Nu poate depăși totalul bonului
+            // Dacă campania cere un produs specific, verificăm dacă există pe bon
+            if (targetProductId != null) {
+                boolean hasProduct = receipt.getItems().stream()
+                        .anyMatch(item -> item.getProduct().getId().equals(targetProductId));
+                
+                if (!hasProduct) {
+                    // Produsul țintă nu e pe bon → voucher nu se aplică
+                    return BigDecimal.ZERO;
+                }
+            }
+            
+            // Voucher valid → returnăm suma fixă (max totalul bonului)
             return val.min(receipt.getTotalAmount());
         }
 
@@ -177,6 +228,14 @@ public class CustomerVoucherService {
             BigDecimal baseAmount;
             
             if (targetProductId != null) {
+                // Verificăm mai întâi dacă produsul există pe bon
+                boolean hasProduct = receipt.getItems().stream()
+                        .anyMatch(item -> item.getProduct().getId().equals(targetProductId));
+                
+                if (!hasProduct) {
+                    return BigDecimal.ZERO;
+                }
+                
                 // Aplicăm procentul doar la liniile care au acel produs
                 baseAmount = receipt.getItems().stream()
                         .filter(item -> item.getProduct().getId().equals(targetProductId))
@@ -187,19 +246,31 @@ public class CustomerVoucherService {
                 baseAmount = receipt.getTotalAmount();
             }
             
-            return baseAmount.multiply(val)
-                    .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP)
-                    .min(receipt.getTotalAmount());
+            BigDecimal calculated = baseAmount.multiply(val)
+                    .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
+            
+            // Aplicăm capul maxim de discount din campanie (dacă există)
+            BigDecimal maxCap = voucher.getCampaign().getMaxDiscountAmount();
+            if (maxCap != null && calculated.compareTo(maxCap) > 0) {
+                calculated = maxCap;
+            }
+            
+            // Nu poate depăși totalul bonului
+            return calculated.min(receipt.getTotalAmount());
         }
 
         // CAZ 3: Ore gratuite (FREE_HOURS)
         if ("FREE_HOURS".equals(type) && targetProductId != null) {
             // Căutăm produsul țintă pe bon (ex: Ora de joacă)
-            // Luăm prețul unitar de pe bon (în caz că a fost modificat manual sau e promoție)
             return receipt.getItems().stream()
                     .filter(item -> item.getProduct().getId().equals(targetProductId))
                     .findFirst()
-                    .map(item -> item.getUnitPrice().multiply(val)) // Preț unitar * nr. de ore din voucher
+                    .map(item -> {
+                        // Luăm minimul dintre ore gratuite din voucher și cantitate efectivă pe bon
+                        BigDecimal itemQuantity = item.getQuantity() != null ? item.getQuantity() : val;
+                        BigDecimal applicableHours = val.min(itemQuantity);
+                        return item.getUnitPrice().multiply(applicableHours);
+                    })
                     .orElse(BigDecimal.ZERO)
                     .min(receipt.getTotalAmount());
         }
@@ -271,6 +342,7 @@ public class CustomerVoucherService {
         voucherRepository.findByUsedReceiptId(receiptId).ifPresent(voucher -> {
             voucher.setUsed(false);
             voucher.setUsedReceipt(null);
+            voucher.setUsedAt(null);
             voucherRepository.save(voucher);
         });
     }
@@ -287,6 +359,7 @@ public class CustomerVoucherService {
 
         voucher.setUsed(false);
         voucher.setUsedReceipt(null);
+        voucher.setUsedAt(null);
         
         voucherRepository.save(voucher);
     }

@@ -19,13 +19,15 @@ const AddPaymentModal = (props) => {
 
   const {
     amount, setAmount,
+    voucherPrefix, setVoucherPrefix,
     voucherCode, setVoucherCode,
+    activePrefixes,
     paymentMethodId, setPaymentMethodId,
-    changeDue,    
+    changeDue,
     lastChange,   
     localPayments,
     isInitialLoading,
-    toastOpen, toastMessage, toastSeverity, handleCloseToast, // Luăm toastSeverity
+    toastOpen, toastMessage, toastSeverity, handleCloseToast,
     totalPaid, remainingAmount, isFullyPaid, isVoucher,
     handleAmountChange, handleRemove, handleSubmit
   } = usePaymentModal(props);
@@ -110,13 +112,37 @@ const AddPaymentModal = (props) => {
                 </FormControl>
 
                 {isVoucher ? (
-                    <TextField 
-                        label="Cod Voucher" fullWidth sx={{ flex: 1 }} value={voucherCode} onChange={(e) => setVoucherCode(e.target.value.toUpperCase())} disabled={loading} 
-                        slotProps={{ input: { endAdornment: <ConfirmationNumberIcon color="action" /> } }} placeholder="COD..." 
-                    />
+                    <Box sx={{ display: 'flex', gap: 1, flex: 1 }}>
+                        <FormControl sx={{ minWidth: 120 }}>
+                            <InputLabel>Prefix</InputLabel>
+                            <Select 
+                                value={voucherPrefix} 
+                                label="Prefix"                                
+                                onChange={(e) => setVoucherPrefix(e.target.value)} 
+                                disabled={loading || activePrefixes.length === 1}
+                            >
+                                <MenuItem value="" disabled><em>Alege...</em></MenuItem>
+                                {activePrefixes.map((prefix, idx) => (
+                                    <MenuItem key={idx} value={prefix}>{prefix}</MenuItem>
+                                ))}
+                            </Select>
+                        </FormControl>
+                        <TextField 
+                            label="Cod Voucher" 
+                            fullWidth 
+                            value={voucherCode} 
+                            onChange={(e) => setVoucherCode(e.target.value.toUpperCase())} 
+                            disabled={loading}
+                            autoComplete="off"
+                            sx={{ minWidth: 160 }}
+                            slotProps={{ input: { endAdornment: <ConfirmationNumberIcon color="action" /> } }} 
+                            placeholder="Ex: A4B7" 
+                        />
+                    </Box>
                 ) : (
                     <TextField 
-                        label="Sumă" type="number" fullWidth sx={{ flex: 1 }} value={amount} onChange={handleAmountChange} onFocus={(e) => e.target.select()} disabled={loading} 
+                        label="Sumă" type="number" fullWidth sx={{ flex: 1 }} value={amount} onChange={handleAmountChange} onFocus={(e) => e.target.select()} disabled={loading}
+                        autoComplete="off"
                         slotProps={{ input: { endAdornment: <Typography variant="caption" sx={{ ml: 1 }}>RON</Typography> } }}
                      />
                 )}
@@ -143,7 +169,7 @@ const AddPaymentModal = (props) => {
           variant="contained" 
           color={isFullyPaid ? "success" : "primary"}
           size="large"
-          disabled={loading || (!isFullyPaid && (!paymentMethodId || (isVoucher && !voucherCode) || (!isVoucher && (!amount || parseFloat(amount) <= 0.01))))}
+          disabled={loading || (!isFullyPaid && (!paymentMethodId || (isVoucher && (!voucherPrefix || !voucherCode)) || (!isVoucher && (!amount || parseFloat(amount) <= 0.01))))}
           sx={{ minWidth: 200, fontWeight: 'bold', fontSize: '1rem', py: 1 }}
           startIcon={isFullyPaid ? <CheckCircleIcon /> : (isVoucher ? <ConfirmationNumberIcon /> : <AttachMoneyIcon />)}
         >

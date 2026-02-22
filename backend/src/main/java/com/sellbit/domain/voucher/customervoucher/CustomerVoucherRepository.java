@@ -20,7 +20,7 @@ public interface CustomerVoucherRepository extends JpaRepository<CustomerVoucher
     
     Optional<CustomerVoucher> findByIssuedReceiptId(Integer receiptId);
 
-    List<CustomerVoucher> findAllByUsedTrue();
+       List<CustomerVoucher> findAllByUsedTrueOrderByUsedAtDesc();
 
     List<CustomerVoucher> findAllByUsedFalse();
 
@@ -30,13 +30,22 @@ public interface CustomerVoucherRepository extends JpaRepository<CustomerVoucher
     @Query("SELECT v FROM CustomerVoucher v WHERE v.used = false AND v.expiresAt <= :now")
     List<CustomerVoucher> findExpired(LocalDateTime now);
 
-    @Query("SELECT v FROM CustomerVoucher v WHERE v.used = false AND v.expiresAt > :now " +
+    @Query("SELECT v FROM CustomerVoucher v " +
+           "LEFT JOIN FETCH v.campaign " +
+           "LEFT JOIN FETCH v.issuedReceipt " +
+           "LEFT JOIN FETCH v.usedReceipt " +
+           "WHERE v.used = false AND v.expiresAt > :now " +
            "AND CAST(v.createdAt AS date) >= :fromDate AND CAST(v.createdAt AS date) <= :toDate " +
            "ORDER BY v.createdAt DESC")
     List<CustomerVoucher> findAvailableBetween(LocalDate fromDate, LocalDate toDate, LocalDateTime now);
 
-    @Query("SELECT v FROM CustomerVoucher v WHERE v.used = true " +
-           "AND CAST(v.createdAt AS date) >= :fromDate AND CAST(v.createdAt AS date) <= :toDate " +
-           "ORDER BY v.createdAt DESC")
+    @Query("SELECT v FROM CustomerVoucher v " +
+           "LEFT JOIN FETCH v.campaign " +
+           "LEFT JOIN FETCH v.issuedReceipt " +
+           "LEFT JOIN FETCH v.usedReceipt " +
+           "WHERE v.used = true " +
+           "AND v.usedAt IS NOT NULL " +
+           "AND CAST(v.usedAt AS date) >= :fromDate AND CAST(v.usedAt AS date) <= :toDate " +
+           "ORDER BY v.usedAt DESC")
     List<CustomerVoucher> findUsedBetween(LocalDate fromDate, LocalDate toDate);
 }

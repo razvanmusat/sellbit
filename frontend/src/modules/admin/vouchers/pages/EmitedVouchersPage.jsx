@@ -32,6 +32,7 @@ const EmitedVouchersPage = ({
   searchResult,
   onReactivate,
   onReactivateByCode,
+  onDeactivateByCode,
   fromDate,
   toDate,
   onDateChange,
@@ -43,14 +44,14 @@ const EmitedVouchersPage = ({
         <Tabs
           value={voucherFilter || false}
           onChange={(_, value) => onFilterChange(value)}
-          sx={{ mb: 2 }}
+          sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}
         >
-          <Tab label="Disponibile" value="available" />
-          <Tab label="Folosite" value="used" />
-          <Tab label="Cauta cod" value="search" />
+          <Tab label="Active" value="available" />
+          <Tab label="Utilizate" value="used" />
+          <Tab label="Caută cod" value="search" />
         </Tabs>
 
-        {/* Date Filter - below tabs, only for Disponibile and Folosite */}
+        {/* Date Filter - below tabs, only for Active and Utilizate */}
         {voucherFilter !== 'search' && voucherFilter && (
           <Box sx={{ mb: 2, p: 1.5, bgcolor: '#f5f5f5', borderRadius: 1 }}>
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center">
@@ -100,8 +101,6 @@ const EmitedVouchersPage = ({
           <AvailableTab
             vouchersLoading={vouchersLoading}
             vouchers={vouchers}
-            saving={saving}
-            onReactivate={onReactivate}
           />
         )}
 
@@ -126,6 +125,7 @@ const EmitedVouchersPage = ({
             searchResult={searchResult}
             saving={saving}
             onReactivateByCode={onReactivateByCode}
+            onDeactivateByCode={onDeactivateByCode}
           />
         )}
       </>

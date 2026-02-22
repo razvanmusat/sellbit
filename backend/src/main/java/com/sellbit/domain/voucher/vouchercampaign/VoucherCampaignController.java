@@ -1,6 +1,7 @@
 package com.sellbit.domain.voucher.vouchercampaign;
 
 import lombok.RequiredArgsConstructor;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -17,7 +18,7 @@ public class VoucherCampaignController {
 
     @PreAuthorize("hasAuthority('100')")
     @PostMapping // Crearea unei noi campanii de vouchere.
-    public ResponseEntity<VoucherCampaignDTOs.Response> create(@RequestBody VoucherCampaignDTOs.Request request) {
+    public ResponseEntity<VoucherCampaignDTOs.Response> create(@Valid @RequestBody VoucherCampaignDTOs.Request request) {
         return ResponseEntity.ok(campaignService.create(request));
     }
 
@@ -25,7 +26,7 @@ public class VoucherCampaignController {
     @PutMapping("/{id}") // Editarea unei campanii de vouchere.
     public ResponseEntity<VoucherCampaignDTOs.Response> update(
             @PathVariable Integer id,
-            @RequestBody VoucherCampaignDTOs.Request request
+            @Valid @RequestBody VoucherCampaignDTOs.Request request
     ) {
         return ResponseEntity.ok(campaignService.update(id, request));
     }

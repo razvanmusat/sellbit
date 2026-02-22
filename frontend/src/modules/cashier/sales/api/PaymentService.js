@@ -5,10 +5,6 @@ export class PaymentService {
     return await client('lookup/payment-methods/active');
   }
 
-  static async getAllActivePaymentMethods() {
-    return await client('lookup/payment-methods/active');
-  }
-
   static async addPayment(receiptId, paymentMethodId, amount, userId) {
     return await client(`sales/receipt-payments?receiptId=${receiptId}&paymentMethodId=${paymentMethodId}&amount=${amount}&userId=${userId}`, {
       method: 'POST',

@@ -1,13 +1,16 @@
 import { useState, useEffect } from 'react';
-import { useSelector } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { ReceiptItemService } from '../../sales/api/ReceiptItemService';
 import { SalesService } from '../../sales/api/SalesService';
 import { PaymentService } from '../../sales/api/PaymentService';
+import { invalidateCache } from '../store/sellReportsSlice';
 
 export const useRefundModal = (open, receipt, onClose, onRefundSuccess) => {
     // --- STATE ---
     const [items, setItems] = useState([]);
     const [paymentMethods, setPaymentMethods] = useState([]);
+    const [voucherAmount, setVoucherAmount] = useState(0); // Suma voucher-ului pe bon
+    const [originalPayments, setOriginalPayments] = useState([]); // Plățile originale ale bonului
     
     const [loadingItems, setLoadingItems] = useState(false);
     const [submitting, setSubmitting] = useState(false);
@@ -16,7 +19,8 @@ export const useRefundModal = (open, receipt, onClose, onRefundSuccess) => {
     const [refundMap, setRefundMap] = useState({});
     const [paymentMethodId, setPaymentMethodId] = useState(''); 
 
-    const { user } = useSelector((state) => state.auth); 
+    const { user } = useSelector((state) => state.auth);
+    const dispatch = useDispatch(); 
 
     // --- EFFECT ---
     useEffect(() => {
@@ -24,6 +28,8 @@ export const useRefundModal = (open, receipt, onClose, onRefundSuccess) => {
             setRefundMap({});
             setPaymentMethodId(''); 
             setError(null);
+            setVoucherAmount(0);
+            setOriginalPayments([]);
             fetchInitialData();
         }
     }, [open, receipt]);
@@ -44,6 +50,16 @@ export const useRefundModal = (open, receipt, onClose, onRefundSuccess) => {
                 const allowedCodes = ['CASH', 'CARD', 'BANK_TRANSFER'];
                 const filteredMethods = methodsData.filter(method => allowedCodes.includes(method.code));
                 setPaymentMethods(filteredMethods);
+            }
+
+            // Încarcă plățile pentru a detecta vouchere
+            const paymentsData = await PaymentService.getPaymentsByReceipt(receipt.id);
+            if (Array.isArray(paymentsData)) {
+                setOriginalPayments(paymentsData);
+                const totalVoucher = paymentsData
+                    .filter(p => p.paymentMethodCode === 'VOUCHER')
+                    .reduce((sum, p) => sum + (p.amount || 0), 0);
+                setVoucherAmount(totalVoucher);
             }
         } catch (err) {
             console.error("Eroare date:", err);
@@ -114,6 +130,7 @@ export const useRefundModal = (open, receipt, onClose, onRefundSuccess) => {
             };
 
             await SalesService.createPartialRefund(receipt.id, request);
+            dispatch(invalidateCache());
             onRefundSuccess(); 
             onClose(); 
         } catch (err) {
@@ -132,18 +149,25 @@ export const useRefundModal = (open, receipt, onClose, onRefundSuccess) => {
         return acc;
     }, 0);
 
+    // Scade proporțional voucherul din suma de restituit
+    const receiptTotalAmount = receipt?.totalAmount || 0;
+    const adjustedRefundAmount = receiptTotalAmount > 0 
+        ? totalRefundAmount - (totalRefundAmount / receiptTotalAmount) * voucherAmount
+        : totalRefundAmount;
+
     const hasSelection = Object.keys(refundMap).length > 0;
 
     return {
         state: {
             items,
+            originalPayments,
             paymentMethods,
             loadingItems,
             submitting,
             error,
             refundMap,
             paymentMethodId,
-            totalRefundAmount,
+            totalRefundAmount: adjustedRefundAmount, // Suma ajustată cu voucher
             hasSelection
         },
         setters: {

@@ -30,12 +30,40 @@ const CompanySettingsPage = () => {
     loading,
     saving,
     isConfigured,
+    saveAll,
     saveField,
     snackbar,
     closeSnackbar,
+    reload,
   } = useCompanySettingsPage();
   const [editingField, setEditingField] = useState(null);
   const [draftValue, setDraftValue] = useState('');
+  const [editAll, setEditAll] = useState(false);
+  const [editAllForm, setEditAllForm] = useState(form);
+
+  const startEditAll = () => {
+    setEditAllForm(form);
+    setEditAll(true);
+    setEditingField(null);
+    setDraftValue('');
+  };
+
+  const cancelEditAll = () => {
+    setEditAll(false);
+    setEditAllForm(form);
+  };
+
+  const handleSaveAll = async () => {
+    const wasConfigured = isConfigured;
+    const saved = await saveAll(editAllForm);
+    if (saved) {
+      setEditAll(false);
+      if (!wasConfigured) {
+        closeSnackbar();
+        await reload();
+      }
+    }
+  };
 
   const openEdit = (field) => {
     setEditingField(field);
@@ -64,17 +92,52 @@ const CompanySettingsPage = () => {
   }
 
   return (
-    <Box sx={{ p: 2 }}>      
+    <Box sx={{ p: 2 }}>
       {!isConfigured && (
-        <Alert severity="info" sx={{ mb: 2 }}>
-          Completează câmpurile obligatorii și salvează-le. La prima configurare, backend-ul validează toate câmpurile obligatorii.
-        </Alert>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+          <Alert severity="info" sx={{ flex: 1 }}>
+            Completează câmpurile obligatorii și salvează-le. La prima configurare, backend-ul validează toate câmpurile obligatorii.
+          </Alert>
+          {!editAll && (
+            <Button
+              variant="contained"
+              startIcon={<EditIcon />}
+              onClick={startEditAll}
+              disabled={saving}
+            >
+              Editare completa
+            </Button>
+          )}
+          {editAll && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Button
+                variant="contained"
+                startIcon={<CheckIcon />}
+                onClick={handleSaveAll}
+                disabled={saving}
+              >
+                Salveaza
+              </Button>
+              <Button
+                variant="outlined"
+                startIcon={<CloseIcon />}
+                onClick={cancelEditAll}
+                disabled={saving}
+              >
+                Renunta
+              </Button>
+            </Box>
+          )}
+        </Box>
       )}
 
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
         {COMPANY_FIELDS.map((field) => {
-          const isEditing = editingField === field.key;
-          const value = form[field.key] || '-';
+          const isEditing = editAll || editingField === field.key;
+          const currentValue = form[field.key] || '';
+          const value = currentValue || '-';
+          const editValue = editAll ? editAllForm[field.key] ?? '' : draftValue;
+          const isMultiline = Boolean(field.multiline);
 
           return (
             <Box
@@ -103,12 +166,33 @@ const CompanySettingsPage = () => {
                       {field.label}{field.required ? ' *' : ''}:
                     </Typography>
                     <TextField
-                      value={draftValue}
-                      onChange={(e) => setDraftValue(e.target.value)}
+                      value={editValue}
+                      onChange={(e) => {
+                        if (editAll) {
+                          setEditAllForm((prev) => ({ ...prev, [field.key]: e.target.value }));
+                          return;
+                        }
+                        setDraftValue(e.target.value);
+                      }}
                       fullWidth
                       size="small"
                       autoFocus
-                      sx={{ '& .MuiInputBase-root': { height: 34 } }}
+                      multiline={isMultiline}
+                      minRows={isMultiline ? 1 : 1}
+                      maxRows={isMultiline ? 3 : undefined}
+                      sx={{
+                        '& .MuiInputBase-root': {
+                          minHeight: 34,
+                          alignItems: 'center',
+                        },
+                        '& .MuiInputBase-input': {
+                          padding: isMultiline ? '6px 12px' : '6px 12px',
+                          lineHeight: '22px',
+                        },
+                        '& .MuiInputBase-inputMultiline': {
+                          padding: '6px 12px',
+                        },
+                      }}
                     />
                   </Box>
                 ) : (
@@ -135,7 +219,7 @@ const CompanySettingsPage = () => {
               </Box>
 
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                {isEditing ? (
+                {editAll ? null : isEditing ? (
                   <>
                     <IconButton color="primary" onClick={handleSaveField} disabled={saving}>
                       <CheckIcon />

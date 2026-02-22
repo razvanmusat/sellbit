@@ -28,7 +28,6 @@ const SellPage = () => {
     receipts,
     editingReceipt,
     paymentMethods,
-    allPaymentMethods,
     cancelReasons,
     loading,
     modals,
@@ -148,12 +147,12 @@ const SellPage = () => {
           open={modals.addPayment}
           onClose={() => toggleModal('addPayment', false)}
           receipt={editingReceipt}
-          paymentMethods={allPaymentMethods} 
+          paymentMethods={paymentMethods} 
           onAddPayment={actions.addPayment}
           onApplyVoucher={actions.applyVoucher} 
           onRemovePayment={actions.removePayment}
           onCloseReceipt={actions.closeReceipt}
-          loading={loading.receipts === 'pending' || loading.allPaymentMethods === 'pending'}
+          loading={loading.receipts === 'pending' || loading.paymentMethods === 'pending'}
         />
       )}
       

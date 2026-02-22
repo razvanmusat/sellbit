@@ -56,18 +56,6 @@ export const fetchActivePaymentMethods = createAsyncThunk(
   }
 );
 
-// FETCH ALL PAYMENT METHODS (Receipt)
-export const fetchAllActivePaymentMethods = createAsyncThunk(
-  'sellPage/fetchAllActivePaymentMethods',
-  async (_, { rejectWithValue }) => {
-    try {
-      return await PaymentService.getAllActivePaymentMethods();
-    } catch (error) {
-      return rejectWithValue(error.message || 'Nu s-au putut încărca metodele de plată.');
-    }
-  }
-);
-
 // REGISTER ADVANCE
 export const registerAdvancePayment = createAsyncThunk(
   'sellPage/registerAdvancePayment',
@@ -201,7 +189,6 @@ const initialState = {
   warehouses: [],
   receipts: [],
   paymentMethods: [],
-  allPaymentMethods: [],
   cancelReasons: [],
   selectedWarehouseId: null,
   
@@ -209,7 +196,6 @@ const initialState = {
   warehousesLoading: 'idle', 
   receiptsLoading: 'idle',
   paymentMethodsLoading: 'idle',
-  allPaymentMethodsLoading: 'idle',
   cancelReasonsLoading: 'idle',
   
   error: null,
@@ -252,12 +238,6 @@ const sellPageSlice = createSlice({
       .addCase(fetchActivePaymentMethods.fulfilled, (state, action) => {
         state.paymentMethodsLoading = 'succeeded';
         state.paymentMethods = action.payload;
-      })
-
-      .addCase(fetchAllActivePaymentMethods.pending, (state) => { state.allPaymentMethodsLoading = 'pending'; })
-      .addCase(fetchAllActivePaymentMethods.fulfilled, (state, action) => {
-        state.allPaymentMethodsLoading = 'succeeded';
-        state.allPaymentMethods = action.payload;
       })
 
       .addCase(fetchCancelReasons.pending, (state) => { state.cancelReasonsLoading = 'pending'; })
@@ -313,7 +293,6 @@ const sellPageSlice = createSlice({
           if (state.warehousesLoading === 'pending') state.warehousesLoading = 'failed';
           if (state.receiptsLoading === 'pending') state.receiptsLoading = 'failed';
           if (state.paymentMethodsLoading === 'pending') state.paymentMethodsLoading = 'failed';
-          if (state.allPaymentMethodsLoading === 'pending') state.allPaymentMethodsLoading = 'failed';
           if (state.cancelReasonsLoading === 'pending') state.cancelReasonsLoading = 'failed';
         }
       );
