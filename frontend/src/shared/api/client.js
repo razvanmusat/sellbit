@@ -12,7 +12,7 @@ const getCookie = (name) => {
 
 // MODIFICARE 1: Extragem 'params' din argumente
 export const client = async (endpoint, { body, params, ...customConfig } = {}) => {
-  const headers = { 'Content-Type': 'application/json' };
+  const headers = {};
   const isLoginRequest = endpoint === 'security/auth/login';
 
   // 1. Adăugăm Token-ul de autorizare (Bearer) dacă există.
@@ -37,8 +37,11 @@ export const client = async (endpoint, { body, params, ...customConfig } = {}) =
     credentials: 'include',
   };
 
-  if (body) {
+  if (body instanceof FormData) {
+    config.body = body;
+  } else if (body !== undefined && body !== null) {
     config.body = JSON.stringify(body);
+    config.headers['Content-Type'] = 'application/json';
   }
 
   // --- MODIFICARE 2: LOGICA PENTRU QUERY PARAMS ---

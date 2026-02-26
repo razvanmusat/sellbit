@@ -16,8 +16,9 @@ const ADMIN_MENU = [
   { label: 'Catering', path: '/admin/catering', icon: <SoupKitchenIcon /> },
   { label: 'Inventar', path: '/admin/inventory', icon: <InventoryIcon /> },
   { label: 'Vânzări', path: '/admin/sales', icon: <TrendingUpIcon /> },
-  { label: 'Setări sistem', path: '/admin/settings', icon: <SettingsIcon /> },
   { label: 'Vouchere', path: '/admin/vouchers', icon: <CardGiftcardIcon /> },
+  { label: 'Setări sistem', path: '/admin/settings', icon: <SettingsIcon /> },
+  
 ];
 
 const AdminTopBar = () => {

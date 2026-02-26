@@ -133,6 +133,17 @@ const ERROR_MESSAGES = {
     "ERROR.CATERING_ORDER.EDIT_FORBIDDEN_PAST_DATE": "Nu poți modifica o comandă din trecut.",
     "ERROR.CATERING_ORDER.DELETE_FORBIDDEN_PAST_DATE": "Nu poți șterge o comandă din trecut.",
 
+    // --- UPLOAD FILES ---
+    "ERROR.UPLOAD.DIR_NOT_AVAILABLE": "Folderul de upload nu este disponibil pe server.",
+    "ERROR.UPLOAD.EMPTY_FILE": "Selectează un fișier înainte de încărcare.",
+    "ERROR.UPLOAD.INVALID_NAME": "Numele fișierului este invalid.",
+    "ERROR.UPLOAD.INVALID_TYPE": "Tip de fișier nepermis.",
+    "ERROR.UPLOAD.SAVE_FAILED": "Fișierul nu a putut fi salvat.",
+    "ERROR.UPLOAD.LIST_FAILED": "Lista fișierelor nu a putut fi încărcată.",
+    "ERROR.UPLOAD.NOT_FOUND": "Fișierul nu a fost găsit.",
+    "ERROR.UPLOAD.READ_FAILED": "Fișierul nu a putut fi deschis.",
+    "ERROR.UPLOAD.DELETE_FAILED": "Fișierul nu a putut fi șters.",
+
     // --- CATEGORIES (ADMIN) ---
     "ERROR.CATEGORY.DUPLICATE_CODE": "Codul categoriei există deja. Alege alt cod.",
     "ERROR.CATEGORY.PARENT_NOT_FOUND": "Categoria părinte selectată nu există.",

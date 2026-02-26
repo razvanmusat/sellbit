@@ -1,0 +1,65 @@
+services:
+  db:
+    image: ${POSTGRES_IMAGE}
+    container_name: sellbit-db
+    restart: always
+    env_file:
+      - .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - /opt/sellbit/postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    mem_limit: 384m
+    networks:
+      - sellbit-net
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: sellbit-backend
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DB_URL: jdbc:postgresql://db:5432/${POSTGRES_DB}
+      DB_USER: ${POSTGRES_USER}
+      DB_PASS: ${POSTGRES_PASSWORD}
+      SELLBIT_UPLOADS_PATH: /opt/sellbit/uploads
+      JAVA_TOOL_OPTIONS: -Xms256m -Xmx512m -XX:+UseContainerSupport
+    volumes:
+      - /opt/sellbit/uploads:/opt/sellbit/uploads
+    ports:
+      - "127.0.0.1:8080:8080"
+    mem_limit: 896m
+    networks:
+      - sellbit-net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: sellbit-frontend
+    restart: always
+    depends_on:
+      - backend
+    ports:
+      - "127.0.0.1:8081:80"
+    mem_limit: 96m
+    networks:
+      - sellbit-net
+
+networks:
+  sellbit-net:
+    name: sellbit-net

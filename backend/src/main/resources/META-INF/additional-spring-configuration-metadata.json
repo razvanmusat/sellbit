@@ -1,0 +1,10 @@
+{
+  "properties": [
+    {
+      "name": "sellbit.uploads.path",
+      "type": "java.lang.String",
+      "description": "Calea absolută unde backend-ul salvează fișierele încărcate.",
+      "defaultValue": "/opt/sellbit/uploads"
+    }
+  ]
+}
