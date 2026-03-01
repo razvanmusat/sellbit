@@ -3,6 +3,8 @@ import { CircularProgress, Alert, Box, Button } from '@mui/material';
 import { UploadService } from '../../api/UploadService';
 
 export default function PreviewFileContent({ file, folder }) {
+  const CHUNK_PREVIEW_THRESHOLD = 25 * 1024 * 1024;
+  const CHUNK_SIZE = 5 * 1024 * 1024;
   const [blobUrl, setBlobUrl] = useState(null);
   const [blobData, setBlobData] = useState(null);
   const [textContent, setTextContent] = useState('');
@@ -13,7 +15,7 @@ export default function PreviewFileContent({ file, folder }) {
 
   const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'avif'];
   const audioExtensions = ['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac', 'webm'];
-  const videoExtensions = ['mp4', 'mov', 'avi', 'mkv', 'webm', 'm4v'];
+  const videoExtensions = ['mp4', 'mov', 'avi', 'mkv', 'webm', 'm4v', 'mpeg', 'mpg', 'ogv', '3gp', '3g2', 'ts', 'm2ts', 'wmv', 'flv', 'asf', 'mxf'];
   const textExtensions = ['txt', 'csv', 'json', 'xml', 'md', 'log', 'yaml', 'yml'];
   const officeExtensions = ['doc', 'docx', 'docm', 'dot', 'dotx', 'xls', 'xlsx', 'xlsm', 'xlt', 'xltx', 'ppt', 'pptx', 'pptm', 'pps', 'ppsx'];
   const extension = file?.originalName?.split('.').pop()?.toLowerCase();
@@ -49,25 +51,105 @@ export default function PreviewFileContent({ file, folder }) {
     setBlobUrl(null);
     setBlobData(null);
     setTextContent('');
-    UploadService.fetchPreviewBlob(file.fileName, folder)
+
+    const fetchBlobInChunks = async () => {
+      const token = localStorage.getItem('token');
+      const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+      const encodedFileName = encodeURIComponent(String(file.fileName || '').trim());
+      const query = folder ? `?folder=${encodeURIComponent(folder)}` : '';
+      const previewUrl = `/api/uploads/${encodedFileName}${query}`;
+
+      const firstEnd = CHUNK_SIZE - 1;
+      const firstResponse = await fetch(previewUrl, {
+        method: 'GET',
+        headers: {
+          ...authHeaders,
+          Range: `bytes=0-${firstEnd}`
+        },
+        credentials: 'include'
+      });
+
+      if (!firstResponse.ok) {
+        throw new Error(`Chunk preview failed (${firstResponse.status})`);
+      }
+
+      if (firstResponse.status === 200) {
+        return firstResponse.blob();
+      }
+
+      if (firstResponse.status !== 206) {
+        throw new Error(`Chunk preview failed (${firstResponse.status})`);
+      }
+
+      const contentType = (firstResponse.headers.get('Content-Type') || '').split(';')[0].trim();
+      const contentRange = firstResponse.headers.get('Content-Range') || '';
+      const totalPart = contentRange.split('/')[1];
+      const totalSize = Number(totalPart);
+
+      if (!Number.isFinite(totalSize) || totalSize <= 0) {
+        throw new Error('Chunk preview failed (invalid content-range)');
+      }
+
+      const parts = [];
+      const firstChunk = await firstResponse.blob();
+      parts.push(firstChunk);
+
+      let start = firstChunk.size;
+      while (start < totalSize) {
+        const end = Math.min(start + CHUNK_SIZE - 1, totalSize - 1);
+        const response = await fetch(previewUrl, {
+          method: 'GET',
+          headers: {
+            ...authHeaders,
+            Range: `bytes=${start}-${end}`
+          },
+          credentials: 'include'
+        });
+
+        if (!response.ok) {
+          throw new Error(`Chunk preview failed (${response.status})`);
+        }
+
+        if (response.status === 200) {
+          return response.blob();
+        }
+
+        if (response.status !== 206) {
+          throw new Error(`Chunk preview failed (${response.status})`);
+        }
+
+        const chunk = await response.blob();
+        parts.push(chunk);
+        start = end + 1;
+      }
+
+      const fallbackType = contentType || (isVideo ? 'video/mp4' : 'audio/mpeg');
+      return new Blob(parts, { type: fallbackType });
+    };
+
+    const fileSize = Number(file?.size || 0);
+    const shouldUseChunkPreview = (isVideo || isAudio) && fileSize > CHUNK_PREVIEW_THRESHOLD;
+
+    (shouldUseChunkPreview ? fetchBlobInChunks() : UploadService.fetchPreviewBlob(file.fileName, folder))
       .then(blob => {
         if (!isMounted) return;
         currentUrl = URL.createObjectURL(blob);
         setBlobUrl(currentUrl);
         setBlobData(blob);
       })
-      .catch(() => {
+      .catch((previewError) => {
         if (!isMounted) return;
-        setError('Nu se poate previzualiza fișierul.');
+        setError(previewError?.message || 'Nu se poate previzualiza fișierul.');
       })
       .finally(() => {
         if (isMounted) setLoading(false);
       });
+
     return () => {
       isMounted = false;
       if (currentUrl) URL.revokeObjectURL(currentUrl);
     };
-  }, [file, folder]);
+  }, [file, folder, isVideo, isAudio]);
 
   useEffect(() => {
     if (!blobUrl || !isAudio || !audioRef.current) return;
@@ -141,7 +223,13 @@ export default function PreviewFileContent({ file, folder }) {
   if (isAudio) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
-        <audio ref={audioRef} src={blobUrl} controls autoPlay style={{ width: '100%', maxWidth: 500 }} />
+        <audio
+          ref={audioRef}
+          src={blobUrl}
+          controls
+          autoPlay
+          style={{ width: '100%', maxWidth: 500 }}
+        />
       </div>
     );
   }
@@ -154,7 +242,6 @@ export default function PreviewFileContent({ file, folder }) {
           src={blobUrl}
           controls
           autoPlay
-          muted
           playsInline
           style={{ width: '100%', maxWidth: 720, maxHeight: 420, borderRadius: 8 }}
         />

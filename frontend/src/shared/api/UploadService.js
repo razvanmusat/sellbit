@@ -29,26 +29,45 @@ export const UploadService = {
     }
   },
 
-  upload: async (file, folder) => {
+  upload: (file, folder, onProgress) => new Promise((resolve, reject) => {
     const formData = new FormData();
     formData.append('file', file);
     if (folder) formData.append('folder', folder);
-    const response = await fetch('/api/uploads', {
-      method: 'POST',
-      body: formData,
-      credentials: 'include',
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem('token')}`,
-      },
-    });
-    const text = await response.text();
-    if (!response.ok) throw new Error(text);
-    try {
-      return JSON.parse(text);
-    } catch {
-      return text;
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/uploads', true);
+    xhr.withCredentials = true;
+
+    const token = localStorage.getItem('token');
+    if (token) {
+      xhr.setRequestHeader('Authorization', `Bearer ${token}`);
     }
-  },
+
+    xhr.upload.onprogress = (event) => {
+      if (!onProgress || !event.lengthComputable) return;
+      const percent = Math.min(100, Math.round((event.loaded / event.total) * 100));
+      onProgress(percent);
+    };
+
+    xhr.onload = () => {
+      const text = xhr.responseText || '';
+      if (xhr.status < 200 || xhr.status >= 300) {
+        reject(new Error(text || `HTTP Error: ${xhr.status}`));
+        return;
+      }
+
+      try {
+        resolve(JSON.parse(text));
+      } catch {
+        resolve(text);
+      }
+    };
+
+    xhr.onerror = () => reject(new Error('Upload eșuat. Verifică conexiunea și încearcă din nou.'));
+    xhr.onabort = () => reject(new Error('Upload anulat.'));
+
+    xhr.send(formData);
+  }),
 
   delete: async (fileName, folder) => {
     const encodedFileName = toEncodedFileName(fileName);
@@ -72,6 +91,17 @@ export const UploadService = {
     }
 
     return response.blob();
+  },
+
+  buildPreviewUrl: (fileName, folder) => {
+    const encodedFileName = toEncodedFileName(fileName);
+    const query = new URLSearchParams();
+    if (folder) query.set('folder', folder);
+
+    const queryString = query.toString();
+    return queryString
+      ? `${API_BASE}/${encodedFileName}?${queryString}`
+      : `${API_BASE}/${encodedFileName}`;
   },
 
   fetchDownloadBlob: async (fileName, folder) => {

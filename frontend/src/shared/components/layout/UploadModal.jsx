@@ -15,7 +15,8 @@ import {
   ListItemText,
   Divider,
   Alert,
-  CircularProgress,
+  LinearProgress,
+  Typography,
   Snackbar,
   useMediaQuery
 } from '@mui/material';
@@ -42,6 +43,7 @@ const UploadModal = ({ open, onClose, isAdmin }) => {
   const [loadingFolders, setLoadingFolders] = useState(false);
   const [folderError, setFolderError] = useState('');
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
+  const [uploadProgress, setUploadProgress] = useState({ active: false, percent: 0, fileName: '' });
 
   const [dialog, setDialog] = useState({ open: false, type: '', value: '' });
   useEffect(() => {
@@ -125,7 +127,7 @@ const UploadModal = ({ open, onClose, isAdmin }) => {
   const canPreviewFile = (file) => {
     const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'avif'];
     const audioExtensions = ['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac', 'webm'];
-    const videoExtensions = ['mp4', 'mov', 'avi', 'mkv', 'webm', 'm4v'];
+    const videoExtensions = ['mp4', 'mov', 'avi', 'mkv', 'webm', 'm4v', 'mpeg', 'mpg', 'ogv', '3gp', '3g2', 'ts', 'm2ts', 'wmv', 'flv', 'asf', 'mxf'];
     const extension = file?.originalName?.split('.').pop()?.toLowerCase();
 
     if (!extension) return false;
@@ -291,20 +293,26 @@ const UploadModal = ({ open, onClose, isAdmin }) => {
               type="file"
               style={{ display: 'none' }}
               id="upload-file-input"
-              disabled={!canUpload}
+              disabled={!canUpload || uploadProgress.active}
               onChange={async (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
                 const folderName = currentFolder;
                 console.log('[DEBUG][FRONTEND] Upload folder trimis:', folderName);
                 try {
-                  const uploadResult = await UploadService.upload(file, folderName);
+                  setUploadProgress({ active: true, percent: 0, fileName: file.name || '' });
+                  const uploadResult = await UploadService.upload(file, folderName, (percent) => {
+                    setUploadProgress({ active: true, percent, fileName: file.name || '' });
+                  });
                   console.log('[DEBUG][FRONTEND] UploadService.upload response:', uploadResult);
                   setSnackbar({ open: true, message: 'Fișier încărcat!', severity: 'success' });
                   await loadFolders();
                   await loadFiles(folderName);
                 } catch (error) {
                   setSnackbar({ open: true, message: getFriendlyErrorMessage(error), severity: 'error' });
+                } finally {
+                  setUploadProgress({ active: false, percent: 0, fileName: '' });
+                  e.target.value = '';
                 }
               }}
             />
@@ -314,13 +322,23 @@ const UploadModal = ({ open, onClose, isAdmin }) => {
                 component="span"
                 startIcon={<UploadFileIcon />}
                 fullWidth={isMobile}
-                disabled={!canUpload}
+                disabled={!canUpload || uploadProgress.active}
                 sx={{ minWidth: isMobile ? '100%' : 'auto' }}
               >
-                Upload fișier
+                {uploadProgress.active ? 'Se încarcă...' : 'Upload fișier'}
               </Button>
             </label>
           </Box>
+          {uploadProgress.active && (
+            <Box sx={{ px: 0.5 }}>
+              <Typography variant="body2" sx={{ mb: 0.75 }}>
+                {uploadProgress.fileName
+                  ? `Upload: ${uploadProgress.fileName} (${uploadProgress.percent}%)`
+                  : `Upload în progres (${uploadProgress.percent}%)`}
+              </Typography>
+              <LinearProgress variant="determinate" value={uploadProgress.percent} />
+            </Box>
+          )}
           {/* File list for selected folder */}
           <List>
             {files.length > 0 ? (

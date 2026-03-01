@@ -1,7 +1,6 @@
 package com.sellbit.domain.inventory.stockcurrent;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -91,7 +90,6 @@ public class StockCurrentService {
                     .reason(reason)
                     .quantityChange(difference)
                     .note(request.reason())
-                    .adjustedAt(LocalDateTime.now())
                     .build());
 
             if (difference.compareTo(BigDecimal.ZERO) < 0) {
