@@ -77,7 +77,7 @@ export const useInventoryOperation = (warehouseId) => {
         try {
             await StockCurrentService.setPhysicalStock({
                 warehouseId: warehouseId,
-                reason: "Inventar " + new Date().toLocaleDateString('ro-RO'),
+                reason: "Inventar " + dayjs().format('DD/MM/YYYY'),
                 items: confirmDialog.items
             });
             

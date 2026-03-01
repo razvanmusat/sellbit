@@ -60,6 +60,7 @@ public class ReceiptService {
         private final ReceiptPaymentRepository paymentRepository;
         private final PaymentMethodRepository paymentMethodRepository;
         private final ProductRepository productRepository;
+        private final com.sellbit.domain.catalog.productcomposite.ProductComponentRepository productComponentRepository;
 
         @Transactional(readOnly = true)
         public ReceiptDTOs.Response getReceiptById(Integer id) {
@@ -606,6 +607,96 @@ public class ReceiptService {
                                         movementNote);
                 }
         }
+
+        /**
+         * Schimbă gestiunea unui bon închis, cu actualizare corectă a stocurilor.
+         * @param receiptId id-ul bonului
+         * @param newWarehouseId id-ul gestiunii noi
+         */
+        @Transactional
+        public void changeReceiptWarehouse(Integer receiptId, Integer newWarehouseId) {
+                // 1. Caută bonul
+                Receipt receipt = receiptRepository.findById(receiptId)
+                    .orElseThrow(() -> new RuntimeException("ERROR.RECEIPT.NOT_FOUND"));
+
+                // 2. Verifică statusul
+                if (!"CLOSED".equals(receipt.getStatus().getCode())) {
+                    throw new RuntimeException("ERROR.RECEIPT.NOT_CLOSED");
+                }
+
+                // 3. Caută gestiunea nouă
+                Warehouse newWarehouse = warehouseRepository.findById(newWarehouseId)
+                    .orElseThrow(() -> new RuntimeException("ERROR.WAREHOUSE.NOT_FOUND"));
+                Warehouse oldWarehouse = receipt.getWarehouse();
+
+                // 4. Verifică stocul pentru toate produsele în gestiunea nouă
+                                List<String> insufficientProducts = new ArrayList<>();
+                                for (ReceiptItem item : receipt.getItems()) {
+                                        Product product = item.getProduct();
+                                        List<com.sellbit.domain.catalog.productcomposite.ProductComponent> components = productComponentRepository.findByParentProductIdAndIsActiveTrue(product.getId());
+                                        if (!components.isEmpty()) {
+                                                for (com.sellbit.domain.catalog.productcomposite.ProductComponent comp : components) {
+                                                        Product child = comp.getChildProduct();
+                                                        if (Boolean.TRUE.equals(child.getTrackStock())) {
+                                                                BigDecimal requiredQty = item.getQuantity().multiply(comp.getQuantity());
+                                                                BigDecimal stockInNew = stockCurrentService.getQuantity(newWarehouseId, child.getId());
+                                                                if (stockInNew.compareTo(requiredQty) < 0) {
+                                                                        insufficientProducts.add(child.getName());
+                                                                }
+                                                        }
+                                                }
+                                        } else if (Boolean.TRUE.equals(product.getTrackStock()) && components.isEmpty()) {
+                                                BigDecimal qty = item.getQuantity();
+                                                Integer productId = product.getId();
+                                                BigDecimal stockInNew = stockCurrentService.getQuantity(newWarehouseId, productId);
+                                                if (stockInNew.compareTo(qty) < 0) {
+                                                        insufficientProducts.add(product.getName());
+                                                }
+                                        }
+                                }
+                                if (!insufficientProducts.isEmpty()) {
+                                        throw new com.sellbit.domain.config.InsufficientStockException(insufficientProducts);
+                                }
+
+                // 5. Actualizează stocurile
+                                for (ReceiptItem item : receipt.getItems()) {
+                                        Product product = item.getProduct();
+                                        List<com.sellbit.domain.catalog.productcomposite.ProductComponent> components = productComponentRepository.findByParentProductIdAndIsActiveTrue(product.getId());
+                                        if (!components.isEmpty()) {
+                                                // Produs compus: actualizez stocul pentru fiecare componentă
+                                                for (com.sellbit.domain.catalog.productcomposite.ProductComponent comp : components) {
+                                                        Product child = comp.getChildProduct();
+                                                        if (Boolean.TRUE.equals(child.getTrackStock())) {
+                                                                BigDecimal requiredQty = item.getQuantity().multiply(comp.getQuantity());
+                                                                // Adaugă în gestiunea veche
+                                                                stockCurrentService.updateStockRelative(oldWarehouse.getId(), child.getId(), requiredQty);
+                                                                // Scade din gestiunea nouă
+                                                                stockCurrentService.updateStockRelative(newWarehouseId, child.getId(), requiredQty.negate());
+                                                        }
+                                                }
+                                        } else if (Boolean.TRUE.equals(product.getTrackStock())) {
+                                                BigDecimal qty = item.getQuantity();
+                                                Integer productId = product.getId();
+                                                // Adaugă în gestiunea veche
+                                                stockCurrentService.updateStockRelative(oldWarehouse.getId(), productId, qty);
+                                                // Scade din gestiunea nouă
+                                                stockCurrentService.updateStockRelative(newWarehouseId, productId, qty.negate());
+                                        }
+                                }
+
+                // 6. Schimbă gestiunea bonului
+                receipt.setWarehouse(newWarehouse);
+
+                // 7. Adaugă flag în notă
+                String note = receipt.getNote() != null ? receipt.getNote() : "";
+                if (!note.contains(" sch gest")) {
+                    note = note + (note.isEmpty() ? "" : " ") + " sch gest";
+                }
+                receipt.setNote(note);
+
+                // 8. Salvează bonul
+                receiptRepository.save(receipt);
+            }
 
         private void validateCateringPrices(Receipt receipt) {
                 for (ReceiptItem item : receipt.getItems()) {

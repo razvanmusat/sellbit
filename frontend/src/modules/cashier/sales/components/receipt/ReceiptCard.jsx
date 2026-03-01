@@ -1,4 +1,5 @@
 import React from 'react';
+import dayjs from 'dayjs';
 import PropTypes from 'prop-types';
 import { Card, CardContent, Typography, Box } from '@mui/material';
 
@@ -8,12 +9,7 @@ const formatTime = (isoString) => {
     return 'N/A';
   }
   try {
-    const date = new Date(isoString);
-    // Formatează ora pentru România (HH:mm)
-    return date.toLocaleTimeString('ro-RO', {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    return dayjs(isoString).format('HH:mm');
   } catch (error) {
     console.error('Format invalid pentru dată:', isoString);
     return 'Invalid';
@@ -67,7 +63,7 @@ ReceiptCard.propTypes = {
     totalAmount: PropTypes.number,
     userName: PropTypes.string,
     tableName: PropTypes.string,
-    createdAt: PropTypes.string, // Presupunem că este un string ISO
+    createdAt: PropTypes.string,
   }).isRequired,
   onClick: PropTypes.func.isRequired,
 };

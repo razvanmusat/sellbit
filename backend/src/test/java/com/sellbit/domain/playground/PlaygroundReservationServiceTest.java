@@ -1,5 +1,7 @@
 package com.sellbit.domain.playground;
 
+import com.sellbit.domain.catering.cateringorder.CateringOrderService;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -21,6 +23,9 @@ class PlaygroundReservationServiceTest {
 
     @Mock
     private PlaygroundReservationRepository reservationRepository;
+
+    @Mock
+    private CateringOrderService cateringOrderService;
 
     @InjectMocks
     private PlaygroundReservationService reservationService;
@@ -138,5 +143,96 @@ class PlaygroundReservationServiceTest {
 
         var ex = assertThrows(RuntimeException.class, () -> reservationService.createReservation(req));
         assertEquals("ERROR.RESERVATION.DATE_IN_PAST", ex.getMessage());
+    }
+
+    @Test
+    @DisplayName("createReservation: Succes - digitalInvitation rămâne null (stare PENDING)")
+    void create_Success_DigitalInvitationNull() {
+        var req = new PlaygroundReservationDTOs.CreateReservationRequest(start, end, "Popescu", "0722111222", null, null, null, null);
+
+        when(reservationRepository.findOverlappingReservations(start, end)).thenReturn(List.of());
+        when(reservationRepository.save(any())).thenAnswer(i -> {
+            PlaygroundReservation r = i.getArgument(0);
+            r.setId(10);
+            return r;
+        });
+
+        var result = reservationService.createReservation(req);
+
+        assertEquals(10, result.id());
+        assertNull(result.digitalInvitation());
+    }
+
+    @Test
+    @DisplayName("updateReservation: Succes - digitalInvitation devine false")
+    void update_Success_DigitalInvitationFalse() {
+        var existing = PlaygroundReservation.builder()
+                .id(2)
+                .startAt(start)
+                .endAt(end)
+                .parentPhone("0722111222")
+                .digitalInvitation(null)
+                .build();
+
+        var req = new PlaygroundReservationDTOs.CreateReservationRequest(start, end, "Update", "0722111222", null, false, null, null);
+
+        when(reservationRepository.findById(2)).thenReturn(Optional.of(existing));
+        when(reservationRepository.findOverlappingReservationsExcludingSelf(start, end, 2)).thenReturn(List.of());
+        when(reservationRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        var result = reservationService.updateReservation(2, req);
+
+        assertEquals(Boolean.FALSE, result.digitalInvitation());
+    }
+
+    @Test
+    @DisplayName("updateReservation: Succes - digitalInvitation devine null")
+    void update_Success_DigitalInvitationNull() {
+        var existing = PlaygroundReservation.builder()
+                .id(3)
+                .startAt(start)
+                .endAt(end)
+                .parentPhone("0722111222")
+                .digitalInvitation(Boolean.TRUE)
+                .build();
+
+        var req = new PlaygroundReservationDTOs.CreateReservationRequest(start, end, "Update", "0722111222", null, null, null, null);
+
+        when(reservationRepository.findById(3)).thenReturn(Optional.of(existing));
+        when(reservationRepository.findOverlappingReservationsExcludingSelf(start, end, 3)).thenReturn(List.of());
+        when(reservationRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        var result = reservationService.updateReservation(3, req);
+
+        assertNull(result.digitalInvitation());
+    }
+
+    @Test
+    @DisplayName("confirmDigitalInvitation: Succes - setează true")
+    void confirmDigitalInvitation_Success() {
+        var reservation = PlaygroundReservation.builder()
+                .id(5)
+                .startAt(start)
+                .endAt(end)
+                .parentName("Popescu")
+                .parentPhone("0722111222")
+                .digitalInvitation(null)
+                .build();
+
+        when(reservationRepository.findById(5)).thenReturn(Optional.of(reservation));
+        when(reservationRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        var result = reservationService.confirmDigitalInvitation(5);
+
+        assertEquals(Boolean.TRUE, result.digitalInvitation());
+    }
+
+    @Test
+    @DisplayName("confirmDigitalInvitation: Eroare - rezervare inexistentă")
+    void confirmDigitalInvitation_NotFound() {
+        when(reservationRepository.findById(404)).thenReturn(Optional.empty());
+
+        var ex = assertThrows(RuntimeException.class, () -> reservationService.confirmDigitalInvitation(404));
+        assertEquals("ERROR.RESERVATION.NOT_FOUND", ex.getMessage());
     }
 }

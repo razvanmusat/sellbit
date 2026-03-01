@@ -35,15 +35,9 @@ export const useStockAdjustmentPage = (warehouseId) => {
   }, []);
 
   // --- HANDLERS ---
-  const handleProductSelect = async (productId) => {
-    try {
-      const results = await SearchProductService.searchProductsByName(""); 
-      const fullProduct = results.find(p => p.id === productId);
-      setSelectedProduct(fullProduct || { id: productId, name: `Produs #${productId}` });
-    } catch (err) {
-      setSelectedProduct({ id: productId, name: `Produs #${productId}` });
-    }
-  };
+    const handleProductSelect = (product) => {
+      setSelectedProduct(product);
+    };
 
   const handleSave = async () => {
     if (!reasonId) {

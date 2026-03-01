@@ -13,11 +13,13 @@ import AddIcon from '@mui/icons-material/Add';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import EditIcon from '@mui/icons-material/Edit';
 
+import dayjs from 'dayjs';
+
 const formatDate = (value) => {
   if (!value) return '-';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString('ro-RO');
+  const date = dayjs(value);
+  if (!date.isValid()) return value;
+  return date.format('DD.MM.YYYY');
 };
 
 const getDiscountLabel = (type, value) => {

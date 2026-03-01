@@ -16,16 +16,16 @@ import 'dayjs/locale/ro';
 
 const formatDateTime = (value) => {
   if (!value) return '-';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString('ro-RO');
+  const date = dayjs(value);
+  if (!date.isValid()) return value;
+  return date.format('DD.MM.YYYY HH:mm');
 };
 
 const formatDate = (value) => {
   if (!value) return '-';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString('ro-RO');
+  const date = dayjs(value);
+  if (!date.isValid()) return value;
+  return date.format('DD.MM.YYYY');
 };
 
 const getDiscountLabel = (type, value) => {

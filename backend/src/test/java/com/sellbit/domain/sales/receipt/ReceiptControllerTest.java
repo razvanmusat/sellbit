@@ -1,6 +1,7 @@
 package com.sellbit.domain.sales.receipt;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sellbit.domain.config.InsufficientStockException;
 import com.sellbit.domain.security.auth.JwtUtils;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -299,4 +300,40 @@ class ReceiptControllerTest {
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isBadRequest());
     }
+
+        // --- 12. CHANGE WAREHOUSE ---
+        @Test
+        @DisplayName("PATCH /api/sales/receipts/{id}/change-warehouse - Succes")
+        void changeWarehouse_Success() throws Exception {
+                doNothing().when(receiptService).changeReceiptWarehouse(100, 2);
+
+                mockMvc.perform(patch("/api/sales/receipts/100/change-warehouse")
+                                                .param("newWarehouseId", "2"))
+                                .andExpect(status().isOk());
+
+                verify(receiptService).changeReceiptWarehouse(100, 2);
+        }
+
+        @Test
+        @DisplayName("PATCH /api/sales/receipts/{id}/change-warehouse - Eroare: Lipsește newWarehouseId")
+        void changeWarehouse_Fail_MissingNewWarehouseId() throws Exception {
+                mockMvc.perform(patch("/api/sales/receipts/100/change-warehouse"))
+                                .andExpect(status().isBadRequest());
+
+                verify(receiptService, never()).changeReceiptWarehouse(anyInt(), anyInt());
+        }
+
+        @Test
+        @DisplayName("PATCH /api/sales/receipts/{id}/change-warehouse - Eroare: Stoc insuficient")
+        void changeWarehouse_Fail_InsufficientStock() throws Exception {
+                doThrow(new InsufficientStockException(List.of("Cafea", "Lapte")))
+                                .when(receiptService).changeReceiptWarehouse(100, 2);
+
+                mockMvc.perform(patch("/api/sales/receipts/100/change-warehouse")
+                                                .param("newWarehouseId", "2"))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.message").value("ERROR.STOCK.INSUFFICIENT_QUANTITY"))
+                                .andExpect(jsonPath("$.params[0]").value("Cafea"))
+                                .andExpect(jsonPath("$.params[1]").value("Lapte"));
+        }
 }

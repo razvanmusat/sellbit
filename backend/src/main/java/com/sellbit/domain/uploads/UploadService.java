@@ -24,13 +24,30 @@ import java.util.stream.Stream;
 
 @Service
 public class UploadService {
+    public List<UploadDTOs.FileItem> listFilesInFolder(String folder) {
+        createUploadDirectoryIfNeeded();
+        if (folder == null || folder.isBlank()) {
+            return List.of();
+        }
+        String safeFolder = folder.trim().replaceAll("[^a-zA-Z0-9._-]", "_");
+        Path folderPath = uploadRoot.resolve(safeFolder).normalize();
+        if (!folderPath.startsWith(uploadRoot) || !Files.isDirectory(folderPath)) {
+            throw new RuntimeException("ERROR.UPLOAD.INVALID_FOLDER");
+        }
+        try (Stream<Path> stream = Files.list(folderPath)) {
+            return stream
+                    .filter(Files::isRegularFile)
+                    .map(this::toFileItem)
+                    .sorted(Comparator.comparing(UploadDTOs.FileItem::lastModified).reversed())
+                    .toList();
+        } catch (IOException ex) {
+            throw new RuntimeException("ERROR.UPLOAD.LIST_FAILED");
+        }
+    }
 
     private static final String SEPARATOR = "__";
 
-    private static final Set<String> ALLOWED_EXTENSIONS = Set.of(
-            "jpg", "jpeg", "png", "gif", "webp", "bmp", "pdf",
-            "txt", "doc", "docx", "xls", "xlsx", "ppt", "pptx"
-    );
+        private static final Set<String> FORBIDDEN_EXTENSIONS = Set.of("exe");
 
     private final Path uploadRoot;
 
@@ -72,8 +89,59 @@ public class UploadService {
         }
     }
 
+    public UploadDTOs.FileItem upload(MultipartFile file, String folder) {
+        if (file == null || file.isEmpty()) {
+            throw new RuntimeException("ERROR.UPLOAD.EMPTY_FILE");
+        }
+
+        String originalName = sanitizeOriginalName(file.getOriginalFilename());
+        validateExtension(originalName);
+
+        // VALIDARE folder
+        String safeFolder = null;
+        if (folder != null && !folder.isBlank()) {
+            String value = folder.trim();
+            System.out.println("[DEBUG] Upload folder param primit: '" + value + "'");
+            if (value.contains("..") || value.contains("/") || value.contains(",") || value.contains("\\") || value.contains(" ")) {
+                throw new RuntimeException("ERROR.UPLOAD.INVALID_FOLDER");
+            }
+            safeFolder = value.replaceAll("[^a-zA-Z0-9._-]", "_");
+            if (safeFolder.isBlank()) {
+                throw new RuntimeException("ERROR.UPLOAD.INVALID_FOLDER");
+            }
+        }
+
+        String storedName = UUID.randomUUID() + SEPARATOR + originalName;
+        Path target = safeFolder == null
+            ? resolveSafePath(storedName)
+            : uploadRoot.resolve(safeFolder).resolve(storedName);
+
+        try (InputStream inputStream = file.getInputStream()) {
+            Files.createDirectories(target.getParent());
+            Files.copy(inputStream, target, StandardCopyOption.REPLACE_EXISTING);
+            return toFileItem(target);
+        } catch (IOException ex) {
+            throw new RuntimeException("ERROR.UPLOAD.SAVE_FAILED");
+        }
+    }
+
     public void delete(String fileName) {
         Path file = resolveSafePath(fileName);
+
+        try {
+            if (!Files.exists(file) || !Files.isRegularFile(file)) {
+                throw new RuntimeException("ERROR.UPLOAD.NOT_FOUND");
+            }
+            Files.delete(file);
+        } catch (RuntimeException ex) {
+            throw ex;
+        } catch (IOException ex) {
+            throw new RuntimeException("ERROR.UPLOAD.DELETE_FAILED");
+        }
+    }
+
+    public void delete(String fileName, String folder) {
+        Path file = resolveSafePath(fileName, folder);
 
         try {
             if (!Files.exists(file) || !Files.isRegularFile(file)) {
@@ -100,8 +168,32 @@ public class UploadService {
         }
     }
 
+    public Resource getResource(String fileName, String folder) {
+        Path file = resolveSafePath(fileName, folder);
+
+        try {
+            if (!Files.exists(file) || !Files.isRegularFile(file)) {
+                throw new RuntimeException("ERROR.UPLOAD.NOT_FOUND");
+            }
+            return new UrlResource(file.toUri());
+        } catch (MalformedURLException ex) {
+            throw new RuntimeException("ERROR.UPLOAD.READ_FAILED");
+        }
+    }
+
     public String resolveContentType(String fileName) {
         Path file = resolveSafePath(fileName);
+
+        try {
+            String detected = Files.probeContentType(file);
+            return detected != null ? detected : "application/octet-stream";
+        } catch (IOException ex) {
+            return "application/octet-stream";
+        }
+    }
+
+    public String resolveContentType(String fileName, String folder) {
+        Path file = resolveSafePath(fileName, folder);
 
         try {
             String detected = Files.probeContentType(file);
@@ -156,6 +248,37 @@ public class UploadService {
         return resolved;
     }
 
+    private Path resolveSafePath(String fileName, String folder) {
+        String cleanFileName = cleanSimpleFileName(fileName);
+
+        if (folder == null || folder.isBlank()) {
+            return resolveSafePath(cleanFileName);
+        }
+
+        String safeFolder = sanitizeFolderName(folder);
+        Path resolved = uploadRoot.resolve(safeFolder).resolve(cleanFileName).normalize();
+
+        if (!resolved.startsWith(uploadRoot)) {
+            throw new RuntimeException("ERROR.UPLOAD.INVALID_NAME");
+        }
+
+        return resolved;
+    }
+
+    private String sanitizeFolderName(String folder) {
+        String value = Objects.toString(folder, "").trim();
+        if (value.isBlank() || value.contains("..") || value.contains("/") || value.contains("\\") || value.contains(",") || value.contains(" ")) {
+            throw new RuntimeException("ERROR.UPLOAD.INVALID_FOLDER");
+        }
+
+        String safeFolder = value.replaceAll("[^a-zA-Z0-9._-]", "_");
+        if (safeFolder.isBlank()) {
+            throw new RuntimeException("ERROR.UPLOAD.INVALID_FOLDER");
+        }
+
+        return safeFolder;
+    }
+
     private String cleanSimpleFileName(String fileName) {
         String clean = StringUtils.cleanPath(Objects.toString(fileName, "")).trim();
 
@@ -189,8 +312,8 @@ public class UploadService {
         }
 
         String extension = fileName.substring(dotIndex + 1).toLowerCase(Locale.ROOT);
-        if (!ALLOWED_EXTENSIONS.contains(extension)) {
-            throw new RuntimeException("ERROR.UPLOAD.INVALID_TYPE");
+        if (FORBIDDEN_EXTENSIONS.contains(extension)) {
+            throw new RuntimeException("ERROR.UPLOAD.FORBIDDEN_TYPE");
         }
     }
 

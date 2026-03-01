@@ -12,19 +12,20 @@ import {
 import RestoreIcon from '@mui/icons-material/Restore';
 import BlockIcon from '@mui/icons-material/Block';
 import { getFriendlyErrorMessage } from '../../../../shared/utils/errorHandler';
+import dayjs from 'dayjs';
 
 const formatDateTime = (value) => {
   if (!value) return '-';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString('ro-RO');
+  return dayjs(value).format('DD.MM.YYYY HH:mm');
 };
 
 const formatDate = (value) => {
   if (!value) return '-';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString('ro-RO');
+  return dayjs(value).format('DD.MM.YYYY');
 };
 
 const getDiscountLabel = (type, value) => {

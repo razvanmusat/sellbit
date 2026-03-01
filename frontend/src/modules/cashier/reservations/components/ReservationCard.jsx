@@ -12,7 +12,7 @@ import RestaurantMenuIcon from '@mui/icons-material/RestaurantMenu';
 
 // Folosim React.memo aici pentru a preveni randările inutile
 // 👇 AM ADĂUGAT PROP-UL 'onAddCatering'
-const ReservationCard = React.memo(({ reservation, onEdit, onDelete, onAddCatering }) => {
+const ReservationCard = React.memo(({ reservation, onEdit, onDelete, onAddCatering, onConfirmDigitalInvitation, isAdmin }) => {
   const start = dayjs(reservation.startAt);
   const end = dayjs(reservation.endAt);
   const now = dayjs(); 
@@ -94,8 +94,32 @@ const ReservationCard = React.memo(({ reservation, onEdit, onDelete, onAddCateri
                 <Chip label={reservation.theme} size="small" sx={{ bgcolor: '#eee' }} />
             )}
             
-            {reservation.digitalInvitation && (
-                <Chip label="Invitație Digitală" size="small" color="info" variant="outlined" />
+            {reservation.digitalInvitation === true && (
+                <Chip
+                    label="Invitație digitală creată"
+                    size="small"
+                    color="success"
+                    sx={{ color: 'white', bgcolor: 'success.main' }}
+                />
+            )}
+
+            {reservation.digitalInvitation === null && (
+                <Chip
+                    label="Invitație digitală de creat"
+                    size="small"
+                    variant="filled"
+                    onClick={isAdmin ? () => onConfirmDigitalInvitation(reservation) : undefined}
+                    sx={{
+                        bgcolor: '#e0e0e0',
+                        color: 'text.primary',
+                        cursor: isAdmin ? 'pointer' : 'default',
+                        '&:hover': isAdmin ? { bgcolor: '#d5d5d5' } : undefined
+                    }}
+                />
+            )}
+
+            {reservation.digitalInvitation === false && (
+                <Chip label="Fără invitație digitală" size="small" variant="outlined" />
             )}
             
             {isFinished && (
@@ -145,7 +169,9 @@ ReservationCard.propTypes = {
   reservation: PropTypes.object.isRequired,
   onEdit: PropTypes.func,
   onDelete: PropTypes.func,
-  onAddCatering: PropTypes.func
+    onAddCatering: PropTypes.func,
+    onConfirmDigitalInvitation: PropTypes.func,
+    isAdmin: PropTypes.bool
 };
 
 export default ReservationCard;

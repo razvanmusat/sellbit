@@ -2,7 +2,7 @@ import React from 'react';
 import { Box, CircularProgress, Alert, Button, Grid, Typography, useTheme, useMediaQuery, Snackbar } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import PaymentsIcon from '@mui/icons-material/Payments';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 
 // Importăm unicul Hook
 import { useSellPage } from '../hooks/useSellPage';
@@ -15,8 +15,10 @@ import CashAdvanceModal from '../components/modals/CashAdvanceModal';
 import OpenedReceiptCard from '../components/receipt/OpenedReceiptCard';
 import AddPaymentModal from '../components/modals/AddPaymentModal'; 
 import CancelReceiptModal from '../components/modals/CancelReceiptModal';
+import ChangeWarehouseModal from '../components/modals/ChangeWarehouseModal';
 
 const SellPage = () => {
+  const navigate = useNavigate();
   const theme = useTheme();
   const isSmallScreen = useMediaQuery(theme.breakpoints.down('md'));
 
@@ -93,6 +95,20 @@ const SellPage = () => {
                 >
                   Încasează Avans
                 </Button>
+                <Button
+                  variant="outlined"
+                  color="secondary"
+                  onClick={() => toggleModal('changeWarehouse', true)}
+                  size={isSmallScreen ? 'small' : 'medium'}
+                >
+                  Schimbă gestiunea bonurilor
+                </Button>
+                    <ChangeWarehouseModal
+                      open={modals.changeWarehouse}
+                      onClose={() => toggleModal('changeWarehouse', false)}
+                      warehouses={warehouses}
+                      warehouseId={Number(warehouseId)}
+                    />
               </Box>
             )}
           </Box>

@@ -35,9 +35,8 @@ public class PlaygroundReservation {
     @Column(name = "advance_paid_at")
     private LocalDateTime advancePaidAt;
 
-    @Builder.Default
-    @Column(name = "digital_invitation", nullable = false)
-    private Boolean digitalInvitation = false;
+    @Column(name = "digital_invitation")
+    private Boolean digitalInvitation;
 
     @Column(length = 100)
     private String theme;

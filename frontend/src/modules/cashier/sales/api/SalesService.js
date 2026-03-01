@@ -63,4 +63,12 @@ export class SalesService {
     const endpoint = `sales/receipts/report?warehouseId=${warehouseId}&status=${status}&start=${start}&end=${end}`;
     return await client(endpoint);
   }
+
+  // @PatchMapping("/{id}/change-warehouse")
+  // Schimbă gestiunea unui bon închis.
+  static async changeReceiptWarehouse(id, newWarehouseId) {
+    await client(`sales/receipts/${id}/change-warehouse?newWarehouseId=${newWarehouseId}`, {
+      method: 'PATCH'
+    });
+  }
 }

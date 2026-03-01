@@ -64,6 +64,7 @@ const PlaceholderPage = ({ title }) => (
   </Box>
 );
 
+
 function App() {
   const { token, user } = useSelector((state) => state.auth);
   const navigate = useNavigate();
@@ -140,6 +141,7 @@ function App() {
         
         {/* 1. Vânzare */}
         <Route path="sell/:warehouseId?/:receiptId?" element={<SellPage />} />
+        {/* Pagina de schimbare gestiune bonuri */}
         
         {/* 2. Casierie */}
         <Route path="cashier" element={<CashierReportsTabs />} />

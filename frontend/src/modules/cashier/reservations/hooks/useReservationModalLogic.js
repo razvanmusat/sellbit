@@ -26,7 +26,7 @@ export const useReservationModalLogic = ({ open, editData, selectedDate, onSubmi
         
         const hasAdvance = Number(editData.advanceAmount) > 0;
         setAdvancePaid(hasAdvance);
-        setDigitalInvitation(!!editData.digitalInvitation);
+        setDigitalInvitation(editData.digitalInvitation ?? null);
       } else {
         const baseDate = selectedDate || dayjs();
         const initialStart = baseDate.startOf('day'); 
@@ -112,8 +112,6 @@ export const useReservationModalLogic = ({ open, editData, selectedDate, onSubmi
      }
 
      if (advancePaid === null) newErrors.advancePaid = "Selectează avans.";
-     if (digitalInvitation === null) newErrors.digitalInvitation = "Selectează invitație.";
-     
      if (advancePaid === true && (!amountVal || Number(amountVal) <= 0)) {
          newErrors.advanceValue = "Sumă?";
      }

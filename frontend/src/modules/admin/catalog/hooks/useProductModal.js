@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { ProductService } from '../api/ProductService';
 import { LookupService } from '../api/LookupService';
+import { CategoryService } from '../api/CategoryService';
 import { getFriendlyErrorMessage } from '../../../../shared/utils/errorHandler';
 
 export const useProductModal = (open, onClose, productToEdit, categoryId, onSuccess) => {

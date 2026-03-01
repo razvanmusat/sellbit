@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
+import 'dayjs/locale/ro';
 import { fetchReservations, setSelectedDate } from '../store/reservationsSlice';
 import { ReservationsService } from '../api/ReservationsService';
 import { CateringService } from '../../catering/api/CateringService';
@@ -16,10 +17,11 @@ export const useReservationsMainPage = () => {
   // --- REDUX STATE ---
   const { 
     selectedDate: selectedDateStr, 
-    reservations, 
+    reservations: dayReservations, 
     loading: loadingList, 
     error: listError 
   } = useSelector((state) => state.reservations);
+  const user = useSelector((state) => state.auth?.user);
 
   const selectedDate = useMemo(() => dayjs(selectedDateStr), [selectedDateStr]);
   const prevDateRef = useRef(selectedDateStr);
@@ -33,15 +35,46 @@ export const useReservationsMainPage = () => {
   const [cateringConflict, setCateringConflict] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState({ open: false, message: '', severity: 'success' });
+  const [viewMode, setViewMode] = useState('day');
+  const [filterOption, setFilterOption] = useState('');
+  const [intervalReservations, setIntervalReservations] = useState([]);
+  const [intervalLoading, setIntervalLoading] = useState(false);
+  const [intervalError, setIntervalError] = useState(null);
+  const [rangeModalOpen, setRangeModalOpen] = useState(false);
+  const [rangeStart, setRangeStart] = useState(dayjs().startOf('month'));
+  const [rangeEnd, setRangeEnd] = useState(dayjs().endOf('month'));
+  const [activeRange, setActiveRange] = useState(null);
+  const [confirmInvitationReservation, setConfirmInvitationReservation] = useState(null);
+
+  const isAdmin = user?.authorityLevel === 100;
 
   // --- LOGICA FETCH ---
   const loadData = useCallback((force = false) => {
     if (!selectedDateStr) return;
-    if (!force && !listError && !loadingList && reservations && reservations.length > 0) {
+    if (!force && !listError && !loadingList && dayReservations && dayReservations.length > 0) {
         return; 
     }
     dispatch(fetchReservations(selectedDateStr));
-  }, [dispatch, selectedDateStr, listError, loadingList, reservations]);
+  }, [dispatch, selectedDateStr, listError, loadingList, dayReservations]);
+
+  const loadIntervalData = useCallback(async (startDate, endDate, mode) => {
+    setIntervalLoading(true);
+    setIntervalError(null);
+    try {
+      const start = dayjs(startDate).startOf('day').format('YYYY-MM-DDTHH:mm:ss');
+      const end = dayjs(endDate).endOf('day').format('YYYY-MM-DDTHH:mm:ss');
+      const data = await ReservationsService.getByInterval(start, end);
+
+      setIntervalReservations(data || []);
+      setActiveRange({ start: dayjs(startDate).startOf('day'), end: dayjs(endDate).endOf('day') });
+      setViewMode(mode);
+    } catch (error) {
+      setIntervalReservations([]);
+      setIntervalError(error.response?.data?.message || error.message || 'Nu s-au putut încărca rezervările.');
+    } finally {
+      setIntervalLoading(false);
+    }
+  }, []);
 
 
   // --- ARHITECTURA URL-FIRST ---
@@ -72,14 +105,79 @@ export const useReservationsMainPage = () => {
 
   // --- HANDLERS NAVIGARE ---
   const handleChangeDate = (newDate) => {
+    setViewMode('day');
+    setFilterOption('');
     const dateStr = newDate ? newDate.format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD');
     setSearchParams({ date: dateStr });
   };
 
   const handlePrevDay = () => handleChangeDate(selectedDate.subtract(1, 'day'));
   const handleNextDay = () => handleChangeDate(selectedDate.add(1, 'day'));
-  const handleGoToToday = () => handleChangeDate(dayjs());
-  const handleRefresh = () => loadData(true);
+  const handleGoToToday = () => {
+    setViewMode('day');
+    setFilterOption('');
+    const today = dayjs();
+    const todayStr = today.format('YYYY-MM-DD');
+    setSearchParams({ date: todayStr });
+
+    if (selectedDateStr === todayStr) {
+      loadData(true);
+    }
+  };
+
+  const handleRefresh = () => {
+    if (viewMode === 'day') {
+      loadData(true);
+      return;
+    }
+
+    if (activeRange) {
+      loadIntervalData(activeRange.start, activeRange.end, viewMode);
+    }
+  };
+
+  const handleFilterOptionChange = (option) => {
+    setFilterOption(option);
+
+    if (option === 'currentMonth') {
+      loadIntervalData(dayjs().startOf('month'), dayjs().endOf('month'), 'currentMonth');
+      return;
+    }
+
+    if (option === 'customInterval') {
+      if (activeRange && viewMode === 'customInterval') {
+        setRangeStart(dayjs(activeRange.start));
+        setRangeEnd(dayjs(activeRange.end));
+      } else {
+        setRangeStart(dayjs().startOf('month'));
+        setRangeEnd(dayjs().endOf('month'));
+      }
+      setRangeModalOpen(true);
+    }
+  };
+
+  const handleCloseRangeModal = () => {
+    setRangeModalOpen(false);
+    if (viewMode === 'day') setFilterOption('');
+    if (viewMode === 'currentMonth') setFilterOption('currentMonth');
+    if (viewMode === 'customInterval') setFilterOption('customInterval');
+  };
+
+  const handleApplyCustomRange = async () => {
+    if (!rangeStart || !rangeEnd) {
+      setToast({ open: true, message: 'Te rog selectează ambele date.', severity: 'warning' });
+      return;
+    }
+
+    if (dayjs(rangeStart).isAfter(dayjs(rangeEnd), 'day')) {
+      setToast({ open: true, message: 'Data de început trebuie să fie înainte de data de sfârșit.', severity: 'warning' });
+      return;
+    }
+
+    await loadIntervalData(rangeStart, rangeEnd, 'customInterval');
+    setRangeModalOpen(false);
+    setFilterOption('customInterval');
+  };
 
   // --- MODAL HANDLERS ---
   const handleOpenAdd = () => {
@@ -111,6 +209,38 @@ export const useReservationsMainPage = () => {
   };
 
   const handleCloseDelete = () => setDeleteId(null);
+
+  const handleOpenConfirmInvitation = (reservation) => {
+    if (!isAdmin) return;
+    if (reservation?.digitalInvitation !== null) return;
+    setConfirmInvitationReservation(reservation);
+  };
+
+  const handleCloseConfirmInvitation = () => {
+    setConfirmInvitationReservation(null);
+  };
+
+  const handleConfirmInvitation = async () => {
+    if (!confirmInvitationReservation?.id) return;
+
+    setSubmitting(true);
+    try {
+      await ReservationsService.confirmDigitalInvitation(confirmInvitationReservation.id);
+      setToast({ open: true, message: 'Invitația digitală a fost confirmată.', severity: 'success' });
+      setConfirmInvitationReservation(null);
+
+      if (viewMode === 'day') {
+        loadData(true);
+      } else if (activeRange) {
+        await loadIntervalData(activeRange.start, activeRange.end, viewMode);
+      }
+    } catch (err) {
+      const msg = getFriendlyErrorMessage(err.response?.data?.message || err.message);
+      setToast({ open: true, message: msg, severity: 'error' });
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const handleOpenCatering = async (reservation) => {
     try {
@@ -206,12 +336,57 @@ export const useReservationsMainPage = () => {
     }
   };
 
+  const reservations = viewMode === 'day' ? dayReservations : intervalReservations;
+  const isLoading = viewMode === 'day' ? loadingList : intervalLoading;
+  const errorToShow = viewMode === 'day' ? listError : intervalError;
+
+  const emptyStateLabel = viewMode === 'day'
+    ? selectedDate?.format('DD/MM/YYYY')
+    : activeRange
+      ? `${dayjs(activeRange.start).format('DD/MM/YYYY')} - ${dayjs(activeRange.end).format('DD/MM/YYYY')}`
+      : selectedDate?.format('DD/MM/YYYY');
+
+  const selectedIntervalLabel = activeRange
+    ? `${dayjs(activeRange.start).format('DD/MM/YYYY')} - ${dayjs(activeRange.end).format('DD/MM/YYYY')}`
+    : 'Selectează interval';
+
+  const groupedReservationsByDay = useMemo(() => {
+    if (viewMode === 'day') return [];
+
+    const groups = intervalReservations.reduce((acc, reservation) => {
+      const dateKey = dayjs(reservation.startAt).format('YYYY-MM-DD');
+      if (!acc[dateKey]) acc[dateKey] = [];
+      acc[dateKey].push(reservation);
+      return acc;
+    }, {});
+
+    return Object.keys(groups)
+      .sort((a, b) => dayjs(a).valueOf() - dayjs(b).valueOf())
+      .map((dateKey) => ({
+        dateKey,
+        title: dayjs(dateKey).locale('ro').format('dddd D MMMM'),
+        reservations: groups[dateKey]
+      }));
+  }, [viewMode, intervalReservations]);
+
   return {
-    selectedDate, reservations, loadingList, listError,
+    selectedDate, reservations, loadingList: isLoading, listError: errorToShow,
     openModal, editingReservation, deleteId, submitting, toast, setToast,
     cateringModalOpen, reservationForCatering, cateringConflict,
     handleRedirectToCatering, handleCloseConflict,
     handleChangeDate, handlePrevDay, handleNextDay, handleGoToToday, handleRefresh,
+    filterOption, handleFilterOptionChange,
+    rangeModalOpen, rangeStart, rangeEnd, setRangeStart, setRangeEnd,
+    handleCloseRangeModal, handleApplyCustomRange,
+    emptyStateLabel,
+    selectedIntervalLabel,
+    viewMode,
+    groupedReservationsByDay,
+    isAdmin,
+    confirmInvitationReservation,
+    handleOpenConfirmInvitation,
+    handleCloseConfirmInvitation,
+    handleConfirmInvitation,
     handleOpenAdd, handleOpenEdit, handleCloseModal, handleOpenDelete, handleCloseDelete, 
     handleSubmit, handleConfirmDelete, handleOpenCatering, handleCloseCatering, handleSubmitCatering    
   };

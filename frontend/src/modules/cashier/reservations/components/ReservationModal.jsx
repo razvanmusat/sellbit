@@ -151,8 +151,19 @@ const ReservationModal = (props) => {
                  <FormControl error={!!errors.digitalInvitation} fullWidth>
                     <Box display="flex" alignItems="center" flexWrap="wrap" gap={1}>
                         <FormLabel id="inv-l" sx={{ fontWeight: 'bold', color: 'text.primary', minWidth: '90px', fontSize: '0.95rem' }}>Invitație digitală?</FormLabel>
-                        <RadioGroup row aria-labelledby="inv-l" value={digitalInvitation === null ? '' : digitalInvitation.toString()} onChange={(e) => setDigitalInvitation(e.target.value === 'true')}>
-                            <FormControlLabel value="true" control={<Radio size="small" />} label="DA" sx={{ mr: 1 }} />
+                  <RadioGroup
+                    row
+                    aria-labelledby="inv-l"
+                    value={digitalInvitation === false ? 'false' : 'pending'}
+                    onChange={(e) => {
+                      if (e.target.value === 'false') {
+                        setDigitalInvitation(false);
+                        return;
+                      }
+                      setDigitalInvitation(null);
+                    }}
+                  >
+                    <FormControlLabel value="pending" control={<Radio size="small" />} label="DA" sx={{ mr: 1 }} />
                             <FormControlLabel value="false" control={<Radio size="small" />} label="NU" />
                         </RadioGroup>
                     </Box>

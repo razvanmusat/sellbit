@@ -119,4 +119,13 @@ public class ReceiptController {
 
         return ResponseEntity.ok().build();
     }
+
+    @PreAuthorize("hasAnyAuthority('50', '100')")
+    @PatchMapping("/{id}/change-warehouse") //Schimbare gestiune pentru un bon
+    public ResponseEntity<Void> changeWarehouse(
+            @PathVariable Integer id,
+            @RequestParam Integer newWarehouseId) {
+        receiptService.changeReceiptWarehouse(id, newWarehouseId);
+        return ResponseEntity.ok().build();
+    }
 }

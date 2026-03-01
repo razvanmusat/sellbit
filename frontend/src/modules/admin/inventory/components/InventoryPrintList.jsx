@@ -98,7 +98,7 @@ const InventoryPrintList = ({ warehouseId, warehouseName }) => {
                 <div className="print-header" style={{ display: 'none' }}>
                     <Typography variant="h4" fontWeight="bold">LISTĂ INVENTARIERE</Typography>
                     <Typography variant="h6">{warehouseName}</Typography>
-                    <Typography variant="caption">Data: {new Date().toLocaleDateString('ro-RO')}</Typography>
+                    <Typography variant="caption">Data: {dayjs().format('DD/MM/YYYY')}</Typography>
                 </div>
 
                 {/* Mesaj informativ */}

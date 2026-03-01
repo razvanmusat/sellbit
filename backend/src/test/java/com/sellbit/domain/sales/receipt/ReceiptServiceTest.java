@@ -7,9 +7,11 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -30,6 +32,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.sellbit.domain.cash.cashmovement.CashMovementService;
 import com.sellbit.domain.catalog.product.Product;
 import com.sellbit.domain.catalog.product.ProductRepository;
+import com.sellbit.domain.catalog.productcomposite.ProductComponent;
+import com.sellbit.domain.catalog.productcomposite.ProductComponentRepository;
+import com.sellbit.domain.config.InsufficientStockException;
 import com.sellbit.domain.lookup.producttype.ProductType;
 import com.sellbit.domain.lookup.vatrate.VatRate;
 import com.sellbit.domain.inventory.purchase.PurchaseService;
@@ -70,6 +75,7 @@ class ReceiptServiceTest {
     @Mock private StoreRepository storeRepository;
     @Mock private PaymentMethodRepository paymentMethodRepository;
     @Mock private ProductRepository productRepository; 
+    @Mock private ProductComponentRepository productComponentRepository;
 
     @InjectMocks
     private ReceiptService receiptService;
@@ -756,4 +762,245 @@ class ReceiptServiceTest {
             receiptService.registerAdvancePayment(null, BigDecimal.TEN, "CASH", 1, "Test")
         );
     }
+
+    // --- 14. changeReceiptWarehouse ---
+    @Test
+    @DisplayName("changeReceiptWarehouse - Succes: Muta bonul simplu si actualizeaza stocul")
+    void changeReceiptWarehouse_Success_SimpleProduct() {
+        receipt.setStatus(closedStatus);
+        receipt.setNote("Nota initiala");
+
+        Product product = new Product();
+        product.setId(10);
+        product.setName("Apa");
+        product.setTrackStock(true);
+
+        ReceiptItem item = ReceiptItem.builder()
+                .product(product)
+                .quantity(new BigDecimal("2.00"))
+                .build();
+        receipt.setItems(List.of(item));
+
+        Warehouse newWarehouse = new Warehouse();
+        newWarehouse.setId(2);
+        newWarehouse.setName("Bar");
+
+        when(receiptRepository.findById(100)).thenReturn(Optional.of(receipt));
+        when(warehouseRepository.findById(2)).thenReturn(Optional.of(newWarehouse));
+        when(productComponentRepository.findByParentProductIdAndIsActiveTrue(10)).thenReturn(List.of());
+        when(stockCurrentService.getQuantity(2, 10)).thenReturn(new BigDecimal("20.00"));
+
+        receiptService.changeReceiptWarehouse(100, 2);
+
+        assertEquals(2, receipt.getWarehouse().getId());
+        assertTrue(receipt.getNote().contains("sch gest"));
+        verify(stockCurrentService).updateStockRelative(eq(1), eq(10), eq(new BigDecimal("2.00")));
+        verify(stockCurrentService).updateStockRelative(eq(2), eq(10), eq(new BigDecimal("-2.00")));
+        verify(receiptRepository).save(receipt);
+    }
+
+    @Test
+    @DisplayName("changeReceiptWarehouse - Eroare: Bonul nu este CLOSED")
+    void changeReceiptWarehouse_Fail_NotClosed() {
+        receipt.setStatus(openStatus);
+        when(receiptRepository.findById(100)).thenReturn(Optional.of(receipt));
+
+        RuntimeException ex = assertThrows(RuntimeException.class, () -> receiptService.changeReceiptWarehouse(100, 2));
+
+        assertEquals("ERROR.RECEIPT.NOT_CLOSED", ex.getMessage());
+        verify(warehouseRepository, never()).findById(any());
+        verify(receiptRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("changeReceiptWarehouse - Eroare: Stoc insuficient in gestiunea noua")
+    void changeReceiptWarehouse_Fail_InsufficientStock() {
+        receipt.setStatus(closedStatus);
+
+        Product product = new Product();
+        product.setId(11);
+        product.setName("Cafea");
+        product.setTrackStock(true);
+
+        ReceiptItem item = ReceiptItem.builder()
+                .product(product)
+                .quantity(new BigDecimal("5.00"))
+                .build();
+        receipt.setItems(List.of(item));
+
+        Warehouse newWarehouse = new Warehouse();
+        newWarehouse.setId(2);
+
+        when(receiptRepository.findById(100)).thenReturn(Optional.of(receipt));
+        when(warehouseRepository.findById(2)).thenReturn(Optional.of(newWarehouse));
+        when(productComponentRepository.findByParentProductIdAndIsActiveTrue(11)).thenReturn(List.of());
+        when(stockCurrentService.getQuantity(2, 11)).thenReturn(new BigDecimal("1.00"));
+
+        InsufficientStockException ex = assertThrows(
+                InsufficientStockException.class,
+                () -> receiptService.changeReceiptWarehouse(100, 2));
+
+        assertTrue(ex.getProductNames().contains("Cafea"));
+        verify(stockCurrentService, never()).updateStockRelative(any(), any(), any());
+        verify(receiptRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("changeReceiptWarehouse - Succes: Produs compus muta stocul componentelor")
+    void changeReceiptWarehouse_Success_CompositeProduct() {
+        receipt.setStatus(closedStatus);
+
+        Product parent = new Product();
+        parent.setId(20);
+        parent.setName("Meniu");
+        parent.setTrackStock(false);
+
+        Product child = new Product();
+        child.setId(21);
+        child.setName("Cartofi");
+        child.setTrackStock(true);
+
+        ProductComponent component = ProductComponent.builder()
+                .parentProduct(parent)
+                .childProduct(child)
+                .quantity(new BigDecimal("1.500"))
+                .isActive(true)
+                .build();
+
+        ReceiptItem item = ReceiptItem.builder()
+                .product(parent)
+                .quantity(new BigDecimal("2.00"))
+                .build();
+        receipt.setItems(List.of(item));
+
+        Warehouse newWarehouse = new Warehouse();
+        newWarehouse.setId(2);
+
+        when(receiptRepository.findById(100)).thenReturn(Optional.of(receipt));
+        when(warehouseRepository.findById(2)).thenReturn(Optional.of(newWarehouse));
+        when(productComponentRepository.findByParentProductIdAndIsActiveTrue(20)).thenReturn(List.of(component));
+        when(stockCurrentService.getQuantity(2, 21)).thenReturn(new BigDecimal("10.00"));
+
+        receiptService.changeReceiptWarehouse(100, 2);
+
+        verify(stockCurrentService).updateStockRelative(
+                eq(1),
+                eq(21),
+                argThat(qty -> qty.compareTo(new BigDecimal("3.00")) == 0));
+        verify(stockCurrentService).updateStockRelative(
+                eq(2),
+                eq(21),
+                argThat(qty -> qty.compareTo(new BigDecimal("-3.00")) == 0));
+        verify(receiptRepository).save(receipt);
+    }
+
+        @Test
+        @DisplayName("changeReceiptWarehouse - Succes: Produs compus ignora componentele fara trackStock")
+        void changeReceiptWarehouse_Success_CompositeProduct_OnlyTrackedChildrenUpdated() {
+        receipt.setStatus(closedStatus);
+
+        Product parent = new Product();
+        parent.setId(30);
+        parent.setName("Pachet");
+
+        Product trackedChild = new Product();
+        trackedChild.setId(31);
+        trackedChild.setName("Suc");
+        trackedChild.setTrackStock(true);
+
+        Product untrackedChild = new Product();
+        untrackedChild.setId(32);
+        untrackedChild.setName("Servire");
+        untrackedChild.setTrackStock(false);
+
+        ProductComponent trackedComponent = ProductComponent.builder()
+            .parentProduct(parent)
+            .childProduct(trackedChild)
+            .quantity(new BigDecimal("2.000"))
+            .isActive(true)
+            .build();
+
+        ProductComponent untrackedComponent = ProductComponent.builder()
+            .parentProduct(parent)
+            .childProduct(untrackedChild)
+            .quantity(new BigDecimal("1.000"))
+            .isActive(true)
+            .build();
+
+        ReceiptItem item = ReceiptItem.builder()
+            .product(parent)
+            .quantity(new BigDecimal("3.00"))
+            .build();
+        receipt.setItems(List.of(item));
+
+        Warehouse newWarehouse = new Warehouse();
+        newWarehouse.setId(2);
+
+        when(receiptRepository.findById(100)).thenReturn(Optional.of(receipt));
+        when(warehouseRepository.findById(2)).thenReturn(Optional.of(newWarehouse));
+        when(productComponentRepository.findByParentProductIdAndIsActiveTrue(30))
+            .thenReturn(List.of(trackedComponent, untrackedComponent));
+        when(stockCurrentService.getQuantity(2, 31)).thenReturn(new BigDecimal("20.00"));
+
+        receiptService.changeReceiptWarehouse(100, 2);
+
+        verify(stockCurrentService).getQuantity(2, 31);
+        verify(stockCurrentService, never()).getQuantity(2, 32);
+
+        verify(stockCurrentService).updateStockRelative(
+            eq(1),
+            eq(31),
+            argThat(qty -> qty.compareTo(new BigDecimal("6.00")) == 0));
+        verify(stockCurrentService).updateStockRelative(
+            eq(2),
+            eq(31),
+            argThat(qty -> qty.compareTo(new BigDecimal("-6.00")) == 0));
+
+        verify(stockCurrentService, never()).updateStockRelative(anyInt(), eq(32), any());
+        verify(receiptRepository).save(receipt);
+        }
+
+        @Test
+        @DisplayName("changeReceiptWarehouse - Eroare: Stoc insuficient pe componenta trackStock")
+        void changeReceiptWarehouse_Fail_InsufficientStockOnCompositeChild() {
+        receipt.setStatus(closedStatus);
+
+        Product parent = new Product();
+        parent.setId(40);
+        parent.setName("Burger Combo");
+
+        Product child = new Product();
+        child.setId(41);
+        child.setName("Cartofi");
+        child.setTrackStock(true);
+
+        ProductComponent component = ProductComponent.builder()
+            .parentProduct(parent)
+            .childProduct(child)
+            .quantity(new BigDecimal("1.500"))
+            .isActive(true)
+            .build();
+
+        ReceiptItem item = ReceiptItem.builder()
+            .product(parent)
+            .quantity(new BigDecimal("2.00"))
+            .build();
+        receipt.setItems(List.of(item));
+
+        Warehouse newWarehouse = new Warehouse();
+        newWarehouse.setId(2);
+
+        when(receiptRepository.findById(100)).thenReturn(Optional.of(receipt));
+        when(warehouseRepository.findById(2)).thenReturn(Optional.of(newWarehouse));
+        when(productComponentRepository.findByParentProductIdAndIsActiveTrue(40)).thenReturn(List.of(component));
+        when(stockCurrentService.getQuantity(2, 41)).thenReturn(new BigDecimal("2.99"));
+
+        InsufficientStockException ex = assertThrows(
+            InsufficientStockException.class,
+            () -> receiptService.changeReceiptWarehouse(100, 2));
+
+        assertTrue(ex.getProductNames().contains("Cartofi"));
+        verify(stockCurrentService, never()).updateStockRelative(anyInt(), anyInt(), any());
+        verify(receiptRepository, never()).save(any());
+        }
 }

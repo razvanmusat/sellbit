@@ -40,7 +40,7 @@ public class PlaygroundReservationService {
                 .parentName(formattedName)
                 .parentPhone(req.parentPhone())
                 .advanceAmount(req.advanceAmount())
-                .digitalInvitation(Boolean.TRUE.equals(req.digitalInvitation()))
+            .digitalInvitation(req.digitalInvitation())
                 .theme(Utils.formatFullName(req.theme()))
                 .note(req.note())
                 .build();
@@ -84,7 +84,7 @@ public class PlaygroundReservationService {
         reservation.setParentName(Utils.formatFullName(req.parentName()));
         reservation.setParentPhone(req.parentPhone());
         reservation.setAdvanceAmount(req.advanceAmount());
-        reservation.setDigitalInvitation(Boolean.TRUE.equals(req.digitalInvitation()));
+        reservation.setDigitalInvitation(req.digitalInvitation());
         reservation.setTheme(Utils.formatFullName(req.theme()));
         reservation.setNote(req.note());
 
@@ -98,7 +98,7 @@ public class PlaygroundReservationService {
 
     @Transactional
     public void deleteReservation(Integer id) {
-        
+
         PlaygroundReservation reservation = reservationRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("ERROR.RESERVATION.NOT_FOUND"));
 
@@ -111,10 +111,29 @@ public class PlaygroundReservationService {
         reservationRepository.delete(reservation);
     }
 
+    @Transactional
+    public PlaygroundReservationDTOs.ReservationResponse confirmDigitalInvitation(Integer id) {
+        PlaygroundReservation reservation = reservationRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("ERROR.RESERVATION.NOT_FOUND"));
+
+        reservation.setDigitalInvitation(Boolean.TRUE);
+
+        return mapToResponse(reservationRepository.save(reservation));
+    }
+
     @Transactional(readOnly = true)
     public List<PlaygroundReservationDTOs.ReservationResponse> getReservationsForDay(LocalDateTime startOfDay,
             LocalDateTime endOfDay) {
         return reservationRepository.findByStartAtBetweenOrderByStartAtAsc(startOfDay, endOfDay)
+                .stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public List<PlaygroundReservationDTOs.ReservationResponse> getReservationsForInterval(LocalDateTime start,
+            LocalDateTime end) {
+        return reservationRepository.findByStartAtBetweenOrderByStartAtAsc(start, end)
                 .stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
@@ -159,7 +178,7 @@ public class PlaygroundReservationService {
         return amount != null && amount.compareTo(BigDecimal.ZERO) > 0;
     }
 
-    private void validatePhoneNumber(String phone) {        
+    private void validatePhoneNumber(String phone) {
 
         // Dacă nu e număr internațional (00), verificăm formatul local
         if (!phone.startsWith("00")) {

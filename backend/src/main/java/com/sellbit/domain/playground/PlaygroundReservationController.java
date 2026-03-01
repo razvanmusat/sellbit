@@ -42,6 +42,12 @@ public class PlaygroundReservationController {
         return ResponseEntity.noContent().build();
     }
 
+    @PreAuthorize("hasAuthority('100')")
+    @PatchMapping("/{id}/confirm-digital-invitation")
+    public ResponseEntity<PlaygroundReservationDTOs.ReservationResponse> confirmDigitalInvitation(@PathVariable Integer id) {
+        return ResponseEntity.ok(reservationService.confirmDigitalInvitation(id));
+    }
+
     @PreAuthorize("hasAnyAuthority('50', '100')")
     @GetMapping // VIEW: Calendarul zilnic.
     public ResponseEntity<List<PlaygroundReservationDTOs.ReservationResponse>> getByDay(
@@ -51,5 +57,13 @@ public class PlaygroundReservationController {
         LocalDateTime endOfDay = date.atTime(LocalTime.MAX);
 
         return ResponseEntity.ok(reservationService.getReservationsForDay(startOfDay, endOfDay));
+    }
+
+    @PreAuthorize("hasAnyAuthority('50', '100')")
+    @GetMapping("/interval") // VIEW: Calendarul pentru un interval dat
+    public ResponseEntity<List<PlaygroundReservationDTOs.ReservationResponse>> getByInterval(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end) {
+        return ResponseEntity.ok(reservationService.getReservationsForInterval(start, end));
     }
 }

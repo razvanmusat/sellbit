@@ -149,4 +149,40 @@ class PlaygroundReservationControllerTest {
                         .param("date", "10/01/2026"))
                 .andExpect(status().isBadRequest());
     }
+
+        // --- 5. PATCH /{id}/confirm-digital-invitation ---
+
+        @Test
+        @DisplayName("PATCH /{id}/confirm-digital-invitation: Succes")
+        void confirmDigitalInvitation_Success() throws Exception {
+        var res = new PlaygroundReservationDTOs.ReservationResponse(
+            1,
+            start,
+            end,
+            "Popescu",
+            "0722111222",
+            null,
+            null,
+            true,
+            null,
+            null,
+            LocalDateTime.now());
+
+        when(reservationService.confirmDigitalInvitation(1)).thenReturn(res);
+
+        mockMvc.perform(patch("/api/playground/reservations/1/confirm-digital-invitation"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.id").value(1))
+            .andExpect(jsonPath("$.digitalInvitation").value(true));
+        }
+
+        @Test
+        @DisplayName("PATCH /{id}/confirm-digital-invitation: Eroare 400 dacă rezervarea nu există")
+        void confirmDigitalInvitation_NotFound_ReturnsBadRequest() throws Exception {
+        when(reservationService.confirmDigitalInvitation(99))
+            .thenThrow(new RuntimeException("ERROR.RESERVATION.NOT_FOUND"));
+
+        mockMvc.perform(patch("/api/playground/reservations/99/confirm-digital-invitation"))
+            .andExpect(status().isBadRequest());
+        }
 }

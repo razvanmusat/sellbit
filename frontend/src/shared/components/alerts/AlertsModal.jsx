@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
 import {
   Dialog,
@@ -115,7 +116,7 @@ const AlertsModal = ({ open, onClose, unclosedAlerts, expirationAlerts, onResolv
                           Bon #{alert.receiptNumber}
                         </Typography>
                         <Typography variant="caption" color="textSecondary">
-                          Deschis: {new Date(alert.createdAt).toLocaleString('ro-RO')}
+                          Deschis: {dayjs(alert.createdAt).format('DD.MM.YYYY HH:mm')}
                         </Typography>
                       </Box>
 
@@ -175,7 +176,7 @@ const AlertsModal = ({ open, onClose, unclosedAlerts, expirationAlerts, onResolv
                   <TableBody>
                     {expirationAlerts.map((alert, idx) => {
                       const daysUntilExpiry = Math.floor(
-                        (new Date(alert.expirationDate) - new Date()) / (1000 * 60 * 60 * 24)
+                        (dayjs(alert.expirationDate).diff(dayjs(), 'day'))
                       );
                       const isExpired = daysUntilExpiry <= 0;
 
@@ -211,7 +212,7 @@ const AlertsModal = ({ open, onClose, unclosedAlerts, expirationAlerts, onResolv
                               pl: 0.5,
                             }}
                           >
-                            {new Date(alert.expirationDate).toLocaleDateString('ro-RO')}
+                            {dayjs(alert.expirationDate).format('DD.MM.YYYY')}
                           </TableCell>
                         </TableRow>
                       );

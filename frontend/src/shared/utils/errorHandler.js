@@ -137,12 +137,16 @@ const ERROR_MESSAGES = {
     "ERROR.UPLOAD.DIR_NOT_AVAILABLE": "Folderul de upload nu este disponibil pe server.",
     "ERROR.UPLOAD.EMPTY_FILE": "Selectează un fișier înainte de încărcare.",
     "ERROR.UPLOAD.INVALID_NAME": "Numele fișierului este invalid.",
+    "ERROR.UPLOAD.INVALID_FOLDER": "Folderul selectat este invalid.",
     "ERROR.UPLOAD.INVALID_TYPE": "Tip de fișier nepermis.",
     "ERROR.UPLOAD.SAVE_FAILED": "Fișierul nu a putut fi salvat.",
     "ERROR.UPLOAD.LIST_FAILED": "Lista fișierelor nu a putut fi încărcată.",
     "ERROR.UPLOAD.NOT_FOUND": "Fișierul nu a fost găsit.",
     "ERROR.UPLOAD.READ_FAILED": "Fișierul nu a putut fi deschis.",
     "ERROR.UPLOAD.DELETE_FAILED": "Fișierul nu a putut fi șters.",
+    "ERROR.UPLOAD.FOLDER_NOT_EMPTY": "Folderul nu poate fi șters deoarece conține fișiere.",
+    "ERROR.UPLOAD.FOLDER_NOT_FOUND": "Folderul nu a fost găsit.",
+    "ERROR.UPLOAD.FOLDER_DELETE_FAILED": "Folderul nu a putut fi șters.",
 
     // --- CATEGORIES (ADMIN) ---
     "ERROR.CATEGORY.DUPLICATE_CODE": "Codul categoriei există deja. Alege alt cod.",

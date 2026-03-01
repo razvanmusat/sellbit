@@ -80,7 +80,7 @@ const AdjustmentProductAudit = ({ warehouseId }) => {
                                     <Stack direction="row" spacing={1} alignItems="center">
                                         <HistoryIcon fontSize="small" color="primary" />
                                         <Typography variant="body2" fontWeight="bold">
-                                            {dayjs(row.adjustedAt).format('DD.MM.YY HH:mm')}
+                                                {row.adjustedAt ? dayjs(row.adjustedAt).format('HH:mm') : '-'}
                                         </Typography>
                                     </Stack>
                                 </TableCell>

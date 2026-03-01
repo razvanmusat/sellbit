@@ -48,4 +48,24 @@ export class ReservationsService {
       method: 'DELETE'
     });
   }
+  /**
+   * Obține rezervările pentru un interval de timp.
+   * Endpoint: GET /api/playground/reservations/interval?start=YYYY-MM-DDTHH:mm:ss&end=YYYY-MM-DDTHH:mm:ss
+   * @param {string} start - Data de început (ISO)
+   * @param {string} end - Data de sfârșit (ISO)
+   */
+  static async getByInterval(start, end) {
+    return await client(`playground/reservations/interval?start=${start}&end=${end}`);
+  }
+
+  /**
+   * Confirmă crearea invitației digitale (admin only).
+   * Endpoint: PATCH /api/playground/reservations/{id}/confirm-digital-invitation
+   * @param {number} id
+   */
+  static async confirmDigitalInvitation(id) {
+    return await client(`playground/reservations/${id}/confirm-digital-invitation`, {
+      method: 'PATCH'
+    });
+  }
 }

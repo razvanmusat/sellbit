@@ -2,7 +2,8 @@ import React from 'react';
 import { 
   Box, Paper, Typography, Button, IconButton, 
   CircularProgress, Alert, Stack, Divider, Snackbar,
-  Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions
+  Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions,
+  FormControl, Select, MenuItem
 } from '@mui/material';
 import { DatePicker, LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
@@ -34,6 +35,25 @@ const ReservationsMainPage = () => {
     cateringConflict, 
     handleRedirectToCatering, 
     handleCloseConflict,
+
+    filterOption,
+    handleFilterOptionChange,
+    rangeModalOpen,
+    rangeStart,
+    rangeEnd,
+    setRangeStart,
+    setRangeEnd,
+    handleCloseRangeModal,
+    handleApplyCustomRange,
+    emptyStateLabel,
+    selectedIntervalLabel,
+    viewMode,
+    groupedReservationsByDay,
+    isAdmin,
+    confirmInvitationReservation,
+    handleOpenConfirmInvitation,
+    handleCloseConfirmInvitation,
+    handleConfirmInvitation,
 
     handleChangeDate, handlePrevDay, handleNextDay, handleGoToToday, handleRefresh, 
     handleOpenAdd, handleOpenEdit, handleCloseModal, 
@@ -95,8 +115,7 @@ const ReservationsMainPage = () => {
                 <IconButton onClick={handleRefresh} disabled={loadingList} title="Reîncarcă">
                     <RefreshIcon />
                 </IconButton>
-
-                {/* --- BUTONUL AZI (Pus DUPĂ Refresh) --- */}
+                
                 <Button 
                     variant="outlined" 
                     size="small" 
@@ -111,6 +130,44 @@ const ReservationsMainPage = () => {
                 >
                     Azi
                 </Button>
+
+                <FormControl
+                  size="small"
+                  sx={{
+                    ml: 1,
+                    minWidth: 170,
+                    '& .MuiOutlinedInput-root': {
+                      bgcolor: 'white',
+                      borderRadius: 1,
+                      overflow: 'hidden'
+                    },
+                    '& .MuiOutlinedInput-notchedOutline': {
+                      borderRadius: 1
+                    }
+                  }}
+                >
+                  <Select
+                    value={filterOption}
+                    displayEmpty
+                    onChange={(e) => {
+                      if (e.target.value !== 'customInterval') {
+                        handleFilterOptionChange(e.target.value);
+                      }
+                    }}
+                    renderValue={(selected) => {
+                      if (!selected) return 'Alege opțiune';
+                      if (selected === 'currentMonth') return 'Luna curentă';
+                      if (selected === 'customInterval') return selectedIntervalLabel;
+                      return 'Alege opțiune';
+                    }}
+                  >
+                    <MenuItem value="" disabled>Alege opțiune</MenuItem>
+                    <MenuItem value="currentMonth">Luna curentă</MenuItem>
+                    <MenuItem value="customInterval" onClick={() => handleFilterOptionChange('customInterval')}>
+                      Selectează interval
+                    </MenuItem>
+                  </Select>
+                </FormControl>
             </Box>
           </Box>
 
@@ -132,9 +189,9 @@ const ReservationsMainPage = () => {
           ) : reservations.length === 0 ? (
             <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" height="50%" color="text.secondary" gap={1}>
                 <EventIcon sx={{ fontSize: 60, opacity: 0.2 }} />
-                <Typography>Nu există rezervări pentru <b>{selectedDate?.format('DD/MM/YYYY')}</b>.</Typography>
+                <Typography>Nu există rezervări pentru <b>{emptyStateLabel}</b>.</Typography>
             </Box>
-          ) : (
+          ) : viewMode === 'day' ? (
             <Stack spacing={1}>
                 {reservations.map((res) => (
                     <ReservationCard 
@@ -143,13 +200,37 @@ const ReservationsMainPage = () => {
                         onEdit={handleOpenEdit} 
                         onDelete={handleOpenDelete} 
                         onAddCatering={handleOpenCatering}
+                      onConfirmDigitalInvitation={handleOpenConfirmInvitation}
+                      isAdmin={isAdmin}
                     />
                 ))}
             </Stack>
+          ) : (
+            <Stack spacing={2}>
+              {groupedReservationsByDay.map((dayGroup) => (
+                <Box key={dayGroup.dateKey}>
+                  <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1, textTransform: 'capitalize' }}>
+                    {dayGroup.title}
+                  </Typography>
+                  <Stack spacing={1}>
+                    {dayGroup.reservations.map((res) => (
+                      <ReservationCard 
+                        key={res.id} 
+                        reservation={res}
+                        onEdit={handleOpenEdit} 
+                        onDelete={handleOpenDelete} 
+                        onAddCatering={handleOpenCatering}
+                        onConfirmDigitalInvitation={handleOpenConfirmInvitation}
+                        isAdmin={isAdmin}
+                      />
+                    ))}
+                  </Stack>
+                </Box>
+              ))}
+            </Stack>
           )}
         </Box>
-
-        {/* --- MODALE --- */}
+        
         <ReservationModal 
             open={openModal}
             onClose={handleCloseModal}
@@ -197,6 +278,45 @@ const ReservationsMainPage = () => {
                 <Button onClick={handleRedirectToCatering} variant="contained" color="primary">Da, Mergi la Comandă</Button>
             </DialogActions>
         </Dialog>
+
+          <Dialog open={!!confirmInvitationReservation} onClose={handleCloseConfirmInvitation} maxWidth="xs" fullWidth>
+            <DialogTitle>Confirmare invitație digitală</DialogTitle>
+            <DialogContent>
+              <DialogContentText>
+                Ai creat invitația digitală?
+              </DialogContentText>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={handleCloseConfirmInvitation} color="inherit">Nu</Button>
+              <Button onClick={handleConfirmInvitation} variant="contained" color="success">Da</Button>
+            </DialogActions>
+          </Dialog>
+
+          <Dialog open={rangeModalOpen} onClose={handleCloseRangeModal} maxWidth="xs" fullWidth>
+            <DialogTitle>Selectează interval</DialogTitle>
+            <DialogContent sx={{ pt: 1 }}>
+              <Stack spacing={2} sx={{ mt: 1 }}>
+                <DatePicker
+                  label="Data start"
+                  value={rangeStart}
+                  onChange={setRangeStart}
+                  format="DD/MM/YYYY"
+                  slotProps={{ textField: { size: 'small', fullWidth: true } }}
+                />
+                <DatePicker
+                  label="Data end"
+                  value={rangeEnd}
+                  onChange={setRangeEnd}
+                  format="DD/MM/YYYY"
+                  slotProps={{ textField: { size: 'small', fullWidth: true } }}
+                />
+              </Stack>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={handleCloseRangeModal} color="inherit">Anulează</Button>
+              <Button onClick={handleApplyCustomRange} variant="contained">Aplică</Button>
+            </DialogActions>
+          </Dialog>
 
         <Snackbar 
             open={toast.open} 
