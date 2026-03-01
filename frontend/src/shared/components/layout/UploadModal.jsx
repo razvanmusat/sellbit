@@ -45,6 +45,7 @@ const UploadModal = ({ open, onClose, isAdmin }) => {
   const [folderError, setFolderError] = useState('');
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
   const [uploadProgress, setUploadProgress] = useState({ active: false, percent: 0, fileName: '' });
+  const [downloadProgress, setDownloadProgress] = useState({ active: false, percent: 0, fileName: '', indeterminate: false });
 
   const [dialog, setDialog] = useState({ open: false, type: '', value: '' });
   useEffect(() => {
@@ -172,17 +173,37 @@ const UploadModal = ({ open, onClose, isAdmin }) => {
     if (!file?.fileName) return;
 
     try {
-      const blob = await UploadService.fetchDownloadBlob(file.fileName, currentFolder, file.size);
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = file.originalName || file.fileName;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
+      const displayName = file.originalName || file.fileName;
+
+      if (UploadService.supportsNativeSavePicker()) {
+        setDownloadProgress({ active: true, percent: 0, fileName: displayName, indeterminate: false });
+        await UploadService.streamDownloadToFile(
+          file.fileName,
+          currentFolder,
+          displayName,
+          file.size,
+          (percent) => {
+            setDownloadProgress({ active: true, percent, fileName: displayName, indeterminate: false });
+          }
+        );
+      } else {
+        setDownloadProgress({ active: true, percent: 0, fileName: displayName, indeterminate: true });
+        const blob = await UploadService.fetchDownloadBlob(file.fileName, currentFolder, file.size);
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = displayName;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+      }
     } catch (error) {
-      setSnackbar({ open: true, message: getFriendlyErrorMessage(error), severity: 'error' });
+      if (error?.name !== 'AbortError' && error?.message !== 'Download anulat.') {
+        setSnackbar({ open: true, message: getFriendlyErrorMessage(error), severity: 'error' });
+      }
+    } finally {
+      setDownloadProgress({ active: false, percent: 0, fileName: '', indeterminate: false });
     }
   };
 
@@ -357,6 +378,20 @@ const UploadModal = ({ open, onClose, isAdmin }) => {
                   : `Upload în progres (${uploadProgress.percent}%)`}
               </Typography>
               <LinearProgress variant="determinate" value={uploadProgress.percent} />
+            </Box>
+          )}
+          {downloadProgress.active && (
+            <Box sx={{ px: 0.5 }}>
+              <Typography variant="body2" sx={{ mb: 0.75 }}>
+                {downloadProgress.fileName
+                  ? `Download: ${downloadProgress.fileName}${downloadProgress.indeterminate ? '' : ` (${downloadProgress.percent}%)`}`
+                  : 'Download în progres...'}
+              </Typography>
+              {downloadProgress.indeterminate ? (
+                <LinearProgress />
+              ) : (
+                <LinearProgress variant="determinate" value={downloadProgress.percent} />
+              )}
             </Box>
           )}
           {/* File list for selected folder */}

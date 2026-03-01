@@ -23,6 +23,8 @@ const parseErrorResponse = async (response) => {
 };
 
 export const UploadService = {
+  supportsNativeSavePicker: () => typeof window !== 'undefined' && typeof window.showSaveFilePicker === 'function',
+
   list: async (folder) => {
     if (folder) {
       return client('uploads', { params: { folder } });
@@ -212,6 +214,80 @@ export const UploadService = {
 
       if (Number.isFinite(fallbackSize) && fallbackSize > 0) {
         return downloadInChunks(fallbackSize);
+      }
+
+      throw error;
+    }
+  },
+
+  streamDownloadToFile: async (fileName, folder, suggestedName, expectedSize, onProgress) => {
+    if (!UploadService.supportsNativeSavePicker()) {
+      throw new Error('BROWSER_SAVE_PICKER_UNSUPPORTED');
+    }
+
+    const safeName = (suggestedName || fileName || 'fisier').trim() || 'fisier';
+    const fileHandle = await window.showSaveFilePicker({
+      suggestedName: safeName,
+    });
+
+    const writable = await fileHandle.createWritable();
+    const encodedFileName = toEncodedFileName(fileName);
+    const query = new URLSearchParams({ download: 'true' });
+    if (folder) query.set('folder', folder);
+    const url = `${API_BASE}/${encodedFileName}?${query.toString()}`;
+
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: getAuthHeaders(),
+        credentials: 'include'
+      });
+
+      if (!response.ok) {
+        await writable.abort();
+        return parseErrorResponse(response);
+      }
+
+      const headerSize = Number(response.headers.get('Content-Length') || 0);
+      const totalSize = Number.isFinite(headerSize) && headerSize > 0
+        ? headerSize
+        : Number(expectedSize || 0);
+
+      if (!response.body) {
+        const blob = await response.blob();
+        await writable.write(blob);
+        await writable.close();
+        if (onProgress) onProgress(100);
+        return;
+      }
+
+      const reader = response.body.getReader();
+      let received = 0;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (!value) continue;
+
+        await writable.write(value);
+        received += value.length;
+
+        if (onProgress && Number.isFinite(totalSize) && totalSize > 0) {
+          const percent = Math.min(100, Math.round((received / totalSize) * 100));
+          onProgress(percent);
+        }
+      }
+
+      await writable.close();
+      if (onProgress) onProgress(100);
+    } catch (error) {
+      try {
+        await writable.abort();
+      } catch {
+      }
+
+      if (error?.name === 'AbortError') {
+        throw new Error('Download anulat.');
       }
 
       throw error;

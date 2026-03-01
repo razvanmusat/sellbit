@@ -33,7 +33,16 @@ export const useRefundPage = (warehouseId) => {
       );
       
       // Tratare sigură: dacă data e null/undefined, punem array gol
-      setReceipts(data || []);
+      const sortedReceipts = [...(data || [])].sort((a, b) => {
+        const aTime = dayjs(a?.closedAt);
+        const bTime = dayjs(b?.closedAt);
+        if (!aTime.isValid() && !bTime.isValid()) return 0;
+        if (!aTime.isValid()) return 1;
+        if (!bTime.isValid()) return -1;
+        return aTime.diff(bTime);
+      });
+
+      setReceipts(sortedReceipts);
       
     } catch (err) {
       console.error("Eroare la căutare bonuri:", err);

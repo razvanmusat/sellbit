@@ -85,6 +85,17 @@ const SellReports = ({ warehouseId, warehouseName }) => {
     return stats;
   }, [receipts]);
 
+    const sortedReceipts = useMemo(() => {
+        return [...receipts].sort((a, b) => {
+            const aTime = dayjs(a?.closedAt);
+            const bTime = dayjs(b?.closedAt);
+            if (!aTime.isValid() && !bTime.isValid()) return 0;
+            if (!aTime.isValid()) return 1;
+            if (!bTime.isValid()) return -1;
+            return aTime.diff(bTime);
+        });
+    }, [receipts]);
+
   const MiniStatCard = ({ typeKey, value }) => {
       const config = METHOD_CONFIG[typeKey] || { label: typeKey, color: '#666', icon: null };
       return (
@@ -159,14 +170,14 @@ const SellReports = ({ warehouseId, warehouseName }) => {
                         </TableRow>
                     </TableHead>
                     <TableBody>
-                        {receipts.length === 0 ? (
+                        {sortedReceipts.length === 0 ? (
                             <TableRow>
                                 <TableCell colSpan={5} align="center" sx={{ py: 4, color: 'text.secondary' }}>
                                     Nu există tranzacții închise pentru data selectată.
                                 </TableCell>
                             </TableRow>
                         ) : (
-                            receipts.map((row) => {
+                            sortedReceipts.map((row) => {
                                 const isRefund = row.totalAmount < 0;
                                 return (
                                     <TableRow key={row.id} hover sx={{ bgcolor: isRefund ? '#fff5f5' : 'inherit' }}>
