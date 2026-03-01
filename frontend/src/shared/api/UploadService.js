@@ -159,22 +159,63 @@ export const UploadService = {
       return new Blob(parts, { type: firstContentType || 'application/octet-stream' });
     };
 
+    const detectSizeFromRangeProbe = async () => {
+      const probeResponse = await fetch(url, {
+        method: 'GET',
+        headers: {
+          ...getAuthHeaders(),
+          Range: 'bytes=0-0'
+        },
+        credentials: 'include'
+      });
+
+      if (!probeResponse.ok) {
+        return null;
+      }
+
+      if (probeResponse.status !== 206) {
+        return null;
+      }
+
+      const contentRange = probeResponse.headers.get('Content-Range') || '';
+      const totalPart = contentRange.split('/')[1];
+      const totalSize = Number(totalPart);
+
+      if (!Number.isFinite(totalSize) || totalSize <= 0) {
+        return null;
+      }
+
+      return totalSize;
+    };
+
     const numericSize = Number(expectedSize || 0);
     if (Number.isFinite(numericSize) && numericSize > DOWNLOAD_CHUNK_THRESHOLD) {
       return downloadInChunks(numericSize);
     }
 
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: getAuthHeaders(),
-      credentials: 'include'
-    });
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: getAuthHeaders(),
+        credentials: 'include'
+      });
 
-    if (!response.ok) {
-      return parseErrorResponse(response);
+      if (!response.ok) {
+        return parseErrorResponse(response);
+      }
+
+      return await response.blob();
+    } catch (error) {
+      const fallbackSize = Number.isFinite(numericSize) && numericSize > 0
+        ? numericSize
+        : await detectSizeFromRangeProbe();
+
+      if (Number.isFinite(fallbackSize) && fallbackSize > 0) {
+        return downloadInChunks(fallbackSize);
+      }
+
+      throw error;
     }
-
-    return response.blob();
   },
 
   // FOLDERS API

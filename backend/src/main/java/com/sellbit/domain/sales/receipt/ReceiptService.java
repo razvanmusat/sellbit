@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.sellbit.domain.cash.cashmovement.CashMovementService;
+import com.sellbit.domain.cash.cashdrawer.CashDrawerService;
 import com.sellbit.domain.catalog.product.Product;
 import com.sellbit.domain.catalog.product.ProductRepository;
 import com.sellbit.domain.inventory.purchase.PurchaseService;
@@ -52,6 +53,7 @@ public class ReceiptService {
         private final CancelReasonRepository cancelReasonRepository;
         private final StockCurrentService stockCurrentService;
         private final CashMovementService cashMovementService;
+        private final CashDrawerService cashDrawerService;
         private final ReceiptItemRepository itemRepository;
         private final PurchaseService purchaseService;
         private final CustomerVoucherRepository customerVoucherRepository;
@@ -683,6 +685,19 @@ public class ReceiptService {
                                                 stockCurrentService.updateStockRelative(newWarehouseId, productId, qty.negate());
                                         }
                                 }
+
+                // 5.1 Mută numerarul între sertare pentru plățile CASH ale bonului
+                BigDecimal cashPaid = receipt.getPayments().stream()
+                                .filter(payment -> payment.getPaymentMethod() != null
+                                                && "CASH".equals(payment.getPaymentMethod().getCode()))
+                                .map(ReceiptPayment::getAmount)
+                                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+                if (cashPaid.compareTo(BigDecimal.ZERO) > 0) {
+                        // Mutare directă de sold între sertare, fără înregistrare de mișcări cash
+                        cashDrawerService.updateBalance(oldWarehouse.getId(), cashPaid.negate());
+                        cashDrawerService.updateBalance(newWarehouse.getId(), cashPaid);
+                }
 
                 // 6. Schimbă gestiunea bonului
                 receipt.setWarehouse(newWarehouse);

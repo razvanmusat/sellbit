@@ -221,6 +221,13 @@ export const useSellPage = () => {
         }
       }
     },
+
+    afterWarehouseTransfer: () => {
+      if (warehouseId) {
+        dispatch(fetchOpenReceipts(warehouseId));
+      }
+      dispatch(invalidateCache());
+    },
     
     // Erori
     clearError: () => dispatch(clearError()),

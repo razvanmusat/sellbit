@@ -21,6 +21,7 @@ const ChangeWarehouseModal = ({
   onClose,
   warehouses,
   warehouseId,
+  onSuccess,
 }) => {
   const [date, setDate] = useState(dayjs());
   const [receipts, setReceipts] = useState([]);
@@ -78,6 +79,9 @@ const ChangeWarehouseModal = ({
       await SalesService.changeReceiptWarehouse(confirmDialog.receipt.id, selectedWarehouseId);
       handleCloseConfirm();
       await fetchReceipts();
+      if (onSuccess) {
+        onSuccess();
+      }
       setSnackbar({ open: true, message: 'Mutare efectuată cu succes!', severity: 'success' });
     } catch (e) {
       const friendly = getFriendlyErrorMessage(e);
@@ -232,11 +236,9 @@ const ChangeWarehouseModal = ({
 ChangeWarehouseModal.propTypes = {
   open: PropTypes.bool.isRequired,
   onClose: PropTypes.func.isRequired,
-  receipts: PropTypes.array.isRequired,
   warehouses: PropTypes.array.isRequired,
   warehouseId: PropTypes.number.isRequired,
-  loading: PropTypes.bool,
-  onReceiptClick: PropTypes.func.isRequired
+  onSuccess: PropTypes.func,
 };
 
 export default ChangeWarehouseModal;

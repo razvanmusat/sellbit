@@ -108,6 +108,7 @@ const SellPage = () => {
                       onClose={() => toggleModal('changeWarehouse', false)}
                       warehouses={warehouses}
                       warehouseId={Number(warehouseId)}
+                      onSuccess={actions.afterWarehouseTransfer}
                     />
               </Box>
             )}
