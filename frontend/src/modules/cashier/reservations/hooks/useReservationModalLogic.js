@@ -8,6 +8,7 @@ export const useReservationModalLogic = ({ open, editData, selectedDate, onSubmi
   const [endTime, setEndTime] = useState(null);
   const [advancePaid, setAdvancePaid] = useState(null); 
   const [digitalInvitation, setDigitalInvitation] = useState(null);
+  const [digitalInvitationTouched, setDigitalInvitationTouched] = useState(false);
   const [errors, setErrors] = useState({});
 
   // --- B. REFS ---
@@ -27,6 +28,7 @@ export const useReservationModalLogic = ({ open, editData, selectedDate, onSubmi
         const hasAdvance = Number(editData.advanceAmount) > 0;
         setAdvancePaid(hasAdvance);
         setDigitalInvitation(editData.digitalInvitation ?? null);
+        setDigitalInvitationTouched(true);
       } else {
         const baseDate = selectedDate || dayjs();
         const initialStart = baseDate.startOf('day'); 
@@ -34,6 +36,7 @@ export const useReservationModalLogic = ({ open, editData, selectedDate, onSubmi
         setEndTime(initialStart.add(2.5, 'hour'));
         setAdvancePaid(null);
         setDigitalInvitation(null);
+        setDigitalInvitationTouched(false);
       }
       setErrors({});
 
@@ -54,6 +57,7 @@ export const useReservationModalLogic = ({ open, editData, selectedDate, onSubmi
       setEndTime(null);
       setAdvancePaid(null);
       setDigitalInvitation(null);
+      setDigitalInvitationTouched(false);
     }
   }, [open, editData, selectedDate]);
 
@@ -136,9 +140,9 @@ export const useReservationModalLogic = ({ open, editData, selectedDate, onSubmi
   };
 
   return {
-    startTime, endTime, advancePaid, digitalInvitation, errors,
+    startTime, endTime, advancePaid, digitalInvitation, digitalInvitationTouched, errors,
     nameRef, amountRef, themeRef, noteRef, phoneRef, 
-    setAdvancePaid, setDigitalInvitation,
+    setAdvancePaid, setDigitalInvitation, setDigitalInvitationTouched,
     handleTimeChange, handleDateChange, handleSubmit // Exportăm și handleDateChange
   };
 };

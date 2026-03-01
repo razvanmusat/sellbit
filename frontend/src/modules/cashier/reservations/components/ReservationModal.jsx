@@ -39,9 +39,9 @@ const ReservationModal = (props) => {
   const { open, onClose, loading, editData, selectedDate } = props;
 
   const {
-    startTime, endTime, advancePaid, digitalInvitation, errors,
+    startTime, endTime, advancePaid, digitalInvitation, digitalInvitationTouched, errors,
     nameRef, amountRef, themeRef, noteRef, phoneRef,
-    setAdvancePaid, setDigitalInvitation,
+    setAdvancePaid, setDigitalInvitation, setDigitalInvitationTouched,
     handleTimeChange, handleDateChange, handleSubmit // Luăm noul handler
   } = useReservationModalLogic(props);
 
@@ -154,8 +154,9 @@ const ReservationModal = (props) => {
                   <RadioGroup
                     row
                     aria-labelledby="inv-l"
-                    value={digitalInvitation === false ? 'false' : 'pending'}
+                    value={digitalInvitationTouched ? (digitalInvitation === false ? 'false' : 'pending') : ''}
                     onChange={(e) => {
+                      setDigitalInvitationTouched(true);
                       if (e.target.value === 'false') {
                         setDigitalInvitation(false);
                         return;

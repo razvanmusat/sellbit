@@ -51,19 +51,9 @@ public class UploadController {
         @PreAuthorize("hasAnyAuthority('50', '100')")
         @GetMapping("/{fileName:.+}")
         public ResponseEntity<?> getFile(@PathVariable("fileName") String fileName,
-                                               @RequestParam(value = "folder", required = false) String folder,
-                                               @RequestParam(defaultValue = "false") boolean download,
-                                               @RequestHeader HttpHeaders requestHeaders) {
-            boolean hasRangeHeader = requestHeaders.getFirst(HttpHeaders.RANGE) != null;
-            if (!hasRangeHeader) {
-                System.out.println("[DEBUG][BACKEND] getFile called: fileName=" + fileName + ", folder=" + folder + ", download=" + download);
-                try {
-                    org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
-                    System.out.println("[DEBUG][BACKEND] Authenticated user: " + (auth != null ? auth.getName() : "null") + ", authorities: " + (auth != null ? auth.getAuthorities() : "null"));
-                } catch (Exception e) {
-                    System.out.println("[DEBUG][BACKEND] Could not get authentication: " + e);
-                }
-            }
+                                           @RequestParam(value = "folder", required = false) String folder,
+                                           @RequestParam(defaultValue = "false") boolean download,
+                                           @RequestHeader HttpHeaders requestHeaders) {
             Resource resource = uploadService.getResource(fileName, folder);
             String contentType = uploadService.resolveContentType(fileName, folder);
             String downloadName = uploadService.resolveDownloadName(fileName);
@@ -144,7 +134,7 @@ public class UploadController {
             }
 
             return responseBuilder.body(resource);
-        }
+    }
 
     private byte[] readRange(Resource resource, long start, long length) {
         if (length <= 0) {

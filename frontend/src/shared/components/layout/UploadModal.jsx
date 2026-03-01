@@ -64,7 +64,6 @@ const UploadModal = ({ open, onClose, isAdmin }) => {
     try {
       const result = await UploadService.list(folder);
       setFiles(result);
-      console.log('[DEBUG][FRONTEND] files in folder', folder, result);
     } catch (error) {
       setFiles([]);
     }
@@ -75,10 +74,8 @@ const UploadModal = ({ open, onClose, isAdmin }) => {
     setFolderError('');
     try {
       const result = await UploadService.listFolders();
-      console.log('[DEBUG][FRONTEND] listFolders API response:', result);
       // Filtrează duplicatele și elementele goale
       const uniqueFolders = Array.from(new Set(result.filter(f => typeof f === 'string' && f.trim())));
-      console.log('[DEBUG][FRONTEND] uniqueFolders:', uniqueFolders);
       setFolders(uniqueFolders);
     } catch (error) {
       setFolderError(getFriendlyErrorMessage(error));
@@ -198,6 +195,8 @@ const UploadModal = ({ open, onClose, isAdmin }) => {
         link.remove();
         URL.revokeObjectURL(url);
       }
+
+      setSnackbar({ open: true, message: 'Descărcare efectuată!', severity: 'success' });
     } catch (error) {
       if (error?.name !== 'AbortError' && error?.message !== 'Download anulat.') {
         setSnackbar({ open: true, message: getFriendlyErrorMessage(error), severity: 'error' });
@@ -215,15 +214,15 @@ const UploadModal = ({ open, onClose, isAdmin }) => {
     setFileDownloadDialog({ open: false, file: null, folder: '' });
   };
 
-  const confirmDownloadFile = async () => {
+  const confirmDownloadFile = () => {
     const targetFile = fileDownloadDialog.file;
     if (!targetFile?.fileName) {
       closeDownloadFileDialog();
       return;
     }
 
-    await handleDownloadFile(targetFile);
     closeDownloadFileDialog();
+    void handleDownloadFile(targetFile);
   };
 
   // Folder actions
@@ -269,14 +268,14 @@ const UploadModal = ({ open, onClose, isAdmin }) => {
           <Box sx={{ display: 'flex', gap: 1 }}>
             {isAdmin && (
               <>
-                <Tooltip title="Adaugă folder">
+                <Tooltip title="Adaugă folder" placement="top">
                   <span>
                     <IconButton onClick={() => setDialog({ open: true, type: 'create', value: '' })}>
                       <CreateNewFolderIcon />
                     </IconButton>
                   </span>
                 </Tooltip>
-                <Tooltip title="Redenumește folder">
+                <Tooltip title="Redenumește folder" placement="top">
                   <span>
                     <IconButton
                       disabled={!folders[activeTab]}
@@ -286,7 +285,7 @@ const UploadModal = ({ open, onClose, isAdmin }) => {
                     </IconButton>
                   </span>
                 </Tooltip>
-                <Tooltip title="Șterge folder">
+                <Tooltip title="Șterge folder" placement="top">
                   <span>
                     <IconButton
                       disabled={!folders[activeTab]}
@@ -298,7 +297,7 @@ const UploadModal = ({ open, onClose, isAdmin }) => {
                 </Tooltip>
               </>
             )}
-            <Tooltip title="Reîmprospătează">
+            <Tooltip title="Reîmprospătează" placement="top">
               <span>
                 <IconButton onClick={loadFolders} disabled={loadingFolders}>
                   <RefreshIcon />
@@ -339,13 +338,11 @@ const UploadModal = ({ open, onClose, isAdmin }) => {
                 const file = e.target.files[0];
                 if (!file) return;
                 const folderName = currentFolder;
-                console.log('[DEBUG][FRONTEND] Upload folder trimis:', folderName);
                 try {
                   setUploadProgress({ active: true, percent: 0, fileName: file.name || '' });
-                  const uploadResult = await UploadService.upload(file, folderName, (percent) => {
+                  await UploadService.upload(file, folderName, (percent) => {
                     setUploadProgress({ active: true, percent, fileName: file.name || '' });
                   });
-                  console.log('[DEBUG][FRONTEND] UploadService.upload response:', uploadResult);
                   setSnackbar({ open: true, message: 'Fișier încărcat!', severity: 'success' });
                   await loadFolders();
                   await loadFiles(folderName);
@@ -406,7 +403,7 @@ const UploadModal = ({ open, onClose, isAdmin }) => {
                 return (
                 <ListItem key={file.fileName} secondaryAction={
                   <Box sx={{ display: 'flex', gap: 1 }}>
-                    <Tooltip title={previewTooltip}>
+                    <Tooltip title={previewTooltip} placement="top">
                       <span>
                         <IconButton
                           onClick={() => handlePreviewFile(file)}
@@ -416,13 +413,13 @@ const UploadModal = ({ open, onClose, isAdmin }) => {
                         </IconButton>
                       </span>
                     </Tooltip>
-                    <Tooltip title="Descarcă">
+                    <Tooltip title="Descarcă" placement="top">
                       <IconButton onClick={() => openDownloadFileDialog(file)}>
                         <DownloadIcon />
                       </IconButton>
                     </Tooltip>
                     {isAdmin && (
-                      <Tooltip title="Șterge">
+                      <Tooltip title="Șterge" placement="top">
                         <IconButton color="error" onClick={() => openDeleteFileDialog(file)}>
                           <DeleteIcon />
                         </IconButton>

@@ -21,7 +21,6 @@ public class FolderController {
     @PostMapping("/create")
     public ResponseEntity<String> createFolder(@RequestParam String name, @RequestParam(required = false) String parent) {
         try {
-            System.out.println("[DEBUG][BACKEND] createFolder - name: '" + name + "', parent: '" + parent + "'");
             Path folder = parent == null ? uploadRoot.resolve(name) : uploadRoot.resolve(parent).resolve(name);
             Files.createDirectories(folder);
             return ResponseEntity.ok("Folder creat cu succes");
@@ -75,7 +74,6 @@ public class FolderController {
                     .filter(Files::isDirectory)
                     .map(p -> p.getFileName().toString())
                     .collect(Collectors.toList());
-            System.out.println("[DEBUG][BACKEND] listFolders - parent: '" + parent + "', folders: " + folders);
             return ResponseEntity.ok(folders);
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(List.of("Eroare la listare: " + e.getMessage()));

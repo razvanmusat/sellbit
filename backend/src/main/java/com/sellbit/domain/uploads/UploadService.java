@@ -101,7 +101,6 @@ public class UploadService {
         String safeFolder = null;
         if (folder != null && !folder.isBlank()) {
             String value = folder.trim();
-            System.out.println("[DEBUG] Upload folder param primit: '" + value + "'");
             if (value.contains("..") || value.contains("/") || value.contains(",") || value.contains("\\") || value.contains(" ")) {
                 throw new RuntimeException("ERROR.UPLOAD.INVALID_FOLDER");
             }
