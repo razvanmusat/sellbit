@@ -5,6 +5,7 @@ import {
 } from '@mui/material';
 import PrintIcon from '@mui/icons-material/Print';
 import SearchIcon from '@mui/icons-material/Search';
+import dayjs from 'dayjs';
 
 import { useInventoryPrintList } from '../hooks/useInventoryPrintList';
 
