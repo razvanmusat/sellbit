@@ -37,6 +37,7 @@ const UploadModal = ({ open, onClose, isAdmin }) => {
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [preview, setPreview] = useState({ open: false, file: null, folder: '' });
   const [fileDeleteDialog, setFileDeleteDialog] = useState({ open: false, file: null, folder: '' });
+  const [fileDownloadDialog, setFileDownloadDialog] = useState({ open: false, file: null, folder: '' });
   const [files, setFiles] = useState([]);
   const [folders, setFolders] = useState([]);
   const [activeTab, setActiveTab] = useState(0);
@@ -171,7 +172,7 @@ const UploadModal = ({ open, onClose, isAdmin }) => {
     if (!file?.fileName) return;
 
     try {
-      const blob = await UploadService.fetchDownloadBlob(file.fileName, currentFolder);
+      const blob = await UploadService.fetchDownloadBlob(file.fileName, currentFolder, file.size);
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -183,6 +184,25 @@ const UploadModal = ({ open, onClose, isAdmin }) => {
     } catch (error) {
       setSnackbar({ open: true, message: getFriendlyErrorMessage(error), severity: 'error' });
     }
+  };
+
+  const openDownloadFileDialog = (file) => {
+    setFileDownloadDialog({ open: true, file, folder: currentFolder });
+  };
+
+  const closeDownloadFileDialog = () => {
+    setFileDownloadDialog({ open: false, file: null, folder: '' });
+  };
+
+  const confirmDownloadFile = async () => {
+    const targetFile = fileDownloadDialog.file;
+    if (!targetFile?.fileName) {
+      closeDownloadFileDialog();
+      return;
+    }
+
+    await handleDownloadFile(targetFile);
+    closeDownloadFileDialog();
   };
 
   // Folder actions
@@ -362,7 +382,7 @@ const UploadModal = ({ open, onClose, isAdmin }) => {
                       </span>
                     </Tooltip>
                     <Tooltip title="Descarcă">
-                      <IconButton onClick={() => handleDownloadFile(file)}>
+                      <IconButton onClick={() => openDownloadFileDialog(file)}>
                         <DownloadIcon />
                       </IconButton>
                     </Tooltip>
@@ -444,7 +464,7 @@ const UploadModal = ({ open, onClose, isAdmin }) => {
               />
             )}
             {dialog.type === 'delete' && (
-              <Alert severity="warning">Sigur vrei să ștergi folderul <b>{dialog.value}</b>?</Alert>
+              <Alert severity="warning">Ești sigur că vrei să ștergi folderul <b>{dialog.value}</b>?</Alert>
             )}
           </DialogContent>
           <DialogActions>
@@ -490,12 +510,27 @@ const UploadModal = ({ open, onClose, isAdmin }) => {
           <DialogTitle>Șterge fișier</DialogTitle>
           <DialogContent>
             <Alert severity="warning">
-              Sigur vrei să ștergi fișierul <b>{fileDeleteDialog.file?.originalName || fileDeleteDialog.file?.fileName}</b>?
+              Ești sigur că vrei să ștergi fișierul <b>{fileDeleteDialog.file?.originalName || fileDeleteDialog.file?.fileName}</b>?
             </Alert>
           </DialogContent>
           <DialogActions>
             <Button onClick={closeDeleteFileDialog} color="inherit">Anulează</Button>
             <Button onClick={handleDeleteFile} variant="contained" color="error">Șterge</Button>
+          </DialogActions>
+        </Dialog>
+      )}
+
+      {fileDownloadDialog.open && (
+        <Dialog open onClose={closeDownloadFileDialog} fullWidth={isMobile} maxWidth="xs">
+          <DialogTitle>Descarcă fișier</DialogTitle>
+          <DialogContent>
+            <Alert severity="info">
+              Ești sigur că vrei să descarci fișierul <b>{fileDownloadDialog.file?.originalName || fileDownloadDialog.file?.fileName}</b>?
+            </Alert>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={closeDownloadFileDialog} color="inherit">Anulează</Button>
+            <Button onClick={confirmDownloadFile} variant="contained">Descarcă</Button>
           </DialogActions>
         </Dialog>
       )}

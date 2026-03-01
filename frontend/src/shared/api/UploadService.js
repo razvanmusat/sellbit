@@ -8,6 +8,8 @@ const getAuthHeaders = () => {
 };
 
 const toEncodedFileName = (fileName) => encodeURIComponent(String(fileName || '').trim());
+const DOWNLOAD_CHUNK_THRESHOLD = 100 * 1024 * 1024;
+const DOWNLOAD_CHUNK_SIZE = 10 * 1024 * 1024;
 
 const parseErrorResponse = async (response) => {
   const text = await response.text();
@@ -104,12 +106,65 @@ export const UploadService = {
       : `${API_BASE}/${encodedFileName}`;
   },
 
-  fetchDownloadBlob: async (fileName, folder) => {
+  buildDownloadUrl: (fileName, folder) => {
     const encodedFileName = toEncodedFileName(fileName);
     const query = new URLSearchParams({ download: 'true' });
     if (folder) query.set('folder', folder);
+    return `${API_BASE}/${encodedFileName}?${query.toString()}`;
+  },
 
-    const response = await fetch(`${API_BASE}/${encodedFileName}?${query.toString()}`, {
+  fetchDownloadBlob: async (fileName, folder, expectedSize) => {
+    const encodedFileName = toEncodedFileName(fileName);
+    const query = new URLSearchParams({ download: 'true' });
+    if (folder) query.set('folder', folder);
+    const url = `${API_BASE}/${encodedFileName}?${query.toString()}`;
+
+    const downloadInChunks = async (totalSize) => {
+      const parts = [];
+      let start = 0;
+      let firstContentType = '';
+
+      while (start < totalSize) {
+        const end = Math.min(start + DOWNLOAD_CHUNK_SIZE - 1, totalSize - 1);
+        const chunkResponse = await fetch(url, {
+          method: 'GET',
+          headers: {
+            ...getAuthHeaders(),
+            Range: `bytes=${start}-${end}`
+          },
+          credentials: 'include'
+        });
+
+        if (!chunkResponse.ok) {
+          return parseErrorResponse(chunkResponse);
+        }
+
+        if (chunkResponse.status === 200) {
+          return chunkResponse.blob();
+        }
+
+        if (chunkResponse.status !== 206) {
+          throw new Error(`HTTP Error: ${chunkResponse.status}`);
+        }
+
+        if (!firstContentType) {
+          firstContentType = (chunkResponse.headers.get('Content-Type') || '').split(';')[0].trim();
+        }
+
+        const part = await chunkResponse.blob();
+        parts.push(part);
+        start = end + 1;
+      }
+
+      return new Blob(parts, { type: firstContentType || 'application/octet-stream' });
+    };
+
+    const numericSize = Number(expectedSize || 0);
+    if (Number.isFinite(numericSize) && numericSize > DOWNLOAD_CHUNK_THRESHOLD) {
+      return downloadInChunks(numericSize);
+    }
+
+    const response = await fetch(url, {
       method: 'GET',
       headers: getAuthHeaders(),
       credentials: 'include'

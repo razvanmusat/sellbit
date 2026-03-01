@@ -87,7 +87,7 @@ public class UploadController {
             }
 
             String rangeHeader = requestHeaders.getFirst(HttpHeaders.RANGE);
-            if (!download && contentLength > 0 && rangeHeader != null && rangeHeader.startsWith("bytes=")) {
+            if (contentLength > 0 && rangeHeader != null && rangeHeader.startsWith("bytes=")) {
                 long start = 0;
                 long end = contentLength - 1;
 
