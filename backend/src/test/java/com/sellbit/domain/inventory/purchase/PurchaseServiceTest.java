@@ -28,9 +28,51 @@ import com.sellbit.domain.inventory.warehouse.Warehouse;
 import com.sellbit.domain.inventory.warehouse.WarehouseRepository;
 import com.sellbit.domain.security.user.User;
 import com.sellbit.domain.security.user.UserRepository;
+import com.sellbit.domain.inventory.purchasefifoallocation.ReceiptItemFifoAllocation;
+import com.sellbit.domain.inventory.purchasefifoallocation.ReceiptItemFifoAllocationRepository;
 
 @ExtendWith(MockitoExtension.class)
 class PurchaseServiceTest {
+
+    @Test
+    @DisplayName("rollbackFifoForReceipt - Restabilește corect stocul și șterge alocările FIFO")
+    void rollbackFifoForReceipt_RestoresStockAndDeletesAllocations() {
+        // Setup purchase and allocation
+        Purchase purchase = Purchase.builder()
+                .id(1)
+                .remainingQuantity(new BigDecimal("5.000"))
+                .build();
+        ReceiptItemFifoAllocation allocation = ReceiptItemFifoAllocation.builder()
+                .id(10)
+                .purchase(purchase)
+                .quantity(new BigDecimal("2.000"))
+                .build();
+        List<ReceiptItemFifoAllocation> allocations = List.of(allocation);
+
+        // Mock repo
+        ReceiptItemFifoAllocationRepository fifoRepo = mock(ReceiptItemFifoAllocationRepository.class);
+        PurchaseRepository purchaseRepo = mock(PurchaseRepository.class);
+        when(fifoRepo.findByReceiptId(100)).thenReturn(allocations);
+
+        // Inject mocks into service
+        PurchaseService service = new PurchaseService(
+            purchaseRepo,
+            productRepository,
+            warehouseRepository,
+            userRepository,
+            stockCurrentRepository,
+            productComponentRepository,
+            fifoRepo
+        );
+
+        // Run
+        service.rollbackFifoForReceipt(100);
+
+        // Verifică stocul restaurat
+        assertEquals(new BigDecimal("7.000"), purchase.getRemainingQuantity());
+        verify(purchaseRepo).save(purchase);
+        verify(fifoRepo).deleteByReceiptId(100);
+    }
 
     @Mock
     private PurchaseRepository purchaseRepository;

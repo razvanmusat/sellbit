@@ -11,6 +11,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -30,6 +31,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.sellbit.domain.cash.cashmovement.CashMovementService;
+import com.sellbit.domain.cash.cashmovement.CashMovementRepository;
+import com.sellbit.domain.cash.cashmovement.CashMovement;
 import com.sellbit.domain.catalog.product.Product;
 import com.sellbit.domain.catalog.product.ProductRepository;
 import com.sellbit.domain.catalog.productcomposite.ProductComponent;
@@ -59,6 +62,91 @@ import com.sellbit.domain.voucher.customervoucher.CustomerVoucherService;
 
 @ExtendWith(MockitoExtension.class)
 class ReceiptServiceTest {
+        @Mock private com.sellbit.domain.cash.cashdrawer.CashDrawerService cashDrawerService;
+    @Test
+    @DisplayName("changeReceiptWarehouse - Validare completă: stoc, cash, profit, FIFO")
+    void changeReceiptWarehouse_FullBusinessEffects() {
+    // Setup entities
+    receipt.setStatus(closedStatus);
+    receipt.setId(100);
+    receipt.setNote("");
+    User user = new User();
+    user.setId(1);
+    receipt.setUser(user);
+    warehouse.setId(1);
+    warehouse.setName("Gestiune Veche");
+    receipt.setWarehouse(warehouse);
+
+    // Product setup
+    Product product = new Product();
+    product.setId(10);
+    product.setName("Cola");
+    product.setTrackStock(true);
+
+    ReceiptItem item = ReceiptItem.builder()
+        .id(1)
+        .product(product)
+        .quantity(new BigDecimal("2.00"))
+        .unitPrice(new BigDecimal("5.00"))
+        .netTotal(new BigDecimal("10.00"))
+        .vatTotal(new BigDecimal("1.90"))
+        .lineTotal(new BigDecimal("11.90"))
+        .build();
+    receipt.setItems(List.of(item));
+
+    // Payment setup (CASH)
+    PaymentMethod cashMethod = new PaymentMethod();
+    cashMethod.setCode("CASH");
+    ReceiptPayment payment = ReceiptPayment.builder()
+        .id(1)
+        .amount(new BigDecimal("11.90"))
+        .paymentMethod(cashMethod)
+        .build();
+    receipt.setPayments(List.of(payment));
+
+    // FIFO allocation exists
+    when(receiptRepository.findById(100)).thenReturn(Optional.of(receipt));
+    Warehouse newWarehouse = new Warehouse();
+    newWarehouse.setId(2);
+    newWarehouse.setName("Gestiune Noua");
+    when(warehouseRepository.findById(2)).thenReturn(Optional.of(newWarehouse));
+    when(productComponentRepository.findByParentProductIdAndIsActiveTrue(10)).thenReturn(List.of());
+    when(stockCurrentService.getQuantity(2, 10)).thenReturn(new BigDecimal("20.00"));
+    when(purchaseService.hasFifoAllocationsForReceipt(100)).thenReturn(true);
+
+    // FIFO rollback and reallocation
+    // Simulează recalcularea costului FIFO
+    when(purchaseService.consumeForReceiptItemAndRecord(2, receipt, item)).thenReturn(new BigDecimal("3.00"));
+
+    // Cash movement
+    CashMovement movement = CashMovement.builder().id(1).warehouse(warehouse).receipt(receipt).amount(new BigDecimal("11.90")).build();
+    when(cashMovementRepository.findByReceiptId(100)).thenReturn(List.of(movement));
+
+    // Run
+    receiptService.changeReceiptWarehouse(100, 2);
+
+    // Stock updated in both warehouses
+    verify(stockCurrentService).updateStockRelative(1, 10, new BigDecimal("2.00"));
+    verify(stockCurrentService).updateStockRelative(2, 10, new BigDecimal("-2.00"));
+
+    // FIFO rollback and reallocation called
+    verify(purchaseService).rollbackFifoForReceipt(100);
+    verify(purchaseService).consumeForReceiptItemAndRecord(2, receipt, item);
+    verify(itemRepository).save(item);
+    assertEquals(new BigDecimal("3.00"), item.getPurchaseUnitPrice());
+
+    // Cash drawer balances updated
+    verify(cashDrawerService).updateBalance(1, new BigDecimal("-11.90"));
+    verify(cashDrawerService).updateBalance(2, new BigDecimal("11.90"));
+
+    // Cash movement warehouse updated
+    assertEquals(newWarehouse, movement.getWarehouse());
+
+    // Receipt warehouse and note updated
+    assertEquals(newWarehouse, receipt.getWarehouse());
+    assertTrue(receipt.getNote().contains("sch gest"));
+    verify(receiptRepository).save(receipt);
+    }
 
     @Mock private ReceiptRepository receiptRepository;
     @Mock private WarehouseRepository warehouseRepository;
@@ -67,6 +155,7 @@ class ReceiptServiceTest {
     @Mock private CancelReasonRepository cancelReasonRepository;
     @Mock private StockCurrentService stockCurrentService;
     @Mock private CashMovementService cashMovementService;
+    @Mock private CashMovementRepository cashMovementRepository;
     @Mock private ReceiptItemRepository itemRepository;
     @Mock private PurchaseService purchaseService;
     @Mock private CustomerVoucherService voucherService;
@@ -109,6 +198,8 @@ class ReceiptServiceTest {
                 .payments(new ArrayList<>())
                 .createdAt(LocalDateTime.now())
                 .build();
+
+                lenient().when(cashMovementRepository.findByReceiptId(anyInt())).thenReturn(List.of());
     }
 
     // --- 1. createReceipt ---
@@ -333,7 +424,7 @@ class ReceiptServiceTest {
         verify(cashMovementService).createMovement(
                 eq(1), eq("REFUND"), 
                 argThat(val -> val.compareTo(new BigDecimal("50")) == 0), 
-                eq(1), anyString()
+            eq(1), anyString(), eq(100)
         );
 
         assertTrue(new BigDecimal("-50.00").compareTo(res.totalAmount()) == 0);
@@ -528,12 +619,13 @@ class ReceiptServiceTest {
 
         when(receiptRepository.findById(100)).thenReturn(Optional.of(receipt));
         when(statusRepository.findByCode("CLOSED")).thenReturn(Optional.of(closedStatus));
-        when(purchaseService.getCurrentFIFOPurchasePrice(1, 5)).thenReturn(new BigDecimal("40.00"));
+        when(purchaseService.consumeForReceiptItemAndRecord(eq(1), eq(receipt), eq(item)))
+            .thenReturn(new BigDecimal("40.00"));
 
         receiptService.closeReceipt(100);
 
         assertEquals(new BigDecimal("40.00"), item.getPurchaseUnitPrice());
-        verify(purchaseService).deductFromBatchesFIFO(1, 5, new BigDecimal("2.00"));
+        verify(purchaseService).consumeForReceiptItemAndRecord(eq(1), eq(receipt), eq(item));
         verify(itemRepository).save(item);
     }
 
@@ -558,7 +650,7 @@ class ReceiptServiceTest {
 
         receiptService.createPartialRefund(100, new ReceiptDTOs.RefundRequest(1, List.of(new ReceiptDTOs.RefundItemRequest(1, BigDecimal.ONE)),1));
 
-        verify(cashMovementService).createMovement(eq(1), eq("REFUND_CARD"), any(BigDecimal.class), eq(1), anyString());
+        verify(cashMovementService).createMovement(eq(1), eq("REFUND_CARD"), any(BigDecimal.class), eq(1), anyString(), eq(100));
     }
 
     @Test
@@ -693,7 +785,7 @@ class ReceiptServiceTest {
             item.getServiceEndAt() == null
         ));
         verify(paymentRepository).save(any(ReceiptPayment.class));
-        verify(cashMovementService).createMovement(eq(warehouseId), eq("SALE"), eq(amount), eq(userId), anyString());
+        verify(cashMovementService).createMovement(eq(warehouseId), eq("SALE"), eq(amount), eq(userId), anyString(), eq(777));
     }
 
     @Test

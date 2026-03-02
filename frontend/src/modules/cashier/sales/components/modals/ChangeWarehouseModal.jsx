@@ -30,7 +30,6 @@ const ChangeWarehouseModal = ({
   const [confirmDialog, setConfirmDialog] = useState({ open: false, receipt: null });
   const [selectedWarehouseId, setSelectedWarehouseId] = useState(null);
   const [modalLoading, setModalLoading] = useState(false);
-  const [modalError, setModalError] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'error' });
 
   const fetchReceipts = async () => {
@@ -61,20 +60,17 @@ const ChangeWarehouseModal = ({
     } else {
       setSelectedWarehouseId(null);
     }
-    setModalError(null);
   };
 
   const handleCloseConfirm = () => {
     setConfirmDialog({ open: false, receipt: null });
     setSelectedWarehouseId(null);
     setModalLoading(false);
-    setModalError(null);
   };
 
   const handleConfirm = async () => {
     if (!confirmDialog.receipt || !selectedWarehouseId || modalLoading) return;
     setModalLoading(true);
-    setModalError(null);
     try {
       await SalesService.changeReceiptWarehouse(confirmDialog.receipt.id, selectedWarehouseId);
       handleCloseConfirm();
@@ -85,7 +81,6 @@ const ChangeWarehouseModal = ({
       setSnackbar({ open: true, message: 'Mutare efectuată cu succes!', severity: 'success' });
     } catch (e) {
       const friendly = getFriendlyErrorMessage(e);
-      setModalError(friendly);
       setSnackbar({ open: true, message: friendly, severity: 'error' });
     } finally {
       setModalLoading(false);
@@ -198,7 +193,6 @@ const ChangeWarehouseModal = ({
                 </Select>
               </FormControl>
             )}
-            {modalError && <Typography color="error" mt={2}>{modalError}</Typography>}
           </DialogContent>
           <DialogActions>
             <Button onClick={handleCloseConfirm} color="inherit" disabled={modalLoading}>Anulează</Button>

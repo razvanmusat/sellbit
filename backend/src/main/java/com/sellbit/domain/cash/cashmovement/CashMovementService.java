@@ -5,6 +5,8 @@ import com.sellbit.domain.inventory.warehouse.Warehouse;
 import com.sellbit.domain.inventory.warehouse.WarehouseRepository;
 import com.sellbit.domain.lookup.cashmovementtype.CashMovementType;
 import com.sellbit.domain.lookup.cashmovementtype.CashMovementTypeRepository;
+import com.sellbit.domain.sales.receipt.Receipt;
+import com.sellbit.domain.sales.receipt.ReceiptRepository;
 import com.sellbit.domain.security.user.User;
 import com.sellbit.domain.security.user.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -22,12 +24,18 @@ public class CashMovementService {
     private final CashMovementTypeRepository typeRepository;
     private final WarehouseRepository warehouseRepository;
     private final UserRepository userRepository;
+    private final ReceiptRepository receiptRepository;
 
     /**
      * Înregistrează o mișcare de cash și actualizează automat soldul live al sertarului.
      */
     @Transactional
     public void createMovement(Integer warehouseId, String typeCode, BigDecimal amount, Integer userId, String note) {
+        createMovement(warehouseId, typeCode, amount, userId, note, null);
+    }
+
+    @Transactional
+    public void createMovement(Integer warehouseId, String typeCode, BigDecimal amount, Integer userId, String note, Integer receiptId) {
         // 1. Validăm existența datelor
         Warehouse warehouse = warehouseRepository.findById(warehouseId)
                 .orElseThrow(() -> new RuntimeException("ERROR.WAREHOUSE.NOT_FOUND"));
@@ -37,6 +45,12 @@ public class CashMovementService {
         
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("ERROR.USER.NOT_FOUND"));
+
+        Receipt receipt = null;
+        if (receiptId != null) {
+            receipt = receiptRepository.findById(receiptId)
+                .orElseThrow(() -> new RuntimeException("ERROR.RECEIPT.NOT_FOUND"));
+        }
 
         // 2. Logica pentru semn: 
         // SALE și CASH_IN sunt pozitive (adună bani).
@@ -58,6 +72,7 @@ public class CashMovementService {
                 .movementType(type)
                 .amount(finalAmount)
                 .user(user)
+                .receipt(receipt)
                 .note(note)
                 .build();
         

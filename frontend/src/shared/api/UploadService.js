@@ -11,6 +11,11 @@ const toEncodedFileName = (fileName) => encodeURIComponent(String(fileName || ''
 const DOWNLOAD_CHUNK_THRESHOLD = 100 * 1024 * 1024;
 const DOWNLOAD_CHUNK_SIZE = 10 * 1024 * 1024;
 
+const UPLOAD_CHUNK_THRESHOLD = 50 * 1024 * 1024;
+const UPLOAD_CHUNK_SIZE = 8 * 1024 * 1024;
+const UPLOAD_CHUNK_MAX_RETRIES = 3;
+const UPLOAD_CHUNK_RETRY_BASE_DELAY_MS = 400;
+
 const parseErrorResponse = async (response) => {
   const text = await response.text();
 
@@ -32,46 +37,145 @@ export const UploadService = {
       return client('uploads');
     }
   },
-
-  upload: (file, folder, onProgress) => new Promise((resolve, reject) => {
-    const formData = new FormData();
-    formData.append('file', file);
-    if (folder) formData.append('folder', folder);
-
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', '/api/uploads', true);
-    xhr.withCredentials = true;
-
-    const token = localStorage.getItem('token');
-    if (token) {
-      xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+  upload: async (file, folder, onProgress) => {
+    const fileSize = Number(file?.size || 0);
+    if (fileSize > UPLOAD_CHUNK_THRESHOLD) {
+      return UploadService.uploadChunked(file, folder, onProgress);
     }
 
-    xhr.upload.onprogress = (event) => {
-      if (!onProgress || !event.lengthComputable) return;
-      const percent = Math.min(100, Math.round((event.loaded / event.total) * 100));
-      onProgress(percent);
-    };
+    return new Promise((resolve, reject) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      if (folder) formData.append('folder', folder);
 
-    xhr.onload = () => {
-      const text = xhr.responseText || '';
-      if (xhr.status < 200 || xhr.status >= 300) {
-        reject(new Error(text || `HTTP Error: ${xhr.status}`));
-        return;
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', '/api/uploads', true);
+      xhr.withCredentials = true;
+
+      const token = localStorage.getItem('token');
+      if (token) {
+        xhr.setRequestHeader('Authorization', `Bearer ${token}`);
       }
 
+      xhr.upload.onprogress = (event) => {
+        if (!onProgress || !event.lengthComputable) return;
+        const percent = Math.min(100, Math.round((event.loaded / event.total) * 100));
+        onProgress(percent);
+      };
+
+      xhr.onload = () => {
+        const text = xhr.responseText || '';
+        if (xhr.status < 200 || xhr.status >= 300) {
+          reject(new Error(text || `HTTP Error: ${xhr.status}`));
+          return;
+        }
+
+        try {
+          resolve(JSON.parse(text));
+        } catch {
+          resolve(text);
+        }
+      };
+
+      xhr.onerror = () => reject(new Error('Upload eșuat. Verifică conexiunea și încearcă din nou.'));
+      xhr.onabort = () => reject(new Error('Upload anulat.'));
+
+      xhr.send(formData);
+    });
+  },
+
+  uploadChunked: async (file, folder, onProgress) => {
+    const totalChunks = Math.max(1, Math.ceil(file.size / UPLOAD_CHUNK_SIZE));
+    const uploadId = UploadService.generateUploadId();
+
+    for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex += 1) {
+      const start = chunkIndex * UPLOAD_CHUNK_SIZE;
+      const end = Math.min(start + UPLOAD_CHUNK_SIZE, file.size);
+      const chunkBlob = file.slice(start, end);
+      const formData = new FormData();
+
+      formData.append('chunk', chunkBlob, file.name);
+      formData.append('uploadId', uploadId);
+      formData.append('chunkIndex', String(chunkIndex));
+      formData.append('totalChunks', String(totalChunks));
+      formData.append('fileName', file.name || 'fisier');
+      if (folder) formData.append('folder', folder);
+
+      await UploadService.uploadChunkWithRetry(formData, chunkIndex, totalChunks);
+
+      if (onProgress) {
+        const percent = Math.min(99, Math.round(((chunkIndex + 1) / totalChunks) * 100));
+        onProgress(percent);
+      }
+    }
+
+    const completeParams = new URLSearchParams();
+    completeParams.set('uploadId', uploadId);
+    completeParams.set('totalChunks', String(totalChunks));
+    completeParams.set('fileName', file.name || 'fisier');
+    if (folder) completeParams.set('folder', folder);
+
+    const completeResponse = await fetch(`/api/uploads/complete?${completeParams.toString()}`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      credentials: 'include',
+    });
+
+    if (!completeResponse.ok) {
+      return parseErrorResponse(completeResponse);
+    }
+
+    const completedFile = await completeResponse.json();
+    if (onProgress) onProgress(100);
+    return completedFile;
+  },
+
+  generateUploadId: () => {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID().replace(/-/g, '').slice(0, 32);
+    }
+
+    return `${Date.now()}_${Math.random().toString(36).slice(2, 14)}`;
+  },
+
+  uploadChunkWithRetry: async (formData, chunkIndex, totalChunks) => {
+    let lastError = null;
+
+    for (let attempt = 0; attempt <= UPLOAD_CHUNK_MAX_RETRIES; attempt += 1) {
       try {
-        resolve(JSON.parse(text));
-      } catch {
-        resolve(text);
+        const response = await fetch('/api/uploads/chunk', {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          credentials: 'include',
+          body: formData,
+        });
+
+        if (response.ok) {
+          return;
+        }
+
+        if (attempt === UPLOAD_CHUNK_MAX_RETRIES) {
+          return parseErrorResponse(response);
+        }
+
+        lastError = new Error(`HTTP Error: ${response.status}`);
+      } catch (error) {
+        lastError = error;
+        if (attempt === UPLOAD_CHUNK_MAX_RETRIES) {
+          break;
+        }
       }
-    };
 
-    xhr.onerror = () => reject(new Error('Upload eșuat. Verifică conexiunea și încearcă din nou.'));
-    xhr.onabort = () => reject(new Error('Upload anulat.'));
+      const delay = UPLOAD_CHUNK_RETRY_BASE_DELAY_MS * Math.pow(2, attempt);
+      await UploadService.sleep(delay);
+    }
 
-    xhr.send(formData);
-  }),
+    throw new Error(
+      `Upload chunk eșuat (${chunkIndex + 1}/${totalChunks}). ${lastError?.message || 'Eroare necunoscută.'}`
+    );
+  },
+
+  sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
 
   delete: async (fileName, folder) => {
     const encodedFileName = toEncodedFileName(fileName);

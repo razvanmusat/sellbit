@@ -16,7 +16,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -28,18 +27,18 @@ public class StockAdjustmentService {
     private final WarehouseRepository warehouseRepository;
     private final UserRepository userRepository;
     private final AdjustmentReasonRepository reasonRepository;
-    
+
     private final PurchaseService purchaseService;
     private final StockCurrentService stockCurrentService;
-    
+
     @Transactional(readOnly = true)
     public List<StockAdjustmentDTOs.Response> getAdjustmentsByProduct(Integer productId) {
-    	if (!productRepository.existsById(productId)) {
+        if (!productRepository.existsById(productId)) {
             throw new RuntimeException("ERROR.PRODUCT.NOT_FOUND");
         }
-    	return adjustmentRepository.findByProductIdOrderByAdjustedAtDesc(productId)
+        return adjustmentRepository.findByProductIdOrderByAdjustedAtDesc(productId)
                 .stream().map(this::mapToResponse).toList();
-    }    
+    }
 
     /**
      * Procesează o ajustare de stoc și sincronizează loturile FIFO.
@@ -55,7 +54,7 @@ public class StockAdjustmentService {
         // 1. Identificare și Validare entități
         Product product = productRepository.findById(dto.productId())
                 .orElseThrow(() -> new RuntimeException("ERROR.PRODUCT.NOT_FOUND"));
-        
+
         if (Boolean.FALSE.equals(product.getTrackStock())) {
             throw new RuntimeException("ERROR.ADJUSTMENT.NOT_TRACKED_PRODUCT");
         }
@@ -86,38 +85,34 @@ public class StockAdjustmentService {
                         .reason(reason)
                         .quantityChange(dto.quantityChange())
                         .note(dto.note())
-                        .adjustedAt(LocalDateTime.now())
-                        .build()
-        );
+                        .build());
 
         // 4. Sincronizare FIFO
         if (dto.quantityChange().compareTo(BigDecimal.ZERO) < 0) {
             purchaseService.deductFromBatchesFIFO(
                     warehouse.getId(),
                     product.getId(),
-                    dto.quantityChange().abs()
-            );
+                    dto.quantityChange().abs());
         } else {
             purchaseService.createVirtualReturnBatch(
                     warehouse.getId(),
                     product.getId(),
                     user.getId(),
                     dto.quantityChange(),
-                    "ADJUSTMENT: " + reason.getLabel()
-            );
+                    "ADJUSTMENT: " + reason.getLabel());
         }
 
         // 5. STOC CURENT – sursa de adevăr
         stockCurrentService.updateStockRelative(
                 warehouse.getId(),
                 product.getId(),
-                dto.quantityChange()
-        );
+                dto.quantityChange());
     }
 
-    //Raport Jurnal (Gestiune + Dată)
+    // Raport Jurnal (Gestiune + Dată)
     @Transactional(readOnly = true)
-    public List<StockAdjustmentDTOs.Response> getAdjustmentsByDateRange(Integer warehouseId, LocalDate start, LocalDate end) {
+    public List<StockAdjustmentDTOs.Response> getAdjustmentsByDateRange(Integer warehouseId, LocalDate start,
+            LocalDate end) {
         // Validare gestiune
         if (!warehouseRepository.existsById(warehouseId)) {
             throw new RuntimeException("ERROR.WAREHOUSE.NOT_FOUND");
@@ -125,9 +120,8 @@ public class StockAdjustmentService {
 
         return adjustmentRepository.findByWarehouseIdAndAdjustedAtBetweenOrderByAdjustedAtDesc(
                 warehouseId,
-                start.atStartOfDay(), 
-                end.atTime(23, 59, 59)
-        ).stream().map(this::mapToResponse).toList();
+                start.atStartOfDay(),
+                end.atTime(23, 59, 59)).stream().map(this::mapToResponse).toList();
     }
 
     private StockAdjustmentDTOs.Response mapToResponse(StockAdjustment s) {
@@ -140,7 +134,6 @@ public class StockAdjustmentService {
                 s.getUser().getFullName(),
                 s.getQuantityChange(),
                 s.getNote(),
-                s.getAdjustedAt()
-        );
+                s.getAdjustedAt());
     }
 }

@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import dayjs from 'dayjs';
 import { SalesService } from '../api/SalesService';
 import { getFriendlyErrorMessage } from '../../../../shared/utils/errorHandler';
+import { onSalesDataChanged } from '../../../../shared/utils/salesSyncEvents';
 
 export const usePaymentStats = (warehouseId, methodCode) => {
     const [startDate, setStartDate] = useState(dayjs().startOf('month'));
@@ -9,8 +10,21 @@ export const usePaymentStats = (warehouseId, methodCode) => {
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
+    const [refreshTick, setRefreshTick] = useState(0);
 
     const REAL_INCOME_METHODS = ['CASH', 'CARD', 'BANK_TRANSFER'];
+
+    useEffect(() => {
+        if (!warehouseId) {
+            return;
+        }
+
+        const unsubscribe = onSalesDataChanged(() => {
+            setRefreshTick((value) => value + 1);
+        });
+
+        return unsubscribe;
+    }, [warehouseId]);
 
     useEffect(() => {
         if (!warehouseId) return;
@@ -78,7 +92,7 @@ export const usePaymentStats = (warehouseId, methodCode) => {
         doFetch();
         return () => { mounted = false; };
         // Folosim .format() ca dependență pentru a declanșa useEffect-ul doar când data se schimbă efectiv
-    }, [warehouseId, methodCode, dayjs(startDate).format('YYYY-MM-DD'), dayjs(endDate).format('YYYY-MM-DD')]);
+    }, [warehouseId, methodCode, dayjs(startDate).format('YYYY-MM-DD'), dayjs(endDate).format('YYYY-MM-DD'), refreshTick]);
 
     const totalGeneral = useMemo(() => {
         if (!data || data.length === 0) return 0;

@@ -1,4 +1,5 @@
 import { client } from '../../../../shared/api/client';
+import { emitSalesDataChanged } from '../../../../shared/utils/salesSyncEvents';
 
 export class SalesService {
 
@@ -29,6 +30,7 @@ export class SalesService {
     const response = await client(`sales/receipts/${id}/cancel?reasonId=${reasonId}`, {
       method: 'PATCH'
     });
+    emitSalesDataChanged({ type: 'receipt-cancelled' });
     return response;
   }
 
@@ -36,12 +38,14 @@ export class SalesService {
   // POS: Închidere Bon (Plată).
   static async closeReceipt(id) {
     await client(`sales/receipts/${id}/close`, { method: 'POST' });
+    emitSalesDataChanged({ type: 'receipt-closed' });
   }
 
   // @PostMapping("/{id}/refund")
   // POS: Refundare parțială.
   static async createPartialRefund(id, request) {
     const response = await client(`sales/receipts/${id}/refund`, { body: request });
+    emitSalesDataChanged({ type: 'receipt-refunded' });
     return response;
   }
 
@@ -56,6 +60,7 @@ export class SalesService {
   // POS: Încasare Avans.
   static async registerAdvancePayment(request) {
     await client('sales/receipts/advance', { body: request });
+    emitSalesDataChanged({ type: 'advance-registered', warehouseId: request?.warehouseId ?? null });
   }
 
   // @GetMapping("/report")
@@ -70,5 +75,6 @@ export class SalesService {
     await client(`sales/receipts/${id}/change-warehouse?newWarehouseId=${newWarehouseId}`, {
       method: 'PATCH'
     });
+    emitSalesDataChanged({ type: 'receipt-warehouse-changed', warehouseId: newWarehouseId });
   }
 }

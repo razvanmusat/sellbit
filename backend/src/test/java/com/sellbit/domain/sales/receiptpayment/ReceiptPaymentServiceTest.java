@@ -69,7 +69,7 @@ class ReceiptPaymentServiceTest {
 
         verify(paymentRepository).save(argThat(p -> 
             p.getAmount().compareTo(new BigDecimal("100.00")) == 0));
-        verify(cashMovementService).createMovement(eq(1), eq("SALE"), eq(new BigDecimal("100.00")), eq(99), anyString());
+        verify(cashMovementService).createMovement(eq(1), eq("SALE"), eq(new BigDecimal("100.00")), eq(99), anyString(), eq(10));
     }
 
     @Test
@@ -107,7 +107,7 @@ class ReceiptPaymentServiceTest {
         paymentService.removePayment(500, 99);
 
         // Trebuie să creeze o mișcare de REFUND pentru a scădea banii
-        verify(cashMovementService).createMovement(eq(1), eq("REFUND"), eq(new BigDecimal("50.00")), eq(99), anyString());
+        verify(cashMovementService).createMovement(eq(1), eq("REFUND"), eq(new BigDecimal("50.00")), eq(99), anyString(), eq(10));
         verify(paymentRepository).delete(payment);
     }
 
@@ -122,7 +122,7 @@ class ReceiptPaymentServiceTest {
 
         paymentService.removePayment(501, 99);
 
-        verify(cashMovementService, never()).createMovement(any(), any(), any(), any(), any());
+        verify(cashMovementService, never()).createMovement(any(), any(), any(), any(), any(), any());
         verify(paymentRepository).delete(payment);
     }
 

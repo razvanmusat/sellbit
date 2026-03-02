@@ -48,9 +48,31 @@ public class UploadController {
         return ResponseEntity.ok(uploadService.upload(file, folder));
     }
 
+    @PreAuthorize("hasAnyAuthority('50', '100')")
+    @PostMapping(value = "/chunk", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<UploadDTOs.ChunkUploadResponse> uploadChunk(
+            @RequestParam("chunk") MultipartFile chunk,
+            @RequestParam("uploadId") String uploadId,
+            @RequestParam("chunkIndex") int chunkIndex,
+            @RequestParam("totalChunks") int totalChunks,
+            @RequestParam("fileName") String fileName,
+            @RequestParam(value = "folder", required = false) String folder) {
+        return ResponseEntity.ok(uploadService.uploadChunk(chunk, uploadId, chunkIndex, totalChunks, fileName, folder));
+    }
+
+    @PreAuthorize("hasAnyAuthority('50', '100')")
+    @PostMapping("/complete")
+    public ResponseEntity<UploadDTOs.FileItem> completeUpload(
+            @RequestParam("uploadId") String uploadId,
+            @RequestParam("totalChunks") int totalChunks,
+            @RequestParam("fileName") String fileName,
+            @RequestParam(value = "folder", required = false) String folder) {
+        return ResponseEntity.ok(uploadService.completeChunkUpload(uploadId, totalChunks, fileName, folder));
+    }
+
         @PreAuthorize("hasAnyAuthority('50', '100')")
         @GetMapping("/{fileName:.+}")
-        public ResponseEntity<?> getFile(@PathVariable("fileName") String fileName,
+        public ResponseEntity<Object> getFile(@PathVariable("fileName") String fileName,
                                            @RequestParam(value = "folder", required = false) String folder,
                                            @RequestParam(defaultValue = "false") boolean download,
                                            @RequestHeader HttpHeaders requestHeaders) {
@@ -113,13 +135,13 @@ public class UploadController {
 
                     long rangeLength = end - start + 1;
                     byte[] body = readRange(resource, start, rangeLength);
-                    return ResponseEntity.status(HttpStatus.PARTIAL_CONTENT)
+                        return ResponseEntity.status(HttpStatus.PARTIAL_CONTENT)
                             .contentType(mediaType)
                             .header(HttpHeaders.ACCEPT_RANGES, "bytes")
                             .header(HttpHeaders.CONTENT_RANGE, "bytes " + start + "-" + end + "/" + contentLength)
                             .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
                             .contentLength(rangeLength)
-                            .body(body);
+                            .body((Object) body);
                 } catch (Exception ignored) {
                 }
             }
@@ -133,7 +155,7 @@ public class UploadController {
                 responseBuilder.contentLength(contentLength);
             }
 
-            return responseBuilder.body(resource);
+                return responseBuilder.body((Object) resource);
     }
 
     private byte[] readRange(Resource resource, long start, long length) {

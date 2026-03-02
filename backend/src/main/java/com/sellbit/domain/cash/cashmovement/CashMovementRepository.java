@@ -19,4 +19,6 @@ public interface CashMovementRepository extends JpaRepository<CashMovement, Inte
         LocalDateTime start, 
         LocalDateTime end
     );
+
+    List<CashMovement> findByReceiptId(Integer receiptId);
 }

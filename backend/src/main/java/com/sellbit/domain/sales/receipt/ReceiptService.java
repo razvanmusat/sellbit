@@ -14,6 +14,8 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.sellbit.domain.cash.cashmovement.CashMovement;
+import com.sellbit.domain.cash.cashmovement.CashMovementRepository;
 import com.sellbit.domain.cash.cashmovement.CashMovementService;
 import com.sellbit.domain.cash.cashdrawer.CashDrawerService;
 import com.sellbit.domain.catalog.product.Product;
@@ -52,6 +54,7 @@ public class ReceiptService {
         private final UserRepository userRepository;
         private final CancelReasonRepository cancelReasonRepository;
         private final StockCurrentService stockCurrentService;
+        private final CashMovementRepository cashMovementRepository;
         private final CashMovementService cashMovementService;
         private final CashDrawerService cashDrawerService;
         private final ReceiptItemRepository itemRepository;
@@ -203,20 +206,15 @@ public class ReceiptService {
                 // Aici doar marcăm consumul loturilor de achiziție pentru profit.
                 for (ReceiptItem item : receipt.getItems()) {
                         if (item.getQuantity().compareTo(BigDecimal.ZERO) != 0) {
-
-                                // 1. Iei prețul de achiziție FIFO la momentul închiderii
-                                BigDecimal purchasePrice = purchaseService.getCurrentFIFOPurchasePrice(
+                                // 1. Consum FIFO și salvează alocările exacte per lot
+                                BigDecimal purchasePrice = purchaseService.consumeForReceiptItemAndRecord(
                                                 receipt.getWarehouse().getId(),
-                                                item.getProduct().getId());
+                                                receipt,
+                                                item);
 
-                                // 2. Îl salvezi pe linie (Aici se "bate în cuie" profitul)
+                                // 2. Salvează costul unitar pe linie (profitul bonului)
                                 item.setPurchaseUnitPrice(purchasePrice);
                                 itemRepository.save(item);
-                                // 3. Descarci gestiunea (FIFO)
-                                purchaseService.deductFromBatchesFIFO(
-                                                receipt.getWarehouse().getId(),
-                                                item.getProduct().getId(),
-                                                item.getQuantity());
                         }
                 }
 
@@ -426,7 +424,8 @@ public class ReceiptService {
                                 typeCode,
                                 tAmount.abs(),
                                 request.userId(),
-                                "Stornare Bon #" + original.getId() + " (" + refundMethod.getLabel() + ")");
+                                "Stornare Bon #" + original.getId() + " (" + refundMethod.getLabel() + ")",
+                                original.getId());
 
                 ReceiptPayment refundPayment = ReceiptPayment.builder()
                                 .receipt(refundReceipt)
@@ -606,7 +605,8 @@ public class ReceiptService {
                                         "SALE",
                                         amount,
                                         userId,
-                                        movementNote);
+                                        movementNote,
+                                        receipt.getId());
                 }
         }
 
@@ -630,6 +630,10 @@ public class ReceiptService {
                 Warehouse newWarehouse = warehouseRepository.findById(newWarehouseId)
                     .orElseThrow(() -> new RuntimeException("ERROR.WAREHOUSE.NOT_FOUND"));
                 Warehouse oldWarehouse = receipt.getWarehouse();
+
+                                if (oldWarehouse != null && oldWarehouse.getId().equals(newWarehouseId)) {
+                                                return;
+                                }
 
                 // 4. Verifică stocul pentru toate produsele în gestiunea nouă
                                 List<String> insufficientProducts = new ArrayList<>();
@@ -686,7 +690,39 @@ public class ReceiptService {
                                         }
                                 }
 
-                // 5.1 Mută numerarul între sertare pentru plățile CASH ale bonului
+                // 5.1 Corecție FIFO lot-cu-lot pentru bonul mutat
+                boolean hasFifoAllocations = purchaseService.hasFifoAllocationsForReceipt(receipt.getId());
+                if (hasFifoAllocations) {
+                        // Revenim loturile din gestiunea veche la starea inițială
+                        purchaseService.rollbackFifoForReceipt(receipt.getId());
+
+                        // Aplicăm FIFO în gestiunea nouă și recalculăm costul liniilor
+                        for (ReceiptItem item : receipt.getItems()) {
+                                if (item.getQuantity() == null || item.getQuantity().compareTo(BigDecimal.ZERO) <= 0) {
+                                        continue;
+                                }
+                                BigDecimal recalculatedUnitCost = purchaseService.consumeForReceiptItemAndRecord(
+                                                newWarehouseId,
+                                                receipt,
+                                                item);
+                                item.setPurchaseUnitPrice(recalculatedUnitCost);
+                                itemRepository.save(item);
+                        }
+                } else {
+                        // Bonuri vechi fără alocări FIFO: ajustăm doar costul unitar pentru profit
+                        for (ReceiptItem item : receipt.getItems()) {
+                                if (item.getQuantity() == null || item.getQuantity().compareTo(BigDecimal.ZERO) <= 0) {
+                                        continue;
+                                }
+                                BigDecimal recalculatedUnitCost = purchaseService.getCurrentFIFOPurchasePrice(
+                                                newWarehouseId,
+                                                item.getProduct().getId());
+                                item.setPurchaseUnitPrice(recalculatedUnitCost);
+                                itemRepository.save(item);
+                        }
+                }
+
+                // 5.2 Mută numerarul între sertare pentru plățile CASH ale bonului
                 BigDecimal cashPaid = receipt.getPayments().stream()
                                 .filter(payment -> payment.getPaymentMethod() != null
                                                 && "CASH".equals(payment.getPaymentMethod().getCode()))
@@ -697,6 +733,12 @@ public class ReceiptService {
                         // Mutare directă de sold între sertare, fără înregistrare de mișcări cash
                         cashDrawerService.updateBalance(oldWarehouse.getId(), cashPaid.negate());
                         cashDrawerService.updateBalance(newWarehouse.getId(), cashPaid);
+                }
+
+                // Mută rapoartele de numerar exact pentru bonul mutat (indiferent de CASH/CARD)
+                List<CashMovement> receiptMovements = cashMovementRepository.findByReceiptId(receipt.getId());
+                for (CashMovement movement : receiptMovements) {
+                        movement.setWarehouse(newWarehouse);
                 }
 
                 // 6. Schimbă gestiunea bonului

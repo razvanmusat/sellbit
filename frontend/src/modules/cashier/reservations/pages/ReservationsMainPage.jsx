@@ -3,7 +3,6 @@ import {
   Box, Paper, Typography, Button, IconButton, 
   CircularProgress, Alert, Stack, Divider, Snackbar,
   Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions,
-  FormControl, Select, MenuItem
 } from '@mui/material';
 import { DatePicker, LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
@@ -131,43 +130,33 @@ const ReservationsMainPage = () => {
                     Azi
                 </Button>
 
-                <FormControl
-                  size="small"
-                  sx={{
-                    ml: 1,
-                    minWidth: 170,
-                    '& .MuiOutlinedInput-root': {
-                      bgcolor: 'white',
-                      borderRadius: 1,
-                      overflow: 'hidden'
-                    },
-                    '& .MuiOutlinedInput-notchedOutline': {
-                      borderRadius: 1
-                    }
-                  }}
+                <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={() => handleFilterOptionChange('currentMonth')}
+                    sx={{
+                        textTransform: 'none',
+                        ml: 1,
+                        bgcolor: 'white',
+                        '&:hover': { bgcolor: '#f0f0f0' }
+                    }}
                 >
-                  <Select
-                    value={filterOption}
-                    displayEmpty
-                    onChange={(e) => {
-                      if (e.target.value !== 'customInterval') {
-                        handleFilterOptionChange(e.target.value);
-                      }
+                    Luna curentă
+                </Button>
+
+                <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={() => handleFilterOptionChange('customInterval')}
+                    sx={{
+                        textTransform: 'none',
+                        ml: 1,
+                        bgcolor: 'white',
+                        '&:hover': { bgcolor: '#f0f0f0' }
                     }}
-                    renderValue={(selected) => {
-                      if (!selected) return 'Alege opțiune';
-                      if (selected === 'currentMonth') return 'Luna curentă';
-                      if (selected === 'customInterval') return selectedIntervalLabel;
-                      return 'Alege opțiune';
-                    }}
-                  >
-                    <MenuItem value="" disabled>Alege opțiune</MenuItem>
-                    <MenuItem value="currentMonth">Luna curentă</MenuItem>
-                    <MenuItem value="customInterval" onClick={() => handleFilterOptionChange('customInterval')}>
-                      Selectează interval
-                    </MenuItem>
-                  </Select>
-                </FormControl>
+                >
+                  {filterOption === 'customInterval' ? selectedIntervalLabel : 'Selectează interval'}
+                </Button>
             </Box>
           </Box>
 

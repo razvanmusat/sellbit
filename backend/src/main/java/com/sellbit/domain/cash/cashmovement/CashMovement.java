@@ -2,6 +2,7 @@ package com.sellbit.domain.cash.cashmovement;
 
 import com.sellbit.domain.inventory.warehouse.Warehouse;
 import com.sellbit.domain.lookup.cashmovementtype.CashMovementType;
+import com.sellbit.domain.sales.receipt.Receipt;
 import com.sellbit.domain.security.user.User;
 import jakarta.persistence.*;
 import lombok.*;
@@ -41,6 +42,10 @@ public class CashMovement {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "receipt_id")
+    private Receipt receipt;
 
     @Column(columnDefinition = "TEXT")
     private String note;

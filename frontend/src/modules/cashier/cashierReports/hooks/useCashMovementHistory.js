@@ -56,8 +56,15 @@ export const useCashMovementHistory = (warehouseId) => {
 
     // --- 3. Filtrare Locală (Derived State) ---
     const filteredMovements = useMemo(() => {
-        if (!selectedType) return [];
-        return movements.filter(m => m.typeCode === selectedType);
+        const sortedMovements = [...movements].sort(
+            (a, b) => dayjs(a.createdAt).valueOf() - dayjs(b.createdAt).valueOf()
+        );
+
+        if (!selectedType || selectedType === 'ALL') {
+            return sortedMovements;
+        }
+
+        return sortedMovements.filter(m => m.typeCode === selectedType);
     }, [movements, selectedType]);
 
     // Returnăm doar ce are nevoie UI-ul

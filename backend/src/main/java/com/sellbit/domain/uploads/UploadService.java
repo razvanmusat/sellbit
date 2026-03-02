@@ -1,6 +1,8 @@
 package com.sellbit.domain.uploads;
 
+import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
 import org.springframework.stereotype.Service;
@@ -12,8 +14,10 @@ import java.io.InputStream;
 import java.net.MalformedURLException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.nio.file.StandardCopyOption;
 import java.time.Instant;
+import java.time.Duration;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
@@ -24,6 +28,9 @@ import java.util.stream.Stream;
 
 @Service
 public class UploadService {
+    private static final int MAX_CHUNKS = 20000;
+    private static final long ABANDONED_UPLOAD_TTL_MILLIS = Duration.ofHours(24).toMillis();
+
     public List<UploadDTOs.FileItem> listFilesInFolder(String folder) {
         createUploadDirectoryIfNeeded();
         if (folder == null || folder.isBlank()) {
@@ -47,13 +54,123 @@ public class UploadService {
 
     private static final String SEPARATOR = "__";
 
-        private static final Set<String> FORBIDDEN_EXTENSIONS = Set.of("exe");
+    private static final Set<String> FORBIDDEN_EXTENSIONS = Set.of("exe");
 
     private final Path uploadRoot;
+    private final Path uploadChunksRoot;
 
     public UploadService(@Value("${sellbit.uploads.path:/opt/sellbit/uploads}") String uploadPath) {
         this.uploadRoot = Path.of(uploadPath).toAbsolutePath().normalize();
+        this.uploadChunksRoot = this.uploadRoot.resolve(".chunks").normalize();
         createUploadDirectoryIfNeeded();
+    }
+
+    @PostConstruct
+    public void runCleanupAtStartup() {
+        cleanupAbandonedChunkUploads();
+    }
+
+    public UploadDTOs.ChunkUploadResponse uploadChunk(MultipartFile chunk,
+                                                      String uploadId,
+                                                      int chunkIndex,
+                                                      int totalChunks,
+                                                      String fileName,
+                                                      String folder) {
+        cleanupAbandonedChunkUploads();
+
+        if (chunk == null || chunk.isEmpty()) {
+            throw new RuntimeException("ERROR.UPLOAD.EMPTY_FILE");
+        }
+
+        validateChunkRequest(uploadId, chunkIndex, totalChunks, fileName);
+
+        String safeUploadId = sanitizeUploadId(uploadId);
+        String safeOriginalName = sanitizeOriginalName(fileName);
+        validateExtension(safeOriginalName);
+        String safeFolder = normalizeOptionalFolder(folder);
+
+        Path uploadSessionDir = resolveChunkUploadDir(safeUploadId);
+        Path chunkFile = uploadSessionDir.resolve(chunkIndex + ".part");
+
+        try {
+            Files.createDirectories(uploadSessionDir);
+            Files.writeString(uploadSessionDir.resolve("meta.name"), safeOriginalName, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+            Files.writeString(uploadSessionDir.resolve("meta.total"), Integer.toString(totalChunks), StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+            Files.writeString(uploadSessionDir.resolve("meta.folder"), safeFolder == null ? "" : safeFolder, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+            try (InputStream inputStream = chunk.getInputStream()) {
+                Files.copy(inputStream, chunkFile, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } catch (IOException ex) {
+            throw new RuntimeException("ERROR.UPLOAD.SAVE_FAILED");
+        }
+
+        long uploadedChunks = countUploadedChunks(uploadSessionDir);
+        return new UploadDTOs.ChunkUploadResponse(safeUploadId, chunkIndex, totalChunks, uploadedChunks, uploadedChunks == totalChunks);
+    }
+
+    public UploadDTOs.FileItem completeChunkUpload(String uploadId,
+                                                   int totalChunks,
+                                                   String fileName,
+                                                   String folder) {
+        cleanupAbandonedChunkUploads();
+
+        validateChunkRequest(uploadId, 0, totalChunks, fileName);
+
+        String safeUploadId = sanitizeUploadId(uploadId);
+        String safeOriginalName = sanitizeOriginalName(fileName);
+        validateExtension(safeOriginalName);
+
+        String safeFolder = normalizeOptionalFolder(folder);
+        Path sessionDir = resolveChunkUploadDir(safeUploadId);
+
+        if (!Files.isDirectory(sessionDir)) {
+            throw new RuntimeException("ERROR.UPLOAD.NOT_FOUND");
+        }
+
+        ensureAllChunksExist(sessionDir, totalChunks);
+
+        String storedName = UUID.randomUUID() + SEPARATOR + safeOriginalName;
+        Path target = safeFolder == null
+                ? resolveSafePath(storedName)
+                : uploadRoot.resolve(safeFolder).resolve(storedName).normalize();
+
+        if (!target.startsWith(uploadRoot)) {
+            throw new RuntimeException("ERROR.UPLOAD.INVALID_NAME");
+        }
+
+        try {
+            Files.createDirectories(target.getParent());
+            mergeChunksToTarget(sessionDir, target, totalChunks);
+            deleteDirectoryRecursively(sessionDir);
+            return toFileItem(target);
+        } catch (IOException ex) {
+            throw new RuntimeException("ERROR.UPLOAD.SAVE_FAILED");
+        }
+    }
+
+    @Scheduled(fixedDelay = 3_600_000L)
+    public void cleanupAbandonedChunkUploads() {
+        createUploadDirectoryIfNeeded();
+
+        if (!Files.exists(uploadChunksRoot) || !Files.isDirectory(uploadChunksRoot)) {
+            return;
+        }
+
+        long now = System.currentTimeMillis();
+        try (Stream<Path> sessions = Files.list(uploadChunksRoot)) {
+            sessions
+                    .filter(Files::isDirectory)
+                    .forEach(path -> {
+                        try {
+                            long lastModified = Files.getLastModifiedTime(path).toMillis();
+                            if ((now - lastModified) > ABANDONED_UPLOAD_TTL_MILLIS) {
+                                deleteDirectoryRecursively(path);
+                            }
+                        } catch (Exception ignored) {
+                        }
+                    });
+        } catch (IOException ignored) {
+        }
     }
 
     public List<UploadDTOs.FileItem> listFiles() {
@@ -231,8 +348,98 @@ public class UploadService {
     private void createUploadDirectoryIfNeeded() {
         try {
             Files.createDirectories(uploadRoot);
+            Files.createDirectories(uploadChunksRoot);
         } catch (IOException ex) {
             throw new RuntimeException("ERROR.UPLOAD.DIR_NOT_AVAILABLE");
+        }
+    }
+
+    private void validateChunkRequest(String uploadId, int chunkIndex, int totalChunks, String fileName) {
+        if (uploadId == null || uploadId.isBlank()) {
+            throw new RuntimeException("ERROR.UPLOAD.INVALID_NAME");
+        }
+
+        if (totalChunks <= 0 || totalChunks > MAX_CHUNKS) {
+            throw new RuntimeException("ERROR.UPLOAD.INVALID_NAME");
+        }
+
+        if (chunkIndex < 0 || chunkIndex >= totalChunks) {
+            throw new RuntimeException("ERROR.UPLOAD.INVALID_NAME");
+        }
+
+        if (fileName == null || fileName.isBlank()) {
+            throw new RuntimeException("ERROR.UPLOAD.INVALID_NAME");
+        }
+    }
+
+    private Path resolveChunkUploadDir(String uploadId) {
+        Path dir = uploadChunksRoot.resolve(uploadId).normalize();
+        if (!dir.startsWith(uploadChunksRoot)) {
+            throw new RuntimeException("ERROR.UPLOAD.INVALID_NAME");
+        }
+        return dir;
+    }
+
+    private String sanitizeUploadId(String uploadId) {
+        String clean = StringUtils.cleanPath(Objects.toString(uploadId, "")).trim();
+        if (clean.isBlank() || clean.contains("..") || clean.contains("/") || clean.contains("\\") || !clean.matches("[a-zA-Z0-9_-]{8,128}")) {
+            throw new RuntimeException("ERROR.UPLOAD.INVALID_NAME");
+        }
+        return clean;
+    }
+
+    private String normalizeOptionalFolder(String folder) {
+        if (folder == null || folder.isBlank()) {
+            return null;
+        }
+        return sanitizeFolderName(folder);
+    }
+
+    private long countUploadedChunks(Path sessionDir) {
+        try (Stream<Path> files = Files.list(sessionDir)) {
+            return files
+                    .filter(Files::isRegularFile)
+                    .map(path -> path.getFileName().toString())
+                    .filter(name -> name.endsWith(".part"))
+                    .count();
+        } catch (IOException ex) {
+            return 0;
+        }
+    }
+
+    private void ensureAllChunksExist(Path sessionDir, int totalChunks) {
+        for (int index = 0; index < totalChunks; index++) {
+            Path partFile = sessionDir.resolve(index + ".part");
+            if (!Files.exists(partFile) || !Files.isRegularFile(partFile)) {
+                throw new RuntimeException("ERROR.UPLOAD.NOT_FOUND");
+            }
+        }
+    }
+
+    private void mergeChunksToTarget(Path sessionDir, Path target, int totalChunks) throws IOException {
+        try (var output = Files.newOutputStream(target, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE)) {
+            for (int index = 0; index < totalChunks; index++) {
+                Path partFile = sessionDir.resolve(index + ".part");
+                try (InputStream input = Files.newInputStream(partFile, StandardOpenOption.READ)) {
+                    input.transferTo(output);
+                }
+            }
+        }
+    }
+
+    private void deleteDirectoryRecursively(Path directory) throws IOException {
+        if (!Files.exists(directory)) {
+            return;
+        }
+
+        try (Stream<Path> walk = Files.walk(directory)) {
+            walk.sorted(Comparator.reverseOrder())
+                    .forEach(path -> {
+                        try {
+                            Files.deleteIfExists(path);
+                        } catch (IOException ignored) {
+                        }
+                    });
         }
     }
 

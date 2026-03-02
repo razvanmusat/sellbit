@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import dayjs from 'dayjs';
 import { fetchReceipts, setFilters, selectGroupedReceipts } from '../store/receiptsSlice';
 import { SalesService } from '../api/SalesService';
+import { onSalesDataChanged } from '../../../../shared/utils/salesSyncEvents';
 
 export const useReceipts = (warehouseId) => {
     const dispatch = useDispatch();
@@ -16,6 +17,18 @@ export const useReceipts = (warehouseId) => {
             dispatch(fetchReceipts({ warehouseId, summary: true }));
         }
     }, [warehouseId, status, loadedWarehouseId, dispatch]);
+
+    useEffect(() => {
+        if (!warehouseId || !status) {
+            return;
+        }
+
+        const unsubscribe = onSalesDataChanged(() => {
+            dispatch(fetchReceipts({ warehouseId, force: true, summary: true }));
+        });
+
+        return unsubscribe;
+    }, [dispatch, warehouseId, status]);
 
     const setDate = (type, val) => {
         const fmt = type === 'start' ? val.startOf('day').format('YYYY-MM-DDTHH:mm:ss') : val.endOf('day').format('YYYY-MM-DDTHH:mm:ss');

@@ -9,6 +9,7 @@ import dayjs from 'dayjs';
 import 'dayjs/locale/ro';
 
 import { SalesService } from '../api/SalesService';
+import { onSalesDataChanged } from '../../../../shared/utils/salesSyncEvents';
 
 const ProfitStats = ({ warehouseId, warehouseName }) => {
     const [startDate, setStartDate] = useState(dayjs().startOf('month'));
@@ -16,6 +17,19 @@ const ProfitStats = ({ warehouseId, warehouseName }) => {
     const [totalProfit, setTotalProfit] = useState(0);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
+    const [refreshTick, setRefreshTick] = useState(0);
+
+    useEffect(() => {
+        if (!warehouseId) {
+            return;
+        }
+
+        const unsubscribe = onSalesDataChanged(() => {
+            setRefreshTick((value) => value + 1);
+        });
+
+        return unsubscribe;
+    }, [warehouseId]);
 
     useEffect(() => {
         const fetchProfitData = async () => {
@@ -48,7 +62,7 @@ const ProfitStats = ({ warehouseId, warehouseName }) => {
         };
 
         fetchProfitData();
-    }, [warehouseId, startDate, endDate]);
+    }, [warehouseId, startDate, endDate, refreshTick]);
 
     const getProfitColor = (value) => {
         if (value > 0) return 'success.main';

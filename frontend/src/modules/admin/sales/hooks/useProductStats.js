@@ -8,6 +8,7 @@ import {
     selectDashboardStats, 
     selectProductTimeline 
 } from '../store/productStatsSlice';
+import { onSalesDataChanged } from '../../../../shared/utils/salesSyncEvents';
 
 export const useProductStats = (warehouseId) => {
     const dispatch = useDispatch();
@@ -31,6 +32,18 @@ export const useProductStats = (warehouseId) => {
             dispatch(fetchProductStats({ warehouseId }));
         }
     }, [dispatch, warehouseId, loadedWarehouseId]);
+
+    useEffect(() => {
+        if (!warehouseId) {
+            return;
+        }
+
+        const unsubscribe = onSalesDataChanged(() => {
+            dispatch(fetchProductStats({ warehouseId, force: true }));
+        });
+
+        return unsubscribe;
+    }, [dispatch, warehouseId]);
 
     // OPTIMIZARE & FIX TOTALURI: 
     // Calculăm stats-urile pe client dacă lipsesc din store sau pentru siguranță 100%

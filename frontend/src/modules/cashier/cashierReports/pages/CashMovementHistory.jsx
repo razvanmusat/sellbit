@@ -109,6 +109,8 @@ const CashMovementHistory = ({ warehouseId }) => {
                   <MenuItem value="" disabled>
                       <em style={{ color: '#9e9e9e', fontStyle: 'normal' }}>Alege tip mișcare</em>
                   </MenuItem>
+
+                                    <MenuItem value="ALL">Toate mișcările</MenuItem>
                   
                   {movementTypes.map((type) => (
                       <MenuItem key={type.code} value={type.code}>
@@ -125,7 +127,11 @@ const CashMovementHistory = ({ warehouseId }) => {
         ) : !selectedType ? (
             <Alert severity="info">Selectează un tip de mișcare din listă.</Alert>
         ) : filteredMovements.length === 0 ? (
-            <Alert severity="warning">Nu există mișcări de acest tip în perioada selectată.</Alert>
+            <Alert severity="warning">
+              {selectedType === 'ALL'
+                ? 'Nu există mișcări în perioada selectată.'
+                : 'Nu există mișcări de acest tip în perioada selectată.'}
+            </Alert>
         ) : (
             <TableContainer component={Paper} elevation={1} sx={{ overflowX: 'auto' }}>
             <Table size="small">

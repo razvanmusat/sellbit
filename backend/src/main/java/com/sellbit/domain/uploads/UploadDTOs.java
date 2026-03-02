@@ -11,4 +11,12 @@ public class UploadDTOs {
             Instant lastModified,
             boolean image
     ) {}
+
+        public record ChunkUploadResponse(
+            String uploadId,
+            int chunkIndex,
+            int totalChunks,
+            long uploadedChunks,
+            boolean readyToComplete
+        ) {}
 }
