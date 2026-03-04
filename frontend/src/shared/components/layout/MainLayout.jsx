@@ -9,8 +9,8 @@ const MainLayout = () => {
     <Box sx={{ 
       display: 'flex', 
       flexDirection: 'column', 
-      height: '100dvh', // Folosim dvh pentru a evita problemele cu bara de browser pe mobil
-      overflow: 'hidden' // Previne scroll-ul pe body, il fortam in content
+      height: '100dvh',
+      overflow: 'hidden' 
     }}>
       {/* Bara de Sus */}
       <TopBar />

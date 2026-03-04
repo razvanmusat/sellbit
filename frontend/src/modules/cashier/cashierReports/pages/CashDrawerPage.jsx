@@ -7,41 +7,45 @@ import {
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 
 import { useCashDrawer } from '../hooks/useCashDrawer';
+import { useSelector } from 'react-redux';
 
 const CashDrawerPage = ({ warehouseId }) => {
   
+
   const {
-      loading,
-      movementTypes,
-      currentBalance,
-      showForm,
-      formData,
-      submitting,
-      toast,
-      handleCloseToast,
-      handleOpenForm,
-      handleCloseForm,
-      handleInputChange,
-      handleSubmit
+    loading,
+    movementTypes,
+    currentBalance,
+    showForm,
+    formData,
+    submitting,
+    toast,
+    handleCloseToast,
+    handleOpenForm,
+    handleCloseForm,
+    handleInputChange,
+    handleSubmit
   } = useCashDrawer(warehouseId);
+  
+  const warehouses = useSelector(state => state.cashier.warehouses);
+  const warehouseName = warehouses.find(w => w.id === warehouseId)?.name || '';
 
   if (!warehouseId) return null;
 
   return (
     <Box sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
       
-      {/* 1. AFISARE SOLD */}
       <Paper 
         elevation={0} 
         sx={{ 
-            p: 4, mb: 4, 
+            p: 2, mb: 4,
             bgcolor: '#f5f5f5', 
             borderRadius: 4, 
             width: '100%', 
             maxWidth: 600, 
             textAlign: 'center', 
             border: '1px solid #e0e0e0',
-            minHeight: '180px', 
+            minHeight: '100px',
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'center',
@@ -49,20 +53,19 @@ const CashDrawerPage = ({ warehouseId }) => {
         }}
       >
         {loading ? (
-             <CircularProgress size={40} />
+             <CircularProgress size={32} />
         ) : (
             <>
                 <Typography variant="body1" color="text.secondary" gutterBottom>
-                    Numerar disponibil în sertar:
+                    Numerar disponibil în sertar - {warehouseName ? ` ${warehouseName}` : ''}
                 </Typography>
-                <Typography variant="h2" color="primary" fontWeight="bold">
-                    {Number(currentBalance).toFixed(2)} <span style={{fontSize: '1.5rem'}}>RON</span>
+                <Typography variant="h3" color="primary" fontWeight="bold">
+                    {Number(currentBalance).toFixed(2)} <span style={{fontSize: '1.2rem'}}>RON</span>
                 </Typography>
             </>
         )}
       </Paper>
-
-      {/* 2. ZONA DE ACȚIUNI / FORMULAR */}
+      
       <Box sx={{ width: '100%', maxWidth: 600 }}>
         
         {!showForm ? (
@@ -71,9 +74,7 @@ const CashDrawerPage = ({ warehouseId }) => {
               variant="contained" 
               startIcon={<SwapHorizIcon />} 
               onClick={handleOpenForm}
-              size="large"
-              // FIX FLICKER: Am scos 'disabled={loading}' de aici. 
-              // Butonul va fi albastru mereu, chiar dacă soldul se încarcă.
+              size="large"              
               sx={{ px: 5, py: 1.5, fontSize: '1.1rem', borderRadius: 2 }}
             >
               Înregistrează Mișcare Nouă
@@ -134,8 +135,7 @@ const CashDrawerPage = ({ warehouseId }) => {
           </Paper>
         )}
       </Box>
-
-      {/* 3. TOAST */}
+      
       <Snackbar
         open={toast.open}
         autoHideDuration={4000}

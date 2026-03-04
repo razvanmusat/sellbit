@@ -54,7 +54,21 @@ import MainLayout from './shared/components/layout/MainLayout';
 dayjs.locale('ro');
 
 // --- PLACEHOLDERS ADMIN (Pagini temporare) ---
-const AdminDashboard = () => <Typography variant="h4" sx={{p:2}}>Panou de Administrare</Typography>;
+const AdminDashboard = () => (
+  <Box
+    sx={{
+      height: '100%',
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      opacity: 0.7,
+    }}
+  >
+    <Typography variant="h5" fontWeight="bold" color="text.secondary">
+      👆 Alege o opțiune din meniul de sus pentru a începe
+    </Typography>
+  </Box>
+);
 
 // Componentă generică pentru paginile "În lucru"
 const PlaceholderPage = ({ title }) => (
@@ -178,8 +192,7 @@ function App() {
         {/* 3. CATERING */}
         <Route path="catering" element={<CateringMainPageAdmin />} />
         
-        {/* 4. INVENTORY (Achiziții / Ajustări / Inventar) */}
-        {/* 👇 AICI AM LEGAT PAGINA REALĂ */}
+        {/* 4. INVENTORY (Achiziții / Ajustări / Inventar) */}        
         <Route path="inventory" element={<InventoryMainPage />} />
 
         <Route path="sales" element={<SalesMainPage />} />

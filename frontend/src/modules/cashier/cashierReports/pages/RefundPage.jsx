@@ -1,4 +1,7 @@
-import React from 'react';
+import React, { useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { useDispatch } from 'react-redux';
+import { resetCache } from '../store/cashMovementHistorySlice';
 import { 
   Box, Paper, Table, TableBody, TableCell, TableContainer, 
   TableHead, TableRow, Typography, Button, 
@@ -20,18 +23,61 @@ import RefundModal from '../components/RefundModal';
 import { useRefundPage } from '../hooks/useRefundPage';
 
 const RefundPage = ({ warehouseId }) => {
+    const dispatch = useDispatch();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlRefundDate = searchParams.get('refundDate');
+  // selectedDate local, sincronizat cu urlRefundDate; dacă nu există, setează la azi și în URL
+  const [selectedDate, setSelectedDate] = React.useState(urlRefundDate ? dayjs(urlRefundDate) : dayjs());
+  React.useEffect(() => {
+    if (!urlRefundDate) {
+      const today = dayjs();
+      setSelectedDate(today);
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('refundDate', today.format('YYYY-MM-DD'));
+      setSearchParams(params, { replace: true });
+      return;
+    }
+    const urlDayjs = dayjs(urlRefundDate);
+    if (!selectedDate || !selectedDate.isSame(urlDayjs, 'day')) {
+      setSelectedDate(urlDayjs);
+    }
+  }, [urlRefundDate]);
+  // Sincronizează selectedDate cu URL-ul dacă user-ul schimbă manual data
+  React.useEffect(() => {
+    if (!selectedDate) return;
+    const urlRefundDate = searchParams.get('refundDate');
+    const formatted = selectedDate.format('YYYY-MM-DD');
+    if (urlRefundDate !== formatted) {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('refundDate', formatted);
+      setSearchParams(params, { replace: true });
+    }
+  }, [selectedDate]);
   const {
     receipts,
     loading,
     error,
-    selectedDate,
-    setSelectedDate,
     modalOpen,
     selectedReceipt,
     handleOpenModal,
     handleCloseModal,
-    handleRefundSuccess
-  } = useRefundPage(warehouseId);
+    handleRefundSuccess: originalHandleRefundSuccess
+  } = selectedDate ? useRefundPage(warehouseId, selectedDate.format('YYYY-MM-DD')) : {
+    receipts: [],
+    loading: false,
+    error: null,
+    modalOpen: false,
+    selectedReceipt: null,
+    handleOpenModal: () => {},
+    handleCloseModal: () => {},
+    handleRefundSuccess: () => {}
+  };
+
+  // Wrapper pentru a reseta cache-ul de miscari numerar la succes retur
+  const handleRefundSuccess = useCallback(() => {
+    dispatch(resetCache());
+    if (originalHandleRefundSuccess) originalHandleRefundSuccess();
+  }, [dispatch, originalHandleRefundSuccess]);
 
   // --- STILURI IDENTICE ---
   const compactCellStyle = { padding: '4px 8px', width: '1%', whiteSpace: 'nowrap' };
@@ -78,8 +124,8 @@ const RefundPage = ({ warehouseId }) => {
 
         {error && <Alert severity="info" sx={{ mb: 2 }}>{error}</Alert>}
         
-        {!loading && !error && receipts.length === 0 && (
-            <Alert severity="warning">Nu există bonuri închise în data de {selectedDate.format('DD/MM/YYYY')}.</Alert>
+        {!loading && !error && receipts.length === 0 && selectedDate && (
+          <Alert severity="warning">Nu există bonuri închise în data de {selectedDate.format('DD/MM/YYYY')}.</Alert>
         )}
 
         {/* TABEL REZULTATE */}

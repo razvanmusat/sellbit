@@ -83,15 +83,20 @@ const OpenedReceiptCard = ({
         <IconButton onClick={onBack} size={isSmallScreen ? "small" : "medium"}>
           <ArrowBackIcon />
         </IconButton>
-        
-        <Typography 
+        <Box sx={{ ml: 1, flex: 1, minWidth: 0 }}>
+          <Typography 
             variant={isSmallScreen ? "h6" : "h5"} 
             fontWeight="bold" 
-            sx={{ ml: 1, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-        >
-          {receipt.tableName}
-        </Typography>
-
+            sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+          >
+            {receipt.tableName}
+            {receipt.note && receipt.note.trim() !== '' && (
+              <span style={{ fontWeight: 'normal', fontStyle: 'italic', color: '#888', marginLeft: 12 }}>
+                &nbsp;| Notă: {receipt.note}
+              </span>
+            )}
+          </Typography>
+        </Box>
         <IconButton 
             onClick={onCancelReceipt} 
             color="error" 

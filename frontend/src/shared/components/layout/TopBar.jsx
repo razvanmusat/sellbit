@@ -24,7 +24,7 @@ const TopBar = () => {
   return (
     <AppBar position="static" color="primary" elevation={2}>
       <Toolbar variant="dense" sx={{ justifyContent: 'space-between' }}>
-        {/* Meniul de Navigare */}
+        
         <Box sx={{ 
           display: 'flex', 
           gap: 1, 
@@ -55,8 +55,7 @@ const TopBar = () => {
             );
           })}
         </Box>
-
-        {/* Zona de Alerte */}
+        
         <AlertsContainer />
       </Toolbar>
     </AppBar>

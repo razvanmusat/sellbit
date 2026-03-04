@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
 import { CashMovementService } from '../api/CashMovementService';
 import { CashDrawerService } from '../api/CashDrawerService';
 import { getFriendlyErrorMessage } from '../../../../shared/utils/errorHandler';
 
 export const useCashDrawer = (warehouseId) => {
     const { user } = useSelector((state) => state.auth);
+    const dispatch = useDispatch();
 
     // FIX 1: Pornim cu loading TRUE ca să nu afișeze "0.00" înainte de verificare
     const [loading, setLoading] = useState(true);
@@ -68,6 +69,7 @@ export const useCashDrawer = (warehouseId) => {
 
         setSubmitting(true);
         try {
+
             await CashMovementService.createMovement({
                 warehouseId,
                 typeCode,
@@ -75,6 +77,35 @@ export const useCashDrawer = (warehouseId) => {
                 userId: user?.id,
                 note
             });
+
+            // Șterge tot cache-ul și refetch pentru perioada activă (toate filtrele)
+            dispatch({ type: 'cashMovementHistory/resetCache' });
+            // Refă fetch pentru perioada activă din URL (dacă există)
+            try {
+                const urlParams = new URLSearchParams(window.location.search);
+                const urlStart = urlParams.get('startDate');
+                const urlEnd = urlParams.get('endDate');
+                const urlType = urlParams.get('type') || '';
+                if (urlStart && urlEnd) {
+                    dispatch(require('../store/cashMovementHistorySlice').fetchCashMovementHistory({
+                        warehouseId,
+                        startDate: urlStart,
+                        endDate: urlEnd,
+                        type: urlType
+                    }));
+                } else {
+                    // fallback: ziua curentă
+                    const today = new Date();
+                    const startDate = today.toISOString().slice(0, 10);
+                    const endDate = startDate;
+                    dispatch(require('../store/cashMovementHistorySlice').fetchCashMovementHistory({
+                        warehouseId,
+                        startDate,
+                        endDate,
+                        type: ''
+                    }));
+                }
+            } catch {}
 
             const newBalance = await CashDrawerService.getBalance(warehouseId);
             setCurrentBalance(newBalance);

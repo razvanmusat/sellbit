@@ -2,13 +2,20 @@ import { useState, useEffect } from 'react';
 import dayjs from 'dayjs';
 import { SalesService } from '../../sales/api/SalesService';
 
-export const useRefundPage = (warehouseId) => {
+export const useRefundPage = (warehouseId, urlDate) => {
   const [receipts, setReceipts] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  
-  // Implicit: Ziua curentă
-  const [selectedDate, setSelectedDate] = useState(dayjs());
+  // Inițializează selectedDate cu data din URL dacă există, altfel cu ziua curentă
+  const [selectedDate, setSelectedDate] = useState(urlDate ? dayjs(urlDate) : dayjs());
+  // Sincronizează selectedDate cu modificările din URL (ex: la schimbare warehouse/tab)
+  useEffect(() => {
+    if (!urlDate) return;
+    const urlDayjs = dayjs(urlDate);
+    if (!selectedDate.isSame(urlDayjs, 'day')) {
+      setSelectedDate(urlDayjs);
+    }
+  }, [urlDate]);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedReceipt, setSelectedReceipt] = useState(null);

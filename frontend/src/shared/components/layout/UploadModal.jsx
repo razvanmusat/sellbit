@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -28,61 +28,30 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import DownloadIcon from '@mui/icons-material/Download';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import { UploadService } from '../../api/UploadService';
 import PreviewFileContent from './PreviewFileContent';
 import { getFriendlyErrorMessage } from '../../utils/errorHandler';
+import { UploadService } from '../../api/UploadService';
+import { useUploadModal } from '../../hooks/useUploadModal';
 
 const UploadModal = ({ open, onClose, isAdmin }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const [preview, setPreview] = useState({ open: false, file: null, folder: '' });
-  const [fileDeleteDialog, setFileDeleteDialog] = useState({ open: false, file: null, folder: '' });
-  const [fileDownloadDialog, setFileDownloadDialog] = useState({ open: false, file: null, folder: '' });
-  const [files, setFiles] = useState([]);
-  const [folders, setFolders] = useState([]);
-  const [activeTab, setActiveTab] = useState(0);
-  const [loadingFolders, setLoadingFolders] = useState(false);
-  const [folderError, setFolderError] = useState('');
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
-  const [uploadProgress, setUploadProgress] = useState({ active: false, percent: 0, fileName: '' });
-  const [downloadProgress, setDownloadProgress] = useState({ active: false, percent: 0, fileName: '', indeterminate: false });
-
-  const [dialog, setDialog] = useState({ open: false, type: '', value: '' });
-  useEffect(() => {
-    if (open) loadFolders();
-  }, [open]);
-
-  useEffect(() => {
-    if (folders.length > 0 && typeof folders[activeTab] === 'string') {
-      loadFiles(folders[activeTab]);
-    } else {
-      setFiles([]);
-    }
-  }, [activeTab, folders]);
-
-  const loadFiles = async (folder) => {
-    try {
-      const result = await UploadService.list(folder);
-      setFiles(result);
-    } catch (error) {
-      setFiles([]);
-    }
-  };
-
-  const loadFolders = async () => {
-    setLoadingFolders(true);
-    setFolderError('');
-    try {
-      const result = await UploadService.listFolders();
-      // Filtrează duplicatele și elementele goale
-      const uniqueFolders = Array.from(new Set(result.filter(f => typeof f === 'string' && f.trim())));
-      setFolders(uniqueFolders);
-    } catch (error) {
-      setFolderError(getFriendlyErrorMessage(error));
-    } finally {
-      setLoadingFolders(false);
-    }
-  };
+  const {
+    preview, setPreview,
+    fileDeleteDialog, setFileDeleteDialog,
+    fileDownloadDialog, setFileDownloadDialog,
+    files, setFiles,
+    folders, setFolders,
+    activeTab, setActiveTab,
+    loadingFolders, setLoadingFolders,
+    folderError, setFolderError,
+    snackbar, setSnackbar,
+    uploadProgress, setUploadProgress,
+    downloadProgress, setDownloadProgress,
+    dialog, setDialog,
+    loadFiles,
+    loadFolders
+  } = useUploadModal(open, isAdmin);
 
   const currentFolder = typeof folders[activeTab] === 'string' ? folders[activeTab] : '';
   const canUpload = folders.length > 0 && !!currentFolder;
@@ -434,8 +403,7 @@ const UploadModal = ({ open, onClose, isAdmin }) => {
               <ListItem>
                 <ListItemText primary="Niciun fișier în acest folder" />
               </ListItem>
-            )}
-                {/* Modală previzualizare fișier cu fetch + blob */}
+            )}                
                 {preview.open && (
                   <Dialog
                     open={preview.open}

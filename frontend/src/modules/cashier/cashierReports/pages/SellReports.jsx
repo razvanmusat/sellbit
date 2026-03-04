@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   Box, Paper, Typography, Card, CardContent,
@@ -31,8 +32,36 @@ const METHOD_CONFIG = {
 };
 
 const SellReports = ({ warehouseId, warehouseName }) => {
-  const dispatch = useDispatch();
-  const [selectedDate, setSelectedDate] = React.useState(dayjs());
+    const dispatch = useDispatch();
+    const [searchParams, setSearchParams] = useSearchParams();
+    const urlReportDate = searchParams.get('reportDate');
+    // selectedDate local, sincronizat cu urlReportDate; dacă nu există, setează la azi și în URL
+    const [selectedDate, setSelectedDate] = React.useState(urlReportDate ? dayjs(urlReportDate) : dayjs());
+    React.useEffect(() => {
+        if (!urlReportDate) {
+            const today = dayjs();
+            setSelectedDate(today);
+            const params = new URLSearchParams(searchParams.toString());
+            params.set('reportDate', today.format('YYYY-MM-DD'));
+            setSearchParams(params, { replace: true });
+            return;
+        }
+        const urlDayjs = dayjs(urlReportDate);
+        if (!selectedDate || !selectedDate.isSame(urlDayjs, 'day')) {
+            setSelectedDate(urlDayjs);
+        }
+    }, [urlReportDate]);
+    // Sincronizează selectedDate cu URL-ul dacă user-ul schimbă manual data
+    React.useEffect(() => {
+        if (!selectedDate) return;
+        const urlReportDate = searchParams.get('reportDate');
+        const formatted = selectedDate.format('YYYY-MM-DD');
+        if (urlReportDate !== formatted) {
+            const params = new URLSearchParams(searchParams.toString());
+            params.set('reportDate', formatted);
+            setSearchParams(params, { replace: true });
+        }
+    }, [selectedDate]);
   
   // Redux state
   const { receipts, loading, error } = useSelector((state) => state.sellReports);

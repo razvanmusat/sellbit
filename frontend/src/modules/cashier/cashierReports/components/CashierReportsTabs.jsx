@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Box, Tabs, Tab, Typography, Paper, CircularProgress } from '@mui/material';
 import SavingsIcon from '@mui/icons-material/Savings';
 import AssessmentIcon from '@mui/icons-material/Assessment';
@@ -17,16 +17,22 @@ import CashMovementHistory from '../pages/CashMovementHistory';
 import RefundPage from '../pages/RefundPage';
 import SellReports from '../pages/SellReports';
 
+const TAB_PARAM_KEYS = {
+  drawer: ['tab', 'warehouseId'],
+  history: ['tab', 'warehouseId', 'startDate', 'endDate', 'type'],
+  refund: ['tab', 'warehouseId', 'date'],
+  reports: ['tab', 'warehouseId', 'date'],
+};
+
 const CashierReportsTabs = () => {
   const dispatch = useDispatch();
   const [searchParams, setSearchParams] = useSearchParams();
   const currentTab = searchParams.get('tab');
+  const warehouseIdParam = searchParams.get('warehouseId');
 
   const { warehouses, loading } = useSelector((state) => state.cashier);
   const [activeTab, setActiveTab] = useState(currentTab || false); 
-  const [selectedWarehouseId, setSelectedWarehouseId] = useState(false);
-
-  // Cheie unică pentru a forța re-randarea completă (Refresh)
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState(warehouseIdParam ? Number(warehouseIdParam) : false);
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
@@ -34,33 +40,71 @@ const CashierReportsTabs = () => {
   }, [dispatch]);
 
   useEffect(() => {
-    if (currentTab) {
-      setActiveTab(currentTab);
-      // Refresh la intrarea pe pagină sau schimbare URL
-      setRefreshKey(prev => prev + 1);
-    } else {
-      setActiveTab(false);
-      setSelectedWarehouseId(false);
+    setActiveTab(currentTab || false);
+    setSelectedWarehouseId(warehouseIdParam ? Number(warehouseIdParam) : false);
+    setRefreshKey(prev => prev + 1);
+  }, [currentTab, warehouseIdParam]);
+
+  // Reconstruiește complet URL-ul păstrând TOȚI parametrii existenți (fără filtrare pe tab)
+  const buildParams = useCallback((tab, warehouseId, prevParams) => {
+    // Păstrează DOAR parametrii specifici tabului țintă
+    const params = new URLSearchParams();
+    const keys = TAB_PARAM_KEYS[tab] || [];
+    for (const key of keys) {
+      if (key === 'tab' && tab) params.set('tab', tab);
+      else if (key === 'warehouseId' && warehouseId) params.set('warehouseId', warehouseId);
+      else if (prevParams.has(key)) params.set(key, prevParams.get(key));
     }
-  }, [currentTab]);
+    return params;
+  }, []);
 
-  // Funcție dedicată pentru click (merge și pe tab-ul activ)
-  const handleForceRefresh = () => {
-      setRefreshKey(prev => prev + 1);
-  };
-
+  // Schimbare warehouse: reconstruiește linkul cu tabul curent și warehouse nou, păstrând DOAR filtrele tabului curent
   const handleWarehouseChange = (event, newValue) => {
     setSelectedWarehouseId(newValue);
-    handleForceRefresh();
+    let params = buildParams(activeTab, newValue, searchParams);
+    // Păstrează explicit refundDate/reportDate dacă există în URL
+    if (searchParams.get('refundDate')) {
+      params.set('refundDate', searchParams.get('refundDate'));
+    }
+    if (searchParams.get('reportDate')) {
+      params.set('reportDate', searchParams.get('reportDate'));
+    }
+    setSearchParams(params, { replace: true });
+    setRefreshKey(prev => prev + 1);
   };
 
+  // Schimbare tab: reconstruiește linkul cu warehouseId și tab nou, păstrând DOAR filtrele tabului nou
   const handleTabChange = (event, newValue) => {
-    setActiveTab(newValue);
-    if (newValue) {
-        setSearchParams({ tab: newValue });
+    let params = buildParams(newValue, selectedWarehouseId, searchParams);
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    if (newValue === 'refund') {
+      params.delete('reportDate');
+      if (!params.get('refundDate')) {
+        params.set('refundDate', `${yyyy}-${mm}-${dd}`);
+      }
+    } else if (newValue === 'reports') {
+      params.delete('refundDate');
+      if (!params.get('reportDate')) {
+        params.set('reportDate', `${yyyy}-${mm}-${dd}`);
+      }
+    } else {
+      params.delete('refundDate');
+      params.delete('reportDate');
     }
-    // Nota: onChange nu se apelează dacă dai click pe tab-ul deja activ
-    // De aceea folosim onClick direct pe <Tab> mai jos
+    setSearchParams(params, { replace: true });
+    setRefreshKey(prev => prev + 1);
+  };
+
+  // Dacă nu există tab selectat, warehouseId se pune singur în URL
+  const handleWarehouseOnly = (event, newValue) => {
+    setSelectedWarehouseId(newValue);
+    const params = new URLSearchParams();
+    params.set('warehouseId', newValue);
+    setSearchParams(params, { replace: true });
+    setRefreshKey(prev => prev + 1);
   };
 
   if (loading && warehouses.length === 0) {
@@ -77,7 +121,7 @@ const CashierReportsTabs = () => {
         <WarehouseTabs 
             warehouses={warehouses} 
             selectedWarehouseId={selectedWarehouseId} 
-            onWarehouseChange={handleWarehouseChange} 
+            onWarehouseChange={activeTab ? handleWarehouseChange : handleWarehouseOnly} 
         />
       </Box>
 
@@ -100,28 +144,24 @@ const CashierReportsTabs = () => {
             value="drawer" 
             icon={<SavingsIcon />} 
             iconPosition="start" 
-            onClick={handleForceRefresh} 
-          />
-          <Tab 
-            label="Istoric Numerar" 
-            value="history" 
-            icon={<HistoryIcon />} 
-            iconPosition="start" 
-            onClick={handleForceRefresh}
-          />
-          <Tab 
-            label="Retur / Stornare" 
-            value="refund" 
-            icon={<AssignmentReturnIcon />} 
-            iconPosition="start" 
-            onClick={handleForceRefresh}
           />
           <Tab 
             label="Rapoarte Casierie" 
             value="reports" 
             icon={<AssessmentIcon />} 
             iconPosition="start" 
-            onClick={handleForceRefresh}
+          />
+          <Tab 
+            label="Istoric Numerar" 
+            value="history" 
+            icon={<HistoryIcon />} 
+            iconPosition="start" 
+          />
+          <Tab 
+            label="Retur / Stornare" 
+            value="refund" 
+            icon={<AssignmentReturnIcon />} 
+            iconPosition="start" 
           />
         </Tabs>
       </Box>
@@ -140,7 +180,7 @@ const CashierReportsTabs = () => {
             <Box display="flex" flexDirection="column" justifyContent="center" alignItems="center" height="60%" gap={2}>
                 <AdsClickIcon sx={{ fontSize: 60, color: 'primary.main', opacity: 0.7 }} />
                 <Typography variant="h6" color="text.secondary">
-                    2. Acum selectează o opțiune: <b>Sertar</b>, <b>Retur</b> sau <b>Rapoarte</b>.
+                  Selectează o opțiune
                 </Typography>
             </Box>
         ) : (

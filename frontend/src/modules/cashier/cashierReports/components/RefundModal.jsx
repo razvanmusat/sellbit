@@ -19,11 +19,11 @@ const RefundModal = ({ open, onClose, receipt, onRefundSuccess }) => {
   const isMobile = useMediaQuery(theme.breakpoints.down('sm')); 
 
   // --- EXTRAGERE LOGICĂ DIN HOOK ---
-  const { 
+    const { 
       state, 
       setters, 
       handlers 
-  } = useRefundModal(open, receipt, onClose, onRefundSuccess);
+    } = useRefundModal(open, receipt, onClose, onRefundSuccess);
 
   const { 
       items, paymentMethods, originalPayments, loadingItems, submitting, error, 
