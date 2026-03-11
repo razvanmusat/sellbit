@@ -33,6 +33,8 @@ public record ProductDTO(
 
     BigDecimal purchasePrice,
 
+    Integer forcedWarehouseId,
+
     // Acesta va fi ignorat la scriere (suprascris de logică), dar îl lăsăm pt citire
     Boolean trackStock,
     

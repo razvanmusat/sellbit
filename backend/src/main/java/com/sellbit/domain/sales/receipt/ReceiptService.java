@@ -20,6 +20,7 @@ import com.sellbit.domain.cash.cashmovement.CashMovementService;
 import com.sellbit.domain.cash.cashdrawer.CashDrawerService;
 import com.sellbit.domain.catalog.product.Product;
 import com.sellbit.domain.catalog.product.ProductRepository;
+import com.sellbit.domain.catalog.product.ProductService;
 import com.sellbit.domain.inventory.purchase.PurchaseService;
 import com.sellbit.domain.inventory.stockcurrent.StockCurrentService;
 import com.sellbit.domain.inventory.warehouse.Warehouse;
@@ -66,6 +67,7 @@ public class ReceiptService {
         private final PaymentMethodRepository paymentMethodRepository;
         private final ProductRepository productRepository;
         private final com.sellbit.domain.catalog.productcomposite.ProductComponentRepository productComponentRepository;
+        private final ProductService productService;
 
         @Transactional(readOnly = true)
         public ReceiptDTOs.Response getReceiptById(Integer id) {
@@ -165,7 +167,7 @@ public class ReceiptService {
                 // Returnăm produsele în stoc folosind metoda ta de sync
                 for (ReceiptItem item : receipt.getItems()) {
                         stockCurrentService.syncStockFromReceiptChange(
-                                        receipt.getWarehouse().getId(),
+                                        productService.resolveWarehouse(item.getProduct(), receipt.getWarehouse()).getId(),
                                         item.getProduct().getId(),
                                         item.getQuantity(),
                                         BigDecimal.ZERO);
@@ -208,7 +210,7 @@ public class ReceiptService {
                         if (item.getQuantity().compareTo(BigDecimal.ZERO) != 0) {
                                 // 1. Consum FIFO și salvează alocările exacte per lot
                                 BigDecimal purchasePrice = purchaseService.consumeForReceiptItemAndRecord(
-                                                receipt.getWarehouse().getId(),
+                                                productService.resolveWarehouse(item.getProduct(), receipt.getWarehouse()).getId(),
                                                 receipt,
                                                 item);
 
@@ -399,7 +401,7 @@ public class ReceiptService {
 
                         refundReceipt.addItem(refundItem);
                         stockCurrentService.syncStockFromReceiptChange(
-                                        original.getWarehouse().getId(),
+                                        productService.resolveWarehouse(originalItem.getProduct(), original.getWarehouse()).getId(),
                                         originalItem.getProduct().getId(),
                                         BigDecimal.ZERO,
                                         itemReq.quantityToRefund().negate());
@@ -645,7 +647,7 @@ public class ReceiptService {
                                                         Product child = comp.getChildProduct();
                                                         if (Boolean.TRUE.equals(child.getTrackStock())) {
                                                                 BigDecimal requiredQty = item.getQuantity().multiply(comp.getQuantity());
-                                                                BigDecimal stockInNew = stockCurrentService.getQuantity(newWarehouseId, child.getId());
+                                                                BigDecimal stockInNew = stockCurrentService.getQuantity(productService.resolveWarehouse(child, newWarehouse).getId(), child.getId());
                                                                 if (stockInNew.compareTo(requiredQty) < 0) {
                                                                         insufficientProducts.add(child.getName());
                                                                 }
@@ -654,7 +656,7 @@ public class ReceiptService {
                                         } else if (Boolean.TRUE.equals(product.getTrackStock()) && components.isEmpty()) {
                                                 BigDecimal qty = item.getQuantity();
                                                 Integer productId = product.getId();
-                                                BigDecimal stockInNew = stockCurrentService.getQuantity(newWarehouseId, productId);
+                                                BigDecimal stockInNew = stockCurrentService.getQuantity(productService.resolveWarehouse(product, newWarehouse).getId(), productId);
                                                 if (stockInNew.compareTo(qty) < 0) {
                                                         insufficientProducts.add(product.getName());
                                                 }
@@ -675,18 +677,18 @@ public class ReceiptService {
                                                         if (Boolean.TRUE.equals(child.getTrackStock())) {
                                                                 BigDecimal requiredQty = item.getQuantity().multiply(comp.getQuantity());
                                                                 // Adaugă în gestiunea veche
-                                                                stockCurrentService.updateStockRelative(oldWarehouse.getId(), child.getId(), requiredQty);
+                                                                stockCurrentService.updateStockRelative(productService.resolveWarehouse(child, oldWarehouse).getId(), child.getId(), requiredQty);
                                                                 // Scade din gestiunea nouă
-                                                                stockCurrentService.updateStockRelative(newWarehouseId, child.getId(), requiredQty.negate());
+                                                                stockCurrentService.updateStockRelative(productService.resolveWarehouse(child, newWarehouse).getId(), child.getId(), requiredQty.negate());
                                                         }
                                                 }
                                         } else if (Boolean.TRUE.equals(product.getTrackStock())) {
                                                 BigDecimal qty = item.getQuantity();
                                                 Integer productId = product.getId();
                                                 // Adaugă în gestiunea veche
-                                                stockCurrentService.updateStockRelative(oldWarehouse.getId(), productId, qty);
+                                                stockCurrentService.updateStockRelative(productService.resolveWarehouse(product, oldWarehouse).getId(), productId, qty);
                                                 // Scade din gestiunea nouă
-                                                stockCurrentService.updateStockRelative(newWarehouseId, productId, qty.negate());
+                                                stockCurrentService.updateStockRelative(productService.resolveWarehouse(product, newWarehouse).getId(), productId, qty.negate());
                                         }
                                 }
 
@@ -702,7 +704,7 @@ public class ReceiptService {
                                         continue;
                                 }
                                 BigDecimal recalculatedUnitCost = purchaseService.consumeForReceiptItemAndRecord(
-                                                newWarehouseId,
+                                                productService.resolveWarehouse(item.getProduct(), newWarehouse).getId(),
                                                 receipt,
                                                 item);
                                 item.setPurchaseUnitPrice(recalculatedUnitCost);
@@ -715,7 +717,7 @@ public class ReceiptService {
                                         continue;
                                 }
                                 BigDecimal recalculatedUnitCost = purchaseService.getCurrentFIFOPurchasePrice(
-                                                newWarehouseId,
+                                                productService.resolveWarehouse(item.getProduct(), newWarehouse).getId(),
                                                 item.getProduct().getId());
                                 item.setPurchaseUnitPrice(recalculatedUnitCost);
                                 itemRepository.save(item);

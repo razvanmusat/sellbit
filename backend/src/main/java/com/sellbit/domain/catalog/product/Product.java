@@ -2,6 +2,7 @@ package com.sellbit.domain.catalog.product;
 
 
 import com.sellbit.domain.catalog.category.Category;
+import com.sellbit.domain.inventory.warehouse.Warehouse;
 import com.sellbit.domain.lookup.producttype.ProductType;
 import com.sellbit.domain.lookup.unitofmeasure.UnitOfMeasure;
 import com.sellbit.domain.lookup.vatrate.VatRate;
@@ -52,6 +53,10 @@ public class Product {
 	// Prețul de achiziție sau costul fix (folosit momentan doar pentru Catering)
     @Column(name = "purchase_price", precision = 10, scale = 2)
     private BigDecimal purchasePrice;
+
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "forced_warehouse_id")
+	private Warehouse forcedWarehouse;
 
 	@Builder.Default
 	@Column(name = "track_stock", nullable = false)

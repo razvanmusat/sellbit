@@ -94,7 +94,7 @@ const ReservationsMainPage = () => {
             <Divider orientation="vertical" flexItem sx={{ display: { xs: 'none', md: 'block' } }} />
             
             {/* Controalele de dată */}
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
+            <Box sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center', justifyContent: 'center' }}>
                 <IconButton onClick={handlePrevDay} title="Ziua anterioară">
                     <ChevronLeftIcon />
                 </IconButton>
@@ -120,12 +120,7 @@ const ReservationsMainPage = () => {
                     size="small" 
                     onClick={handleGoToToday}
                     startIcon={<TodayIcon />}
-                    sx={{ 
-                        textTransform: 'none', 
-                        ml: 1, 
-                        bgcolor: 'white',
-                        '&:hover': { bgcolor: '#f0f0f0' }
-                    }}
+                    sx={{ textTransform: 'none', ml: 1, bgcolor: 'white', '&:hover': { bgcolor: '#f0f0f0' } }}
                 >
                     Azi
                 </Button>
@@ -134,12 +129,7 @@ const ReservationsMainPage = () => {
                     variant="outlined"
                     size="small"
                     onClick={() => handleFilterOptionChange('currentMonth')}
-                    sx={{
-                        textTransform: 'none',
-                        ml: 1,
-                        bgcolor: 'white',
-                        '&:hover': { bgcolor: '#f0f0f0' }
-                    }}
+                    sx={{ textTransform: 'none', ml: 1, bgcolor: 'white', '&:hover': { bgcolor: '#f0f0f0' } }}
                 >
                     Luna curentă
                 </Button>
@@ -148,15 +138,70 @@ const ReservationsMainPage = () => {
                     variant="outlined"
                     size="small"
                     onClick={() => handleFilterOptionChange('customInterval')}
-                    sx={{
-                        textTransform: 'none',
-                        ml: 1,
-                        bgcolor: 'white',
-                        '&:hover': { bgcolor: '#f0f0f0' }
-                    }}
+                    sx={{ textTransform: 'none', ml: 1, bgcolor: 'white', '&:hover': { bgcolor: '#f0f0f0' } }}
                 >
                   {filterOption === 'customInterval' ? selectedIntervalLabel : 'Selectează interval'}
                 </Button>
+            </Box>
+
+            {/* MOBILE ROW 1: calendar + prev/next/refresh */}
+            <Box sx={{ display: { xs: 'flex', md: 'none' }, alignItems: 'center', justifyContent: 'center', width: '100%', overflow: 'visible' }}>
+                <IconButton onClick={handlePrevDay} title="Ziua anterioară" sx={{ flexShrink: 0 }}>
+                    <ChevronLeftIcon />
+                </IconButton>
+
+                <Box style={{ width: '160px', flexShrink: 0 }}>
+                    <DatePicker 
+                        label="Selectează Data"
+                        value={selectedDate}
+                        onChange={handleChangeDate}
+                        format="DD/MM/YYYY"
+                        slotProps={{ textField: { size: 'small', fullWidth: true, style: { backgroundColor: 'white' } } }}
+                    />
+                </Box>
+
+                <IconButton onClick={handleNextDay} title="Ziua următoare" sx={{ flexShrink: 0 }}>
+                    <ChevronRightIcon />
+                </IconButton>
+
+                  <IconButton onClick={handleRefresh} disabled={loadingList} title="Reîncarcă" sx={{ flexShrink: 0, ml: -1 }}>
+                    <RefreshIcon />
+                </IconButton>
+            </Box>
+
+            {/* MOBILE ROW 2: 4 butoane egale */}
+            <Box sx={{ display: { xs: 'flex', md: 'none' }, width: '100%', gap: 0.5 }}>
+              <Button 
+                variant="outlined" size="small" onClick={handleGoToToday}                
+                sx={{ flex: 1, textTransform: 'none', bgcolor: 'white', px: 0.5, py: 0.75, minWidth: 0, whiteSpace: 'normal', textAlign: 'center', '&:hover': { bgcolor: '#f0f0f0' }, '& .MuiButton-startIcon': { mr: 0.25, ml: 0 } }}
+              >
+                <span style={{ fontSize: '0.9rem', lineHeight: 1.2 }}>Azi</span>
+              </Button>
+
+              <Button
+                variant="outlined" size="small"
+                onClick={() => handleFilterOptionChange('currentMonth')}
+                sx={{ flex: 1, textTransform: 'none', bgcolor: 'white', px: 0.5, py: 0.75, minWidth: 0, whiteSpace: 'normal', textAlign: 'center', '&:hover': { bgcolor: '#f0f0f0' } }}
+              >
+                <span style={{ fontSize: '0.7rem', lineHeight: 1.2 }}>Luna curentă</span>
+              </Button>
+
+              <Button
+                variant="outlined" size="small"
+                onClick={() => handleFilterOptionChange('customInterval')}
+                sx={{ flex: 1, textTransform: 'none', bgcolor: 'white', px: 0.5, py: 0.75, minWidth: 0, whiteSpace: 'normal', textAlign: 'center', '&:hover': { bgcolor: '#f0f0f0' } }}
+              >
+                <span style={{ fontSize: '0.7rem', lineHeight: 1.2 }}>
+                  {filterOption === 'customInterval' ? selectedIntervalLabel : 'Selectează interval'}
+                </span>
+              </Button>
+
+              <Button 
+                variant="contained" size="small" onClick={handleOpenAdd}                
+                sx={{ flex: 1, textTransform: 'none', px: 0.5, py: 0.75, minWidth: 0, whiteSpace: 'normal', textAlign: 'center', '& .MuiButton-startIcon': { mr: 0.25, ml: 0 } }}
+              >
+                <span style={{ fontSize: '0.7rem', lineHeight: 1.2 }}>Rezervare Nouă</span>
+              </Button>
             </Box>
           </Box>
 
@@ -164,7 +209,7 @@ const ReservationsMainPage = () => {
             variant="contained" 
             startIcon={<AddCircleIcon />} 
             onClick={handleOpenAdd}
-            sx={{ width: { xs: '100%', md: 'auto' } }}
+            sx={{ width: { xs: '100%', md: 'auto' }, display: { xs: 'none', md: 'inline-flex' } }}
           >
             Rezervare Nouă
           </Button>

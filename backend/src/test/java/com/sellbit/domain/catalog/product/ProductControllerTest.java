@@ -48,11 +48,12 @@ class ProductControllerTest {
                 "REGULAR",
                 1, 
                 1, 
-                new BigDecimal("50.0"), 
-                new BigDecimal("20.0"), 
-                true, 
-                true, 
-                null, 
+                new BigDecimal("50.0"),
+                new BigDecimal("20.0"),
+                null,
+                true,
+                true,
+                null,
                 null
         );
     }

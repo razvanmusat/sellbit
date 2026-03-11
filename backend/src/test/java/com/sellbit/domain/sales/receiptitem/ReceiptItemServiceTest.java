@@ -34,7 +34,8 @@ import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class ReceiptItemServiceTest {
-
+    @Mock
+    private com.sellbit.domain.catalog.product.ProductService productService;
     @Mock private ReceiptItemRepository itemRepository;
     @Mock private ReceiptRepository receiptRepository;
     @Mock private ProductRepository productRepository;
@@ -72,6 +73,17 @@ class ReceiptItemServiceTest {
                 .trackStock(true) // Important pentru testele de stoc
                 .vatRate(vat)
                 .build();
+
+        // Mock global pentru productService.resolveWarehouse
+        lenient().when(productService.resolveWarehouse(any(Product.class), any(Warehouse.class))).thenAnswer(invocation -> {
+            Warehouse wh = invocation.getArgument(1);
+            if (wh == null) {
+                Warehouse fallback = new Warehouse();
+                fallback.setId(1);
+                return fallback;
+            }
+            return wh;
+        });
     }
 
     // --- TESTE PRINCIPALE ---

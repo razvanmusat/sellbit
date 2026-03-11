@@ -74,6 +74,7 @@ public class CateringOrderService {
                         p.getVatRate() != null ? p.getVatRate().getId() : null,
                         p.getSalePrice(),
                         p.getPurchasePrice(),
+                        p.getForcedWarehouse() != null ? p.getForcedWarehouse().getId() : null,
                         p.getTrackStock(),
                         p.getIsActive(),
                         p.getCreatedAt(),

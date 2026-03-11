@@ -13,13 +13,15 @@ public interface ProductComponentRepository extends JpaRepository<ProductCompone
     @Query("SELECT pc FROM ProductComponent pc " +
         "JOIN FETCH pc.childProduct cp " +
         "LEFT JOIN FETCH cp.unit u " +
+        "LEFT JOIN FETCH cp.forcedWarehouse fw " +
         "WHERE pc.parentProduct.id = :parentProductId " +
         "AND pc.isActive = true")
     List<ProductComponent> findByParentProductIdAndIsActiveTrue(@Param("parentProductId") Integer parentProductId);
-    
+
     @Query("SELECT pc FROM ProductComponent pc " +
         "JOIN FETCH pc.childProduct cp " +
         "LEFT JOIN FETCH cp.unit u " +
+        "LEFT JOIN FETCH cp.forcedWarehouse fw " +
         "WHERE pc.parentProduct.id = :parentProductId " +
         "AND pc.isActive = false")
     List<ProductComponent> findByParentProductIdAndIsActiveFalse(@Param("parentProductId") Integer parentProductId);

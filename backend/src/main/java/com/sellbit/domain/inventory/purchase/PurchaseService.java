@@ -128,7 +128,11 @@ public class PurchaseService {
         if (!components.isEmpty()) {
             for (ProductComponent comp : components) {
                 BigDecimal totalCompQty = quantityToDeduct.multiply(comp.getQuantity());
-                deductFromBatchesFIFO(warehouseId, comp.getChildProduct().getId(), totalCompQty);
+                Product child = comp.getChildProduct();
+                Integer childWarehouseId = (child.getForcedWarehouse() != null)
+                        ? child.getForcedWarehouse().getId()
+                        : warehouseId;
+                deductFromBatchesFIFO(childWarehouseId, child.getId(), totalCompQty);
             }
         } else {
             // --- MODIFICARE AICI ---
@@ -233,9 +237,14 @@ public class PurchaseService {
             BigDecimal totalCost = BigDecimal.ZERO;
             for (ProductComponent comp : components) {
                 BigDecimal componentQty = quantityToDeduct.multiply(comp.getQuantity());
+                Product child = comp.getChildProduct();
+                Integer childWarehouseId = (child.getForcedWarehouse() != null)
+                        ? child.getForcedWarehouse().getId()
+                        : warehouseId;
+                System.out.println("[FIFO] Componenta: " + child.getId() + " | forcedWarehouse: " + child.getForcedWarehouse() + " | warehouseId folosit: " + childWarehouseId + " | qty: " + componentQty);
                 BigDecimal componentCost = consumeAndRecordTotalCost(
-                        warehouseId,
-                        comp.getChildProduct(),
+                        childWarehouseId,
+                        child,
                         componentQty,
                         receipt,
                         receiptItem);
@@ -254,6 +263,7 @@ public class PurchaseService {
         }
 
         List<Purchase> activeBatches = purchaseRepository.findActiveBatchesFIFO(warehouseId, product.getId());
+        System.out.println("[FIFO] Produs simplu: " + product.getId() + " | warehouseId: " + warehouseId + " | loturi active: " + activeBatches.size() + " | qty necesara: " + quantityToDeduct);
         BigDecimal remaining = quantityToDeduct;
         BigDecimal totalCost = BigDecimal.ZERO;
 
@@ -288,7 +298,7 @@ public class PurchaseService {
         }
 
         if (remaining.compareTo(BigDecimal.ZERO) > 0) {
-            throw new RuntimeException("ERROR.STOCK.BATCHES_INSUFFICIENT");
+            throw new RuntimeException("ERROR.STOCK.BATCHES_INSUFFICIENT|product=" + product.getName() + "|warehouseId=" + warehouseId + "|needed=" + quantityToDeduct + "|batches=" + activeBatches.size());
         }
 
         return totalCost;
@@ -323,7 +333,11 @@ public BigDecimal getCurrentFIFOPurchasePrice(Integer warehouseId, Integer produ
     if (!components.isEmpty()) {
         BigDecimal totalCost = BigDecimal.ZERO;
         for (ProductComponent comp : components) {
-            BigDecimal unitCost = getCurrentFIFOPurchasePrice(warehouseId, comp.getChildProduct().getId());
+            Product child = comp.getChildProduct();
+            Integer childWarehouseId = (child.getForcedWarehouse() != null)
+                    ? child.getForcedWarehouse().getId()
+                    : warehouseId;
+            BigDecimal unitCost = getCurrentFIFOPurchasePrice(childWarehouseId, child.getId());
             totalCost = totalCost.add(comp.getQuantity().multiply(unitCost));
         }
         return totalCost.setScale(2, java.math.RoundingMode.HALF_UP);

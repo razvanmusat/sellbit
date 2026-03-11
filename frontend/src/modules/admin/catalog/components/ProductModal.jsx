@@ -93,12 +93,21 @@ const ProductModal = ({ open, onClose, productToEdit, categoryId, onSuccess }) =
                                 {state.units.map(u => <MenuItem key={u.id} value={u.id}>{u.symbol} {u.label}</MenuItem>)}
                             </TextField>
 
-                            <TextField 
-                                select label="Cotă TVA" fullWidth required 
-                                value={state.vatRates.length > 0 ? state.vatRateId : ''} 
+                            <TextField
+                                select label="Cotă TVA" fullWidth required
+                                value={state.vatRates.length > 0 ? state.vatRateId : ''}
                                 onChange={e => setters.setVatRateId(e.target.value)}
                             >
                                 {state.vatRates.map(v => <MenuItem key={v.id} value={v.id}>{v.label}</MenuItem>)}
+                            </TextField>
+
+                            <TextField
+                                select label="Gestiune Fixă (opțional)" fullWidth
+                                value={state.warehouses.length > 0 ? state.forcedWarehouseId : ''}
+                                onChange={e => setters.setForcedWarehouseId(e.target.value)}
+                            >
+                                <MenuItem value=""><em>Niciuna (folosește gestiunea bonului)</em></MenuItem>
+                                {state.warehouses.map(w => <MenuItem key={w.id} value={w.id}>{w.name}</MenuItem>)}
                             </TextField>
                         </Box>
                     </DialogContent>

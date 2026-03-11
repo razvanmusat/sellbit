@@ -1,10 +1,10 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   Box, Paper, Typography, Card, CardContent,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-  Chip, Stack, Alert
+  Chip, Alert
 } from '@mui/material';
 
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
@@ -22,6 +22,7 @@ import EventIcon from '@mui/icons-material/Event';
 
 // Redux
 import { fetchSellReports, invalidateCache } from '../store/sellReportsSlice';
+import { onSalesDataChanged } from '../../../../shared/utils/salesSyncEvents';
 
 const METHOD_CONFIG = {
     CASH: { label: 'Numerar', icon: <AttachMoneyIcon />, color: '#2e7d32', bg: '#e8f5e9' },
@@ -37,6 +38,20 @@ const SellReports = ({ warehouseId, warehouseName }) => {
     const urlReportDate = searchParams.get('reportDate');
     // selectedDate local, sincronizat cu urlReportDate; dacă nu există, setează la azi și în URL
     const [selectedDate, setSelectedDate] = React.useState(urlReportDate ? dayjs(urlReportDate) : dayjs());
+
+    // Ascultă modificări de date de vânzare (emitSalesDataChanged) și forțează invalidateCache + fetch pentru warehouseId+date curente
+    useEffect(() => {
+        const unsubscribe = onSalesDataChanged(() => {
+            if (warehouseId && selectedDate) {
+                dispatch(invalidateCache());
+                dispatch(fetchSellReports({ warehouseId, date: selectedDate }));
+                localStorage.removeItem('salesDataChanged');
+            }
+        });
+        return () => {
+            if (unsubscribe) unsubscribe();
+        };
+    }, [dispatch, warehouseId, selectedDate]);
     React.useEffect(() => {
         if (!urlReportDate) {
             const today = dayjs();
@@ -64,24 +79,14 @@ const SellReports = ({ warehouseId, warehouseName }) => {
     }, [selectedDate]);
   
   // Redux state
-  const { receipts, loading, error } = useSelector((state) => state.sellReports);
-  
-  // Track cache status pentru a detecta invalidation
-  const [cacheVersion, setCacheVersion] = React.useState(0);
-  
-  // Ascultă la invalidateCache prin pollingul Redux state
-  const cached = useSelector((state) => state.sellReports?.cached || {});
-  React.useEffect(() => {
-    // Cand cached object se schimbă (ex: invalidateCache a șters keys), refetch
-    setCacheVersion(prev => prev + 1);
-  }, [cached]);
+  const { receipts, loading, error } = useSelector((state) => state.sellReports);  
 
   // Dispatch fetch cand se schimbă date, warehouse SAU cand cache e invalidat
   React.useEffect(() => {
     if (warehouseId) {
       dispatch(fetchSellReports({ warehouseId, date: selectedDate }));
     }
-  }, [warehouseId, selectedDate, cacheVersion, dispatch]);
+  }, [warehouseId, selectedDate, dispatch]); 
 
   // --- STILURI IDENTICE CU REFUND PAGE ---
   // Acestea asigură că rândurile sunt mici și compacte

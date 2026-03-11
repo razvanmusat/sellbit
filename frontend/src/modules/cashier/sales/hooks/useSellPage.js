@@ -38,11 +38,16 @@ export const useSellPage = () => {
     paymentMethods,
     paymentMethodsLoading,
     warehousesLoading,
-    error, // <--- Aceasta este eroarea care vine din Backend (ex: Stoc insuficient)
+    error, 
     cancelReasons,
     cancelReasonsLoading
   } = useSelector((state) => state.sellPage);
 
+  // Filtrare: excludem gestiunea cu codul "GP"
+  const filteredWarehouses = useMemo(
+    () => warehouses.filter(w => w.code !== "GP"),
+    [warehouses]
+  );
   // --- LOCAL STATE (Modale & UI) ---
   const [modals, setModals] = useState({
     addReceipt: false,
@@ -238,7 +243,7 @@ export const useSellPage = () => {
     // Data
     warehouseId,
     receiptId,
-    warehouses,
+    warehouses: filteredWarehouses,
     receipts,
     editingReceipt,
     paymentMethods,

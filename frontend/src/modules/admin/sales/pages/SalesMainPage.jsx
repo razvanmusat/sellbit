@@ -24,6 +24,8 @@ const SalesMainPage = () => {
     const [searchParams, setSearchParams] = useSearchParams();
     
     const [warehouses, setWarehouses] = useState([]);
+    // Filtrare: excludem gestiunea cu codul "GP"
+    const filteredWarehouses = warehouses.filter(w => w.code !== "GP");
     const [loadingWarehouses, setLoadingWarehouses] = useState(true);
     const [error, setError] = useState(null);
 
@@ -76,7 +78,7 @@ const SalesMainPage = () => {
                     <Alert severity="error" sx={{ m: 2 }}>{error}</Alert>
                 ) : (
                     <WarehouseTabs 
-                        warehouses={warehouses}
+                        warehouses={filteredWarehouses}
                         selectedWarehouseId={selectedWarehouseId}
                         onWarehouseChange={(e, val) => updateParams({ warehouseId: val })}
                     />
@@ -118,7 +120,7 @@ const SalesMainPage = () => {
                         {activeTab === 3 && (
                             <ProfitStats 
                                 warehouseId={selectedWarehouseId} 
-                                warehouseName={warehouses.find(w => w.id === selectedWarehouseId)?.name}
+                                warehouseName={filteredWarehouses.find(w => w.id === selectedWarehouseId)?.name}
                             />
                         )}
                     </>

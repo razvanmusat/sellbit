@@ -145,11 +145,14 @@ public class StockCurrentService {
         List<ProductComponent> components = productComponentRepository.findByParentProductIdAndIsActiveTrue(productId);
 
         if (!components.isEmpty()) {
-            // Dacă are rețetă, aplicăm diferența pentru fiecare componentă
+            // Dacă are rețetă, aplicăm diferența pentru fiecare componentă cu propriul warehouse rezolvat
             for (ProductComponent comp : components) {
                 BigDecimal compDiff = diff.multiply(comp.getQuantity());
-                // Scădem componenta (negate pentru că updateStockRelative adună delta)
-                updateStockRelative(warehouseId, comp.getChildProduct().getId(), compDiff.negate());
+                Product child = comp.getChildProduct();
+                Integer childWarehouseId = (child.getForcedWarehouse() != null)
+                        ? child.getForcedWarehouse().getId()
+                        : warehouseId;
+                updateStockRelative(childWarehouseId, child.getId(), compDiff.negate());
             }
         } else {
             // Dacă este produs simplu, rămâne logica originală

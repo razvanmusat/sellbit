@@ -2,6 +2,7 @@ package com.sellbit.domain.catalog.product;
 
 import com.sellbit.domain.catalog.category.Category;
 import com.sellbit.domain.catalog.category.CategoryRepository;
+import com.sellbit.domain.inventory.warehouse.WarehouseRepository;
 import com.sellbit.domain.lookup.producttype.ProductType;
 import com.sellbit.domain.lookup.producttype.ProductTypeRepository;
 import com.sellbit.domain.lookup.unitofmeasure.UnitOfMeasure;
@@ -30,6 +31,7 @@ class ProductServiceTest {
     @Mock private UnitOfMeasureRepository unitOfMeasureRepository;
     @Mock private VatRateRepository vatRateRepository;
     @Mock private ProductTypeRepository productTypeRepository;
+    @Mock private WarehouseRepository warehouseRepository;
 
     private ProductService productService;
 
@@ -40,7 +42,8 @@ class ProductServiceTest {
                 categoryRepository,
                 unitOfMeasureRepository,
                 vatRateRepository,
-                productTypeRepository
+                productTypeRepository,
+                warehouseRepository
         );
     }
 
@@ -111,8 +114,8 @@ class ProductServiceTest {
     void createProduct_ShouldSaveSuccessfully() {
         // DTO Intrare
         ProductDTO dto = new ProductDTO(
-                null, "Prod", "123", 10, 1, "REGULAR", 1, 1, 
-                new BigDecimal("10"), new BigDecimal("5"), true, true, null, null
+                null, "Prod", "123", 10, 1, "REGULAR", 1, 1,
+                new BigDecimal("10"), new BigDecimal("5"), null, true, true, null, null
         );
         
         // MOCK-uri
@@ -166,8 +169,8 @@ class ProductServiceTest {
 
         // DTO Update
         ProductDTO dto = new ProductDTO(
-                1, "New Name", "new", 10, 1, "REGULAR", 1, 1, 
-                new BigDecimal("20"), new BigDecimal("10"), true, true, null, null
+                1, "New Name", "new", 10, 1, "REGULAR", 1, 1,
+                new BigDecimal("20"), new BigDecimal("10"), null, true, true, null, null
         );
 
         // MOCK-uri DB

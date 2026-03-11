@@ -22,6 +22,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ReceiptDetailModal from './ReceiptDetailModal';
 import { SalesService } from '../api/SalesService';
 import { fetchReceipts, setFilters } from '../store/receiptsSlice';
+import { onSalesDataChanged } from '../../../../shared/utils/salesSyncEvents';
 
 const REAL_INCOME_METHODS = ['CASH', 'CARD', 'BANK_TRANSFER'];
 
@@ -47,6 +48,20 @@ const PaymentStats = ({ warehouseId }) => {
             dispatch(fetchReceipts({ warehouseId, force: true }));
         }
     }, [warehouseId, startDate, endDate, dispatch]);
+
+    // Refresh la fiecare vânzare (emitSalesDataChanged)
+    useEffect(() => {
+        if (!warehouseId || !startDate.isValid() || !endDate.isValid()) return;
+        const unsubscribe = onSalesDataChanged(() => {
+            dispatch(setFilters({
+                startDate: startDate.startOf('day').format('YYYY-MM-DDTHH:mm:ss'),
+                endDate: endDate.endOf('day').format('YYYY-MM-DDTHH:mm:ss'),
+                status: 'CLOSED'
+            }));
+            dispatch(fetchReceipts({ warehouseId, force: true }));
+        });
+        return unsubscribe;
+    }, [dispatch, warehouseId, startDate, endDate]);
 
     const getMethodDetails = (code) => {
         switch (code) {

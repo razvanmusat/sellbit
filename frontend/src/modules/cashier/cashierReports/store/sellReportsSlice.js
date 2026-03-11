@@ -46,9 +46,15 @@ const sellReportsSlice = createSlice({
       state.cached = {};
       state.error = null;
     },
-    invalidateCache: (state) => {
-      state.cached = {};
-      state.receipts = [];
+    invalidateCache: (state, action) => {
+      // Dacă se specifică cacheKey, șterge doar acea cheie
+      if (action.payload && action.payload.cacheKey) {
+        delete state.cached[action.payload.cacheKey];
+        state.receipts = [];
+      } else {
+        state.cached = {};
+        state.receipts = [];
+      }
     },
   },
   extraReducers: (builder) => {
@@ -63,10 +69,7 @@ const sellReportsSlice = createSlice({
         const { receipts, cacheKey, fromCache } = action.payload;
         state.receipts = receipts;
         state.cached[cacheKey] = receipts;
-        
-        // IMPORTANT: Doar setez loading false la API call real
-        // Dacă din cache, nu setez loading true în pending
-        state.loading = !fromCache ? false : false; // Totdeauna false
+        state.loading = false;
       })
       .addCase(fetchSellReports.rejected, (state, action) => {
         state.loading = false;

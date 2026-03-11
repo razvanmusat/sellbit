@@ -39,11 +39,15 @@ export const useProductStats = (warehouseId) => {
         }
 
         const unsubscribe = onSalesDataChanged(() => {
-            dispatch(fetchProductStats({ warehouseId, force: true }));
+            dispatch(fetchProductStats({ 
+                warehouseId, 
+                force: true, 
+                overrideDates: { start: startDate, end: endDate }
+            }));
         });
 
         return unsubscribe;
-    }, [dispatch, warehouseId]);
+    }, [dispatch, warehouseId, startDate, endDate]);
 
     // OPTIMIZARE & FIX TOTALURI: 
     // Calculăm stats-urile pe client dacă lipsesc din store sau pentru siguranță 100%

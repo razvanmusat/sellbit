@@ -89,11 +89,12 @@ class CateringOrderControllerTest {
                 "REGULAR",  
                 1,          
                 1,         
-                new BigDecimal("25.00"), 
-                new BigDecimal("15.00"), 
-                true, 
-                true, 
-                LocalDateTime.now(), 
+                new BigDecimal("25.00"),
+                new BigDecimal("15.00"),
+                null,
+                true,
+                true,
+                LocalDateTime.now(),
                 LocalDateTime.now()
         );
         

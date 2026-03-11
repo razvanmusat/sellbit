@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { ProductService } from '../api/ProductService';
 import { LookupService } from '../api/LookupService';
 import { CategoryService } from '../api/CategoryService';
+import { WarehouseService } from '../../settings/warehouses/api/WarehouseService';
 import { getFriendlyErrorMessage } from '../../../../shared/utils/errorHandler';
 
 export const useProductModal = (open, onClose, productToEdit, categoryId, onSuccess) => {
@@ -15,11 +16,13 @@ export const useProductModal = (open, onClose, productToEdit, categoryId, onSucc
     const [productTypeId, setProductTypeId] = useState('');
     const [unitId, setUnitId] = useState('');
     const [vatRateId, setVatRateId] = useState('');
+    const [forcedWarehouseId, setForcedWarehouseId] = useState('');
 
     // --- LOOKUP LISTS ---
     const [types, setTypes] = useState([]);
     const [units, setUnits] = useState([]);
     const [vatRates, setVatRates] = useState([]);
+    const [warehouses, setWarehouses] = useState([]);
 
     // --- UI STATE ---
     const [loading, setLoading] = useState(false);
@@ -51,14 +54,16 @@ export const useProductModal = (open, onClose, productToEdit, categoryId, onSucc
     useEffect(() => {
         const fetchLookups = async () => {
             try {
-                const [t, u, v] = await Promise.all([
+                const [t, u, v, w] = await Promise.all([
                     LookupService.getActiveProductTypes(),
                     LookupService.getActiveUnits(),
-                    LookupService.getActiveVatRates()
+                    LookupService.getActiveVatRates(),
+                    WarehouseService.getAllActive()
                 ]);
                 setTypes(t || []);
                 setUnits(u || []);
                 setVatRates(v || []);
+                setWarehouses(w || []);
             } catch (err) {
                 // Aici putem lăsa console.error, sau putem afișa un snackbar discret
                 console.error("Eroare încărcare nomenclatoare:", err);
@@ -79,6 +84,7 @@ export const useProductModal = (open, onClose, productToEdit, categoryId, onSucc
                 setProductTypeId(productToEdit.productTypeId || '');
                 setUnitId(productToEdit.unitId || '');
                 setVatRateId(productToEdit.vatRateId || '');
+                setForcedWarehouseId(productToEdit.forcedWarehouseId ?? '');
             } else {
                 setName('');
                 setBarcode('');
@@ -87,6 +93,7 @@ export const useProductModal = (open, onClose, productToEdit, categoryId, onSucc
                 setProductTypeId('');
                 setUnitId('');
                 setVatRateId('');
+                setForcedWarehouseId('');
             }
             setLoading(false);
             setConfirmOpen(false);
@@ -140,6 +147,8 @@ export const useProductModal = (open, onClose, productToEdit, categoryId, onSucc
             return showSnackbar(getFriendlyErrorMessage('ERROR.CATERING.PRICE_REQUIRED'));
         }
 
+        const normalizedForcedWarehouseId = normalizeId(forcedWarehouseId);
+
         const payload = {
             name: name.trim(),
             barcode: barcode ? barcode.trim() : null,
@@ -149,6 +158,7 @@ export const useProductModal = (open, onClose, productToEdit, categoryId, onSucc
             vatRateId: normalizedVatRateId,
             salePrice: normalizedSalePrice,
             purchasePrice: normalizedPurchasePrice,
+            forcedWarehouseId: normalizedForcedWarehouseId,
             isActive: isEditMode ? currentIsActive : true
         };
 
@@ -216,13 +226,13 @@ export const useProductModal = (open, onClose, productToEdit, categoryId, onSucc
 
     return {
         state: {
-            name, barcode, salePrice, purchasePrice, productTypeId, unitId, vatRateId,
-            types, units, vatRates, loading, confirmOpen, snackbar, currentIsActive,
+            name, barcode, salePrice, purchasePrice, productTypeId, unitId, vatRateId, forcedWarehouseId,
+            types, units, vatRates, warehouses, loading, confirmOpen, snackbar, currentIsActive,
             moveDialogOpen, leafCategories, selectedMoveCategory, loadingLeaves, isEditMode
         },
         setters: {
-            setName, setBarcode, setSalePrice, setPurchasePrice, setProductTypeId, 
-            setUnitId, setVatRateId, setConfirmOpen, setSnackbar, setMoveDialogOpen, setSelectedMoveCategory
+            setName, setBarcode, setSalePrice, setPurchasePrice, setProductTypeId,
+            setUnitId, setVatRateId, setForcedWarehouseId, setConfirmOpen, setSnackbar, setMoveDialogOpen, setSelectedMoveCategory
         },
         handlers: {
             handleSave, handleConfirmToggle, handleOpenMoveDialog, handleMoveProduct

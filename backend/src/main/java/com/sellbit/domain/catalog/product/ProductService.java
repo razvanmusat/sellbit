@@ -2,6 +2,8 @@ package com.sellbit.domain.catalog.product;
 
 import com.sellbit.domain.catalog.category.Category;
 import com.sellbit.domain.catalog.category.CategoryRepository;
+import com.sellbit.domain.inventory.warehouse.Warehouse;
+import com.sellbit.domain.inventory.warehouse.WarehouseRepository;
 import com.sellbit.domain.lookup.producttype.ProductType;
 import com.sellbit.domain.lookup.producttype.ProductTypeRepository;
 import com.sellbit.domain.lookup.unitofmeasure.UnitOfMeasureRepository;
@@ -23,6 +25,7 @@ public class ProductService {
     private final UnitOfMeasureRepository unitOfMeasureRepository;
     private final VatRateRepository vatRateRepository;
     private final ProductTypeRepository productTypeRepository;
+    private final WarehouseRepository warehouseRepository;
 
     @Transactional(readOnly = true)
     public List<ProductDTO> getProductsForAdmin(Integer categoryId) {
@@ -75,7 +78,7 @@ public class ProductService {
         Product product = new Product();
         mapDtoToEntity(dto, product);
 
-        product.setIsActive(true);        
+        product.setIsActive(true);
 
         return convertToDTO(productRepository.save(product));
     }
@@ -128,15 +131,25 @@ public class ProductService {
         productRepository.save(product);
     }
 
+    public Warehouse resolveWarehouse(Product product, Warehouse defaultWarehouse) {
+        if (product.getForcedWarehouse() != null) {
+            return product.getForcedWarehouse();
+        }
+        if (defaultWarehouse == null) {
+            throw new RuntimeException("ERROR.WAREHOUSE.NOT_FOUND");
+        }
+        return defaultWarehouse;
+    }
+
     private void mapDtoToEntity(ProductDTO dto, Product product) {
         product.setName(dto.name());
         product.setBarcode(dto.barcode());
-        product.setSalePrice(dto.salePrice());        
+        product.setSalePrice(dto.salePrice());
 
         // 1. Căutăm Tipul Produsului (l-am mutat la început ca să putem decide stocul)
         ProductType type = productTypeRepository.findById(dto.productTypeId())
                 .orElseThrow(() -> new RuntimeException("ERROR.PRODUCT_TYPE.NOT_FOUND"));
-        
+
         product.setProductType(type);
 
         if ("CATERING".equalsIgnoreCase(type.getCode())) {
@@ -144,7 +157,7 @@ public class ProductService {
                 throw new RuntimeException("ERROR.CATERING.PRICE_REQUIRED");
             }
         }
-        
+
         product.setPurchasePrice(dto.purchasePrice());
 
         // 2. LOGICĂ AUTOMATĂ TRACK STOCK
@@ -173,9 +186,17 @@ public class ProductService {
         if (dto.vatRateId() == null) {
             throw new RuntimeException("ERROR.VAT.REQUIRED");
         }
-        
+
         product.setVatRate(vatRateRepository.findById(dto.vatRateId())
                 .orElseThrow(() -> new RuntimeException("ERROR.VAT.NOT_FOUND")));
+
+        // 6. Gestiune Fixă (opțional)
+        if (dto.forcedWarehouseId() != null) {
+            product.setForcedWarehouse(warehouseRepository.findById(dto.forcedWarehouseId())
+                    .orElseThrow(() -> new RuntimeException("ERROR.WAREHOUSE.NOT_FOUND")));
+        } else {
+            product.setForcedWarehouse(null);
+        }
     }
 
     private ProductDTO convertToDTO(Product product) {
@@ -190,6 +211,7 @@ public class ProductService {
                 product.getVatRate() != null ? product.getVatRate().getId() : null,
                 product.getSalePrice(),
                 product.getPurchasePrice(),
+                product.getForcedWarehouse() != null ? product.getForcedWarehouse().getId() : null,
                 product.getTrackStock(),
                 product.getIsActive(),
                 product.getCreatedAt(),

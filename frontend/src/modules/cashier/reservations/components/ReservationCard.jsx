@@ -7,11 +7,8 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import PhoneIcon from '@mui/icons-material/Phone';
 import PaidIcon from '@mui/icons-material/Paid';
 import DoneRoundedIcon from '@mui/icons-material/DoneRounded';
-// 👇 IMPORT NOU
 import RestaurantMenuIcon from '@mui/icons-material/RestaurantMenu';
 
-// Folosim React.memo aici pentru a preveni randările inutile
-// 👇 AM ADĂUGAT PROP-UL 'onAddCatering'
 const ReservationCard = React.memo(({ reservation, onEdit, onDelete, onAddCatering, onConfirmDigitalInvitation, isAdmin }) => {
   const start = dayjs(reservation.startAt);
   const end = dayjs(reservation.endAt);
@@ -140,8 +137,7 @@ const ReservationCard = React.memo(({ reservation, onEdit, onDelete, onAddCateri
         flexDirection={{ xs: 'row', sm: 'column' }} 
         gap={1} 
         sx={{ width: { xs: '100%', sm: 'auto' }, justifyContent: 'flex-end', zIndex: 1 }}
-      >
-        {/* 👇 BUTON NOU: CATERING */}
+      >        
         <IconButton 
             color="secondary" 
             onClick={() => onAddCatering(reservation)} 

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Box, Tabs, Tab, Typography, Paper, CircularProgress } from '@mui/material';
+import { invalidateCache } from '../store/sellReportsSlice';
+import { Box, Tabs, Tab, Typography, CircularProgress } from '@mui/material';
 import SavingsIcon from '@mui/icons-material/Savings';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import HistoryIcon from '@mui/icons-material/History';
@@ -28,9 +29,10 @@ const CashierReportsTabs = () => {
   const dispatch = useDispatch();
   const [searchParams, setSearchParams] = useSearchParams();
   const currentTab = searchParams.get('tab');
-  const warehouseIdParam = searchParams.get('warehouseId');
-
+  const warehouseIdParam = searchParams.get('warehouseId');  
   const { warehouses, loading } = useSelector((state) => state.cashier);
+  // Filtrare: excludem gestiunea cu codul "GP"
+  const filteredWarehouses = warehouses.filter(w => w.code !== "GP");
   const [activeTab, setActiveTab] = useState(currentTab || false); 
   const [selectedWarehouseId, setSelectedWarehouseId] = useState(warehouseIdParam ? Number(warehouseIdParam) : false);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -107,11 +109,23 @@ const CashierReportsTabs = () => {
     setRefreshKey(prev => prev + 1);
   };
 
+  // La click pe logo sau pe linkul principal de cashier, invalidează tot cache-ul rapoartelor
+  useEffect(() => {
+    const handleHomeClick = (e) => {
+      // Verifică dacă se apasă pe linkul către /home/cashier
+      if (e.target.closest('a[href="/home/cashier"]')) {
+        dispatch(invalidateCache());
+      }
+    };
+    window.addEventListener('click', handleHomeClick);
+    return () => window.removeEventListener('click', handleHomeClick);
+  }, [dispatch]);
+
   if (loading && warehouses.length === 0) {
     return <Box p={4} display="flex" justifyContent="center"><CircularProgress /></Box>;
   }
 
-  const selectedWarehouse = warehouses.find(w => w.id === selectedWarehouseId);
+  const selectedWarehouse = filteredWarehouses.find(w => w.id === selectedWarehouseId);
 
   return (
     <Box sx={{ p: { xs: 0, sm: 2 }, height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -119,7 +133,7 @@ const CashierReportsTabs = () => {
       {/* ZONA 1: TABURI GESTIUNI */}
       <Box sx={{ mb: 2 }}>
         <WarehouseTabs 
-            warehouses={warehouses} 
+            warehouses={filteredWarehouses} 
             selectedWarehouseId={selectedWarehouseId} 
             onWarehouseChange={activeTab ? handleWarehouseChange : handleWarehouseOnly} 
         />

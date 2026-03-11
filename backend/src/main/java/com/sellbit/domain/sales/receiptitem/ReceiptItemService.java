@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.sellbit.domain.catalog.product.Product;
 import com.sellbit.domain.catalog.product.ProductRepository;
+import com.sellbit.domain.catalog.product.ProductService;
 import com.sellbit.domain.catalog.productcomposite.ProductComponentRepository;
 import com.sellbit.domain.inventory.purchase.PurchaseService;
 import com.sellbit.domain.inventory.stockcurrent.StockCurrentService;
@@ -37,6 +38,7 @@ public class ReceiptItemService {
     private final ReceiptService receiptService;
     private final PurchaseService purchaseService;
     private final ProductComponentRepository productComponentRepository;
+    private final ProductService productService;
 
     /**
      * Adaugă sau actualizează un produs și returnează totalurile noi ale bonului.
@@ -61,11 +63,11 @@ public class ReceiptItemService {
         BigDecimal oldQty = (item != null) ? item.getQuantity() : BigDecimal.ZERO;
         BigDecimal delta = quantity.subtract(oldQty);
         if (delta.compareTo(BigDecimal.ZERO) > 0) {
-            validateStockAvailability(receipt.getWarehouse().getId(), product, delta);
+            validateStockAvailability(productService.resolveWarehouse(product, receipt.getWarehouse()).getId(), product, delta);
         }
 
         BigDecimal currentPurchasePrice = purchaseService.getCurrentFIFOPurchasePrice(
-                receipt.getWarehouse().getId(),
+                productService.resolveWarehouse(product, receipt.getWarehouse()).getId(),
                 productId);
 
         if (item == null) {
@@ -88,7 +90,7 @@ public class ReceiptItemService {
         itemRepository.save(item);
 
         // Sincronizare stoc (Scădere pentru vânzare)
-        stockCurrentService.syncStockFromReceiptChange(receipt.getWarehouse().getId(), productId, oldQty, quantity);
+        stockCurrentService.syncStockFromReceiptChange(productService.resolveWarehouse(product, receipt.getWarehouse()).getId(), productId, oldQty, quantity);
 
         receiptService.updateReceiptTotals(receiptId);
 
@@ -115,7 +117,7 @@ public class ReceiptItemService {
         receipt.getItems().remove(item);
 
         stockCurrentService.syncStockFromReceiptChange(
-                receipt.getWarehouse().getId(),
+                productService.resolveWarehouse(item.getProduct(), receipt.getWarehouse()).getId(),
                 item.getProduct().getId(),
                 item.getQuantity(),
                 BigDecimal.ZERO);
@@ -238,10 +240,14 @@ public class ReceiptItemService {
             // Produs simplu
             checkSingleProductStock(warehouseId, product, requiredQty, missingProducts);
         } else {
-            // Produs compus (Meniu) -> verificăm fiecare ingredient
+            // Produs compus (Meniu) -> verificăm fiecare ingredient cu propriul warehouse rezolvat
             for (ProductComponent comp : components) {
                 BigDecimal componentRequiredQty = requiredQty.multiply(comp.getQuantity());
-                checkSingleProductStock(warehouseId, comp.getChildProduct(), componentRequiredQty, missingProducts);
+                Product child = comp.getChildProduct();
+                Integer childWarehouseId = (child.getForcedWarehouse() != null)
+                        ? child.getForcedWarehouse().getId()
+                        : warehouseId;
+                checkSingleProductStock(childWarehouseId, child, componentRequiredQty, missingProducts);
             }
         }
 

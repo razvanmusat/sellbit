@@ -164,6 +164,7 @@ CREATE TABLE products (
     purchase_price DECIMAL(10, 2),
     vat_rate_id INT REFERENCES vat_rates(id),
     track_stock BOOLEAN DEFAULT TRUE,
+    forced_warehouse_id INTEGER REFERENCES warehouses(id),
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
@@ -194,6 +195,22 @@ CREATE TABLE cash_drawer (
     current_balance DECIMAL(10, 2) DEFAULT 0
 );
 
+CREATE TABLE receipts (
+    id SERIAL PRIMARY KEY,
+    status_id INT NOT NULL REFERENCES receipt_statuses(id),
+    original_receipt_id INT REFERENCES receipts(id),
+    table_name VARCHAR(50),
+    total_amount DECIMAL(10, 2),
+    created_at TIMESTAMP DEFAULT NOW(),
+    closed_at TIMESTAMP,
+    user_id INT REFERENCES users(id),
+    warehouse_id INT NOT NULL REFERENCES warehouses(id),
+    total_net DECIMAL(10, 2),
+    total_vat DECIMAL(10, 2),
+    cancel_reason_id INT REFERENCES cancel_reasons(id),
+    note TEXT
+);
+
 CREATE TABLE cash_movements (
     id SERIAL PRIMARY KEY,
     created_at TIMESTAMP DEFAULT NOW(),
@@ -201,6 +218,7 @@ CREATE TABLE cash_movements (
     movement_type_id INT NOT NULL REFERENCES cash_movement_types(id),
     amount DECIMAL(10, 2),
     user_id INT NOT NULL REFERENCES users(id),
+    receipt_id INT REFERENCES receipts(id),
     note TEXT
 );
 
@@ -241,22 +259,6 @@ CREATE TABLE stock_adjustments (
 -- 5. TRANZACTII (BONURI FISCALE)
 -------------------------------------------------------------------------------
 
-CREATE TABLE receipts (
-    id SERIAL PRIMARY KEY,
-    status_id INT NOT NULL REFERENCES receipt_statuses(id),
-    original_receipt_id INT REFERENCES receipts(id),
-    table_name VARCHAR(50),
-    total_amount DECIMAL(10, 2),
-    created_at TIMESTAMP DEFAULT NOW(),
-    closed_at TIMESTAMP,
-    user_id INT REFERENCES users(id),
-    warehouse_id INT NOT NULL REFERENCES warehouses(id),
-    total_net DECIMAL(10, 2),
-    total_vat DECIMAL(10, 2),
-    cancel_reason_id INT REFERENCES cancel_reasons(id),
-    note TEXT
-);
-
 CREATE TABLE receipt_items (
     id SERIAL PRIMARY KEY,
     product_id INT NOT NULL REFERENCES products(id),
@@ -270,6 +272,17 @@ CREATE TABLE receipt_items (
     vat_total DECIMAL(10, 2),
     service_end_at TIMESTAMP,
     is_service_time BOOLEAN DEFAULT FALSE
+);
+
+CREATE TABLE receipt_item_fifo_allocations (
+    id SERIAL PRIMARY KEY,
+    receipt_id INT NOT NULL REFERENCES receipts(id) ON DELETE CASCADE,
+    receipt_item_id INT NOT NULL REFERENCES receipt_items(id) ON DELETE CASCADE,
+    purchase_id INT NOT NULL REFERENCES purchases(id),
+    warehouse_id INT NOT NULL REFERENCES warehouses(id),
+    quantity DECIMAL(10, 3) NOT NULL,
+    unit_cost DECIMAL(10, 2) NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW()
 );
 
 CREATE TABLE receipt_payments (
@@ -338,5 +351,6 @@ CREATE INDEX idx_receipts_warehouse ON receipts(warehouse_id);
 CREATE INDEX idx_receipts_created ON receipts(created_at);
 CREATE INDEX idx_stock_current_product ON stock_current(product_id);
 CREATE INDEX idx_customer_vouchers_code ON customer_vouchers(code);
+CREATE INDEX idx_cash_movements_receipt_id ON cash_movements(receipt_id);
 ALTER TABLE voucher_campaigns ADD CONSTRAINT fk_vc_required_product FOREIGN KEY (required_product_id) REFERENCES products(id);
 ALTER TABLE voucher_campaigns ADD CONSTRAINT fk_vc_applicable_product FOREIGN KEY (applicable_product_id) REFERENCES products(id);
