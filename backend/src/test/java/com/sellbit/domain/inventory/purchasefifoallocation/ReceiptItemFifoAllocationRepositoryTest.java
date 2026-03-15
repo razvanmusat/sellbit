@@ -110,11 +110,12 @@ class ReceiptItemFifoAllocationRepositoryTest {
 
     private ReceiptItem buildAndPersistReceiptItem(Receipt receipt, Product product) {
         return em.persist(ReceiptItem.builder()
-                .receipt(receipt)
-                .product(product)
-                .quantity(BigDecimal.ONE)
-                .unitPrice(BigDecimal.valueOf(10))
-                .build());
+            .receipt(receipt)
+            .product(product)
+            .quantity(BigDecimal.ONE)
+            .unitPrice(BigDecimal.valueOf(10))
+            .warehouse(receipt.getWarehouse())
+            .build());
     }
 
     @Test

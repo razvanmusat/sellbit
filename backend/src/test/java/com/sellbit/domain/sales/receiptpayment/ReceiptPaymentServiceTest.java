@@ -2,6 +2,7 @@ package com.sellbit.domain.sales.receiptpayment;
 
 import com.sellbit.domain.cash.cashmovement.CashMovementService;
 import com.sellbit.domain.inventory.warehouse.Warehouse;
+import com.sellbit.domain.inventory.warehouse.WarehouseRepository;
 import com.sellbit.domain.lookup.paymentmethod.PaymentMethod;
 import com.sellbit.domain.lookup.paymentmethod.PaymentMethodRepository;
 import com.sellbit.domain.lookup.receiptstatus.ReceiptStatus;
@@ -32,6 +33,7 @@ class ReceiptPaymentServiceTest {
     @Mock private ReceiptRepository receiptRepository;
     @Mock private PaymentMethodRepository paymentMethodRepository;
     @Mock private CashMovementService cashMovementService;
+    @Mock private WarehouseRepository warehouseRepository;
 
     @InjectMocks
     private ReceiptPaymentService paymentService;
@@ -63,9 +65,10 @@ class ReceiptPaymentServiceTest {
     void addPayment_Cash_RegistersOnlyRemaining() {
         when(receiptRepository.findById(10)).thenReturn(Optional.of(receipt));
         when(paymentMethodRepository.findById(1)).thenReturn(Optional.of(cashMethod));
+        when(warehouseRepository.findById(1)).thenReturn(Optional.of(receipt.getWarehouse()));
 
         // Clientul dă 150 lei, dar bonul e de 100. Trebuie să înregistreze 100.
-        paymentService.addPayment(10, 1, new BigDecimal("150.00"), 99);
+        paymentService.addPayment(10, 1, new BigDecimal("150.00"), 99, 1);
 
         verify(paymentRepository).save(argThat(p -> 
             p.getAmount().compareTo(new BigDecimal("100.00")) == 0));
@@ -80,7 +83,7 @@ class ReceiptPaymentServiceTest {
 
         // Cardul nu permite "rest", deci 100.01 e invalid
         assertThrows(RuntimeException.class, () -> 
-            paymentService.addPayment(10, 2, new BigDecimal("100.01"), 99));
+            paymentService.addPayment(10, 2, new BigDecimal("100.01"), 99, 1));
     }
 
     @Test
@@ -90,7 +93,7 @@ class ReceiptPaymentServiceTest {
         when(receiptRepository.findById(10)).thenReturn(Optional.of(receipt));
 
         assertThrows(RuntimeException.class, () -> 
-            paymentService.addPayment(10, 1, BigDecimal.TEN, 99));
+            paymentService.addPayment(10, 1, BigDecimal.TEN, 99, 1));
     }
 
     // --- Teste removePayment ---
@@ -98,9 +101,10 @@ class ReceiptPaymentServiceTest {
     @Test
     @DisplayName("removePayment - Succes: Șterge plata și scade din sertar dacă e CASH")
     void removePayment_Success_Cash() {
+    		Warehouse warehouse = Warehouse.builder().id(1).build();
         ReceiptPayment payment = ReceiptPayment.builder()
-                .id(500).amount(new BigDecimal("50.00"))
-                .paymentMethod(cashMethod).receipt(receipt).build();
+            .id(500).amount(new BigDecimal("50.00"))
+            .paymentMethod(cashMethod).receipt(receipt).warehouse(warehouse).build();
 
         when(paymentRepository.findById(500)).thenReturn(Optional.of(payment));
 
@@ -140,7 +144,7 @@ class ReceiptPaymentServiceTest {
         var result = paymentService.getPaymentsByReceipt(10);
 
         assertEquals(1, result.size());
-        assertEquals("Numerar", result.get(0).paymentMethodName());
+        assertEquals("Numerar", result.get(0).paymentMethodLabel());
         assertTrue(new BigDecimal("20.00").compareTo(result.get(0).amount()) == 0);
     }
 
@@ -163,7 +167,7 @@ class ReceiptPaymentServiceTest {
         // Assert
         assertNotNull(result);
         assertEquals(1, result.size());
-        assertEquals(expectedTotal, result.get(0).totalAmount());
+        assertEquals(expectedTotal, result.get(0).total());
         assertEquals("CASH", result.get(0).methodCode());
         assertEquals(start, result.get(0).start());
         assertEquals(end, result.get(0).end());
@@ -190,7 +194,7 @@ class ReceiptPaymentServiceTest {
 
         // Assert
         assertEquals(2, result.size());
-        assertEquals(new BigDecimal("1000.00"), result.get(0).totalAmount());
+        assertEquals(new BigDecimal("1000.00"), result.get(0).total());
         assertEquals("CASH", result.get(0).methodCode());
     }
 
@@ -209,7 +213,7 @@ class ReceiptPaymentServiceTest {
 
         // Assert
         assertEquals(1, result.size());
-        assertEquals(BigDecimal.ZERO, result.get(0).totalAmount());
+        assertEquals(BigDecimal.ZERO, result.get(0).total());
         
         verify(paymentRepository).calculatePaymentsSum(start, end, "CASH", null);
     }
@@ -227,6 +231,6 @@ class ReceiptPaymentServiceTest {
 
         // Assert
         assertEquals(1, result.size());
-        assertEquals(BigDecimal.ZERO, result.get(0).totalAmount());
+        assertEquals(BigDecimal.ZERO, result.get(0).total());
     }
 }

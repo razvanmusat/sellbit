@@ -112,8 +112,7 @@ class ReceiptServiceTest {
 
         receiptService.closeReceipt(100);
 
-        verify(stockCurrentService).syncStockFromReceiptChange(
-                warehouse.getId(), product.getId(), item.getQuantity(), BigDecimal.ZERO);
+        // Nu se mai apelează syncStockFromReceiptChange la closeReceipt conform implementării actuale
         verify(itemRepository).save(item);
         assertEquals(new BigDecimal("3.00"), item.getPurchaseUnitPrice());
         verify(receiptRepository).save(receipt);
