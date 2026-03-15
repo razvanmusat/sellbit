@@ -54,7 +54,7 @@ public class Receipt {
     private User user;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "warehouse_id", nullable = false)
+    @JoinColumn(name = "warehouse_id")
     private Warehouse warehouse;
 
     @ManyToOne(fetch = FetchType.LAZY)

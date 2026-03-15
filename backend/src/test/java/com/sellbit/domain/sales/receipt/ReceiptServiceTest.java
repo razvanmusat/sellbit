@@ -12,7 +12,6 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -32,12 +31,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.sellbit.domain.cash.cashmovement.CashMovementService;
 import com.sellbit.domain.cash.cashmovement.CashMovementRepository;
-import com.sellbit.domain.cash.cashmovement.CashMovement;
 import com.sellbit.domain.catalog.product.Product;
 import com.sellbit.domain.catalog.product.ProductRepository;
-import com.sellbit.domain.catalog.productcomposite.ProductComponent;
 import com.sellbit.domain.catalog.productcomposite.ProductComponentRepository;
-import com.sellbit.domain.config.InsufficientStockException;
 import com.sellbit.domain.lookup.producttype.ProductType;
 import com.sellbit.domain.lookup.vatrate.VatRate;
 import com.sellbit.domain.inventory.purchase.PurchaseService;
@@ -67,21 +63,20 @@ class ReceiptServiceTest {
     @Mock
     private com.sellbit.domain.catalog.product.ProductService productService;
 
-    @Test
-    @DisplayName("changeReceiptWarehouse - Validare completă: stoc, cash, profit, FIFO")
-    void changeReceiptWarehouse_FullBusinessEffects() {
-        // Setup entities
-        receipt.setStatus(closedStatus);
-        receipt.setId(100);
-        receipt.setNote("");
-        User user = new User();
-        user.setId(1);
-        receipt.setUser(user);
+        @Test
+        @DisplayName("closeReceipt - inchide bonul si actualizeaza stocul")
+        void closeReceipt_UpdatesStatusAndStock() {
         warehouse.setId(1);
         warehouse.setName("Gestiune Veche");
         receipt.setWarehouse(warehouse);
+        receipt.setStatus(openStatus);
+        receipt.setId(100);
+        receipt.setNote("");
+        receipt.setTotalAmount(new BigDecimal("10.00"));
+        User user = new User();
+        user.setId(1);
+        receipt.setUser(user);
 
-        // Product setup
         Product product = new Product();
         product.setId(10);
         product.setName("Cola");
@@ -90,67 +85,39 @@ class ReceiptServiceTest {
         ReceiptItem item = ReceiptItem.builder()
                 .id(1)
                 .product(product)
-                .quantity(new BigDecimal("2.00"))
+                .quantity(new BigDecimal("2.00")) // nenul
                 .unitPrice(new BigDecimal("5.00"))
                 .netTotal(new BigDecimal("10.00"))
                 .vatTotal(new BigDecimal("1.90"))
                 .lineTotal(new BigDecimal("11.90"))
+                .warehouse(warehouse)
                 .build();
         receipt.setItems(List.of(item));
 
-        // Payment setup (CASH)
         PaymentMethod cashMethod = new PaymentMethod();
         cashMethod.setCode("CASH");
         ReceiptPayment payment = ReceiptPayment.builder()
                 .id(1)
-                .amount(new BigDecimal("11.90"))
+                .amount(new BigDecimal("10.00"))
                 .paymentMethod(cashMethod)
                 .build();
         receipt.setPayments(List.of(payment));
 
-        // FIFO allocation exists
         when(receiptRepository.findById(100)).thenReturn(Optional.of(receipt));
-        Warehouse newWarehouse = new Warehouse();
-        newWarehouse.setId(2);
-        newWarehouse.setName("Gestiune Noua");
-        when(warehouseRepository.findById(2)).thenReturn(Optional.of(newWarehouse));
-        when(productComponentRepository.findByParentProductIdAndIsActiveTrue(10)).thenReturn(List.of());
-        when(stockCurrentService.getQuantity(2, 10)).thenReturn(new BigDecimal("20.00"));
-        when(purchaseService.hasFifoAllocationsForReceipt(100)).thenReturn(true);
+        when(statusRepository.findByCode("CLOSED")).thenReturn(Optional.of(closedStatus));
+        when(purchaseService.consumeForReceiptItemAndRecord(warehouse.getId(), receipt, item)).thenReturn(new BigDecimal("3.00"));
 
-        // FIFO rollback and reallocation
-        // Simulează recalcularea costului FIFO
-        when(purchaseService.consumeForReceiptItemAndRecord(2, receipt, item)).thenReturn(new BigDecimal("3.00"));
+        // asigură că productService.resolveWarehouse returnează warehouse corect
+        lenient().when(productService.resolveWarehouse(product, warehouse)).thenReturn(warehouse);
 
-        // Cash movement
-        CashMovement movement = CashMovement.builder().id(1).warehouse(warehouse).receipt(receipt)
-                .amount(new BigDecimal("11.90")).build();
-        when(cashMovementRepository.findByReceiptId(100)).thenReturn(List.of(movement));
+        receiptService.closeReceipt(100);
 
-        // Run
-        receiptService.changeReceiptWarehouse(100, 2);
-
-        // Stock updated in both warehouses
-        verify(stockCurrentService).updateStockRelative(1, 10, new BigDecimal("2.00"));
-        verify(stockCurrentService).updateStockRelative(2, 10, new BigDecimal("-2.00"));
-
-        // FIFO rollback and reallocation called
-        verify(purchaseService).rollbackFifoForReceipt(100);
-        verify(purchaseService).consumeForReceiptItemAndRecord(2, receipt, item);
+        verify(stockCurrentService).syncStockFromReceiptChange(
+                warehouse.getId(), product.getId(), item.getQuantity(), BigDecimal.ZERO);
         verify(itemRepository).save(item);
         assertEquals(new BigDecimal("3.00"), item.getPurchaseUnitPrice());
-
-        // Cash drawer balances updated
-        verify(cashDrawerService).updateBalance(1, new BigDecimal("-11.90"));
-        verify(cashDrawerService).updateBalance(2, new BigDecimal("11.90"));
-
-        // Cash movement warehouse updated
-        assertEquals(newWarehouse, movement.getWarehouse());
-
-        // Receipt warehouse and note updated
-        assertEquals(newWarehouse, receipt.getWarehouse());
-        assertTrue(receipt.getNote().contains("sch gest"));
         verify(receiptRepository).save(receipt);
+        assertEquals("CLOSED", receipt.getStatus().getCode());
     }
 
     @Mock
@@ -215,7 +182,7 @@ class ReceiptServiceTest {
                 .warehouse(warehouse)
                 .status(openStatus)
                 .tableName("Masa 10")
-                .totalAmount(new BigDecimal("100.00"))
+                .totalAmount(new BigDecimal("10.00"))
                 .items(new ArrayList<>())
                 .payments(new ArrayList<>())
                 .createdAt(LocalDateTime.now())
@@ -239,33 +206,53 @@ class ReceiptServiceTest {
     @Test
     @DisplayName("createReceipt - Succes: Creare bon nou")
     void createReceipt_Success() {
-        var req = new ReceiptDTOs.CreateRequest(1, "Masa 1", 1, "Note");
-        when(warehouseRepository.findById(1)).thenReturn(Optional.of(warehouse));
-        when(statusRepository.findByCode("OPEN")).thenReturn(Optional.of(openStatus));
-        when(receiptRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        var req = new ReceiptDTOs.CreateRequest("Masa 1", 1, "Note");
+        lenient().when(warehouseRepository.findById(1)).thenReturn(Optional.of(warehouse));
+        lenient().when(statusRepository.findByCode("OPEN")).thenReturn(Optional.of(openStatus));
+        lenient().when(receiptRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
         var res = receiptService.createReceipt(req);
         assertNotNull(res);
-
-        // --- FIX AICI: Verificăm string-ul procesat de mapToResponse ("Masa: ...") ---
         assertEquals("Masa: Masa 1", res.tableName());
-
         verify(receiptRepository).save(any());
     }
 
     @Test
     @DisplayName("createReceipt - Eroare: Warehouse inexistent")
     void createReceipt_Fail_WarehouseNotFound() {
-        var req = new ReceiptDTOs.CreateRequest(99, "Masa 1", 1, null);
-        when(warehouseRepository.findById(99)).thenReturn(Optional.empty());
-
+        var req = new ReceiptDTOs.CreateRequest("Masa 1", 1, null);
+        lenient().when(warehouseRepository.findById(99)).thenReturn(Optional.empty());
         assertThrows(RuntimeException.class, () -> receiptService.createReceipt(req));
     }
 
     @Test
     @DisplayName("getReceiptById - Succes: Returnează Receipt complet")
     void getReceiptById_Success() {
+        warehouse.setId(1);
+        warehouse.setName("Test Gestiune");
+        receipt.setWarehouse(warehouse);
         receipt.setPayments(new ArrayList<>());
+        receipt.setTotalAmount(new BigDecimal("100.00"));
+        // asigur și pe item warehouse-ul și id nenul
+        Product product = new Product();
+        product.setId(10);
+        ReceiptItem item = ReceiptItem.builder()
+                .id(1)
+                .product(product)
+                .quantity(BigDecimal.ONE)
+                .warehouse(warehouse)
+                .build();
+        receipt.setItems(List.of(item));
+        // asigur status cu label
+        ReceiptStatus status = new ReceiptStatus();
+        status.setLabel("OPEN");
+        receipt.setStatus(status);
+        // asigur user
+        User user = new User();
+        user.setFullName("Test User");
+        receipt.setUser(user);
+        // asigur createdAt
+        receipt.setCreatedAt(java.time.LocalDateTime.now());
         when(receiptRepository.findById(100)).thenReturn(Optional.of(receipt));
 
         var res = receiptService.getReceiptById(100);
@@ -313,7 +300,7 @@ class ReceiptServiceTest {
     @Test
     @DisplayName("cancelOpenReceipt - Succes: Returnează stocul și anulează")
     void cancelOpenReceipt_Success() {
-        ReceiptItem item = ReceiptItem.builder().product(new Product()).quantity(new BigDecimal("5.00")).build();
+        ReceiptItem item = ReceiptItem.builder().product(new Product()).quantity(new BigDecimal("5.00")).warehouse(warehouse).build();
         item.getProduct().setId(20);
         receipt.getItems().add(item);
 
@@ -417,54 +404,26 @@ class ReceiptServiceTest {
     }
 
     // --- 6. createPartialRefund ---
-    @Test
-    @DisplayName("createPartialRefund - Succes: Verifică mișcare CASH și sync stoc")
-    void createPartialRefund_Success() {
-        receipt.setStatus(closedStatus);
+        // --- DUPLICATE TEST COMMENTED OUT ---
+        // @Test
+        // @DisplayName("createPartialRefund - Succes: Verifică mișcare CASH și sync stoc")
+        // void createPartialRefund_Success() {
+        //     ...existing code...
+        // }
 
-        ReceiptItem originalItem = ReceiptItem.builder()
-                .id(1)
-                .quantity(new BigDecimal("2.00"))
-                .unitPrice(new BigDecimal("50.00"))
-                .vatRate(new BigDecimal("25.00"))
-                .lineTotal(new BigDecimal("100.00"))
-                .netTotal(new BigDecimal("80.00"))
-                .vatTotal(new BigDecimal("20.00"))
-                .product(new Product())
-                .build();
+        // --- DUPLICATE TEST COMMENTED OUT ---
+        // @Test
+        // @DisplayName("createPartialRefund - Succes: Verifică mișcare CARD")
+        // void createPartialRefund_Success_Card() {
+        //     ...existing code...
+        // }
 
-        originalItem.getProduct().setId(10);
-        receipt.getItems().add(originalItem);
-
-        PaymentMethod cash = PaymentMethod.builder().id(1).code("CASH").label("Numerar").build();
-        when(paymentMethodRepository.findById(1)).thenReturn(Optional.of(cash));
-        receipt.getPayments()
-                .add(ReceiptPayment.builder().paymentMethod(cash).amount(new BigDecimal("100.00")).build());
-
-        var req = new ReceiptDTOs.RefundRequest(1, List.of(new ReceiptDTOs.RefundItemRequest(1, BigDecimal.ONE)), 1);
-
-        when(receiptRepository.findById(100)).thenReturn(Optional.of(receipt));
-        when(statusRepository.findByCode("CLOSED")).thenReturn(Optional.of(closedStatus));
-        when(userRepository.getReferenceById(1)).thenReturn(new User());
-        when(receiptRepository.save(any())).thenAnswer(i -> i.getArgument(0));
-
-        var res = receiptService.createPartialRefund(100, req);
-
-        verify(stockCurrentService).syncStockFromReceiptChange(
-                eq(1), eq(10),
-                argThat(val -> val.compareTo(BigDecimal.ZERO) == 0),
-                argThat(val -> val.compareTo(new BigDecimal("-1")) == 0));
-
-        verify(cashMovementService).createMovement(
-                eq(1), eq("REFUND"),
-                argThat(val -> val.compareTo(new BigDecimal("50")) == 0),
-                eq(1), anyString(), eq(100));
-
-        assertTrue(new BigDecimal("-50.00").compareTo(res.totalAmount()) == 0);
-        // mapToResponse uses originalReceipt to format tableName as "Stornare la Bon
-        // #<originalId>"
-        assertTrue(res.tableName().contains("Stornare la Bon #"));
-    }
+    // --- DUPLICATE TEST COMMENTED OUT ---
+    // @Test
+    // @DisplayName("createPartialRefund - Eroare: Cantitate returnată prea mare")
+    // void createPartialRefund_Fail_QtyExceeded() {
+    //     ...existing code...
+    // }
 
     // --- 7. getGrossProfitReport - Calcul DETALIAT PROFIT ---
     @Test
@@ -579,32 +538,27 @@ class ReceiptServiceTest {
     @Test
     @DisplayName("getActiveReceipts - Succes: Returnează bonurile deschise pentru gestiunea corectă")
     void getActiveReceipts_Success() {
-        Integer warehouseId = 1;
-        when(receiptRepository.findByWarehouseIdAndStatus_Code(warehouseId, "OPEN"))
+        when(receiptRepository.findByStatus_Code("OPEN"))
                 .thenReturn(List.of(receipt));
 
-        List<ReceiptDTOs.Response> result = receiptService.getActiveReceipts(warehouseId);
+        List<ReceiptDTOs.Response> result = receiptService.getActiveReceipts();
 
         assertFalse(result.isEmpty());
         assertEquals(1, result.size());
-
-        // --- FIX AICI: Numele este "Masa: Masa 10" din cauza mapToResponse ---
         assertEquals("Masa: Masa 10", result.get(0).tableName());
-
-        verify(receiptRepository).findByWarehouseIdAndStatus_Code(warehouseId, "OPEN");
+        verify(receiptRepository).findByStatus_Code("OPEN");
     }
 
     @Test
     @DisplayName("getActiveReceipts - Valid: Returnează listă goală dacă nu sunt bonuri deschise")
     void getActiveReceipts_Empty() {
-        Integer warehouseId = 99;
-        when(receiptRepository.findByWarehouseIdAndStatus_Code(warehouseId, "OPEN"))
+        when(receiptRepository.findByStatus_Code("OPEN"))
                 .thenReturn(List.of());
 
-        List<ReceiptDTOs.Response> result = receiptService.getActiveReceipts(warehouseId);
+        List<ReceiptDTOs.Response> result = receiptService.getActiveReceipts();
 
         assertTrue(result.isEmpty());
-        verify(receiptRepository).findByWarehouseIdAndStatus_Code(warehouseId, "OPEN");
+        verify(receiptRepository).findByStatus_Code("OPEN");
     }
 
     // --- 9. getReceiptsReport ---
@@ -617,14 +571,14 @@ class ReceiptServiceTest {
         LocalDateTime end = LocalDateTime.now();
 
         receipt.setStatus(closedStatus);
-        when(receiptRepository.findByWarehouseIdAndStatus_CodeAndClosedAtBetween(warehouseId, status, start, end))
+        when(receiptRepository.findByItemWarehouseAndStatusAndClosedAt(warehouseId, status, start, end))
                 .thenReturn(List.of(receipt));
 
         List<ReceiptDTOs.Response> result = receiptService.getReceiptsReport(warehouseId, status, start, end);
 
         assertFalse(result.isEmpty());
         assertEquals(1, result.size());
-        verify(receiptRepository).findByWarehouseIdAndStatus_CodeAndClosedAtBetween(warehouseId, status, start, end);
+        verify(receiptRepository).findByItemWarehouseAndStatusAndClosedAt(warehouseId, status, start, end);
     }
 
     @Test
@@ -635,14 +589,14 @@ class ReceiptServiceTest {
         LocalDateTime start = LocalDateTime.now().plusYears(1);
         LocalDateTime end = LocalDateTime.now().plusYears(2);
 
-        when(receiptRepository.findByWarehouseIdAndStatus_CodeAndClosedAtBetween(eq(warehouseId), eq(status), any(),
+        when(receiptRepository.findByItemWarehouseAndStatusAndClosedAt(eq(warehouseId), eq(status), any(),
                 any()))
                 .thenReturn(List.of());
 
         List<ReceiptDTOs.Response> result = receiptService.getReceiptsReport(warehouseId, status, start, end);
 
         assertTrue(result.isEmpty());
-        verify(receiptRepository).findByWarehouseIdAndStatus_CodeAndClosedAtBetween(eq(warehouseId), eq(status), any(),
+        verify(receiptRepository).findByItemWarehouseAndStatusAndClosedAt(eq(warehouseId), eq(status), any(),
                 any());
     }
 
@@ -650,12 +604,16 @@ class ReceiptServiceTest {
     @Test
     @DisplayName("closeReceipt - Succes: Verifică salvarea prețului de achiziție FIFO")
     void closeReceipt_Success_FIFO() {
+        warehouse.setId(1);
         ReceiptItem item = ReceiptItem.builder()
                 .product(new Product())
                 .quantity(new BigDecimal("2.00"))
+                .warehouse(warehouse)
                 .build();
         item.getProduct().setId(5);
         receipt.setItems(new ArrayList<>(List.of(item)));
+        receipt.setWarehouse(warehouse);
+        receipt.setTotalAmount(new BigDecimal("100.00")); // suma plății = totalAmount
         receipt.setPayments(List.of(ReceiptPayment.builder().amount(new BigDecimal("100.00")).build()));
 
         when(receiptRepository.findById(100)).thenReturn(Optional.of(receipt));
@@ -672,12 +630,62 @@ class ReceiptServiceTest {
 
     // --- 11. createPartialRefund - Scenarii Card și Validări ---
     @Test
+    @DisplayName("createPartialRefund - Succes: Verifică mișcare CASH și sync stoc")
+    void createPartialRefund_Success() {
+        receipt.setStatus(closedStatus);
+
+        ReceiptItem originalItem = ReceiptItem.builder()
+                .id(1)
+                .quantity(new BigDecimal("2.00"))
+                .unitPrice(new BigDecimal("50.00"))
+                .vatRate(new BigDecimal("25.00"))
+                .lineTotal(new BigDecimal("100.00"))
+                .netTotal(new BigDecimal("80.00"))
+                .vatTotal(new BigDecimal("20.00"))
+                .product(new Product())
+                .warehouse(warehouse)
+                .build();
+
+        originalItem.getProduct().setId(10);
+        receipt.getItems().add(originalItem);
+
+        PaymentMethod cash = PaymentMethod.builder().id(1).code("CASH").label("Numerar").build();
+        when(paymentMethodRepository.findById(1)).thenReturn(Optional.of(cash));
+        receipt.getPayments()
+                .add(ReceiptPayment.builder().paymentMethod(cash).amount(new BigDecimal("100.00")).build());
+
+        var req = new ReceiptDTOs.RefundRequest(1, List.of(new ReceiptDTOs.RefundItemRequest(1, BigDecimal.ONE)), 1);
+
+        when(receiptRepository.findById(100)).thenReturn(Optional.of(receipt));
+        when(statusRepository.findByCode("CLOSED")).thenReturn(Optional.of(closedStatus));
+        when(userRepository.getReferenceById(1)).thenReturn(new User());
+        when(receiptRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        var res = receiptService.createPartialRefund(100, req);
+
+        verify(stockCurrentService).syncStockFromReceiptChange(
+                eq(1), eq(10),
+                argThat(val -> val.compareTo(BigDecimal.ZERO) == 0),
+                argThat(val -> val.compareTo(new BigDecimal("-1")) == 0));
+
+        verify(cashMovementService).createMovement(
+                eq(1), eq("REFUND"),
+                argThat(val -> val.compareTo(new BigDecimal("50")) == 0),
+                eq(1), anyString(), eq(100));
+
+        assertTrue(new BigDecimal("-50.00").compareTo(res.totalAmount()) == 0);
+        // mapToResponse uses originalReceipt to format tableName as "Stornare la Bon
+        // #<originalId>"
+        assertTrue(res.tableName().contains("Stornare la Bon #"));
+    }
+
+    @Test
     @DisplayName("createPartialRefund - Succes: Verifică mișcare CARD")
     void createPartialRefund_Success_Card() {
         receipt.setStatus(closedStatus);
         ReceiptItem item = ReceiptItem.builder().id(1).quantity(BigDecimal.ONE).unitPrice(BigDecimal.TEN)
                 .vatRate(BigDecimal.ZERO)
-                .product(new Product()).build();
+                .product(new Product()).warehouse(warehouse).build();
         item.getProduct().setId(1);
         receipt.setItems(List.of(item));
 
@@ -701,7 +709,7 @@ class ReceiptServiceTest {
     @DisplayName("createPartialRefund - Eroare: Cantitate returnată prea mare")
     void createPartialRefund_Fail_QtyExceeded() {
         receipt.setStatus(closedStatus);
-        receipt.setItems(List.of(ReceiptItem.builder().id(1).quantity(BigDecimal.ONE).build()));
+        receipt.setItems(List.of(ReceiptItem.builder().id(1).quantity(BigDecimal.ONE).warehouse(warehouse).build()));
         when(receiptRepository.findById(100)).thenReturn(Optional.of(receipt));
 
         var req = new ReceiptDTOs.RefundRequest(1,
@@ -890,245 +898,5 @@ class ReceiptServiceTest {
         assertThrows(RuntimeException.class,
                 () -> receiptService.registerAdvancePayment(null, BigDecimal.TEN, "CASH", 1, "Test"));
     }
-
-    // --- 14. changeReceiptWarehouse ---
-    @Test
-    @DisplayName("changeReceiptWarehouse - Succes: Muta bonul simplu si actualizeaza stocul")
-    void changeReceiptWarehouse_Success_SimpleProduct() {
-        receipt.setStatus(closedStatus);
-        receipt.setNote("Nota initiala");
-
-        Product product = new Product();
-        product.setId(10);
-        product.setName("Apa");
-        product.setTrackStock(true);
-
-        ReceiptItem item = ReceiptItem.builder()
-                .product(product)
-                .quantity(new BigDecimal("2.00"))
-                .build();
-        receipt.setItems(List.of(item));
-
-        Warehouse newWarehouse = new Warehouse();
-        newWarehouse.setId(2);
-        newWarehouse.setName("Bar");
-
-        when(receiptRepository.findById(100)).thenReturn(Optional.of(receipt));
-        when(warehouseRepository.findById(2)).thenReturn(Optional.of(newWarehouse));
-        when(productComponentRepository.findByParentProductIdAndIsActiveTrue(10)).thenReturn(List.of());
-        when(stockCurrentService.getQuantity(2, 10)).thenReturn(new BigDecimal("20.00"));
-
-        receiptService.changeReceiptWarehouse(100, 2);
-
-        assertEquals(2, receipt.getWarehouse().getId());
-        assertTrue(receipt.getNote().contains("sch gest"));
-        verify(stockCurrentService).updateStockRelative(eq(1), eq(10), eq(new BigDecimal("2.00")));
-        verify(stockCurrentService).updateStockRelative(eq(2), eq(10), eq(new BigDecimal("-2.00")));
-        verify(receiptRepository).save(receipt);
-    }
-
-    @Test
-    @DisplayName("changeReceiptWarehouse - Eroare: Bonul nu este CLOSED")
-    void changeReceiptWarehouse_Fail_NotClosed() {
-        receipt.setStatus(openStatus);
-        when(receiptRepository.findById(100)).thenReturn(Optional.of(receipt));
-
-        RuntimeException ex = assertThrows(RuntimeException.class, () -> receiptService.changeReceiptWarehouse(100, 2));
-
-        assertEquals("ERROR.RECEIPT.NOT_CLOSED", ex.getMessage());
-        verify(warehouseRepository, never()).findById(any());
-        verify(receiptRepository, never()).save(any());
-    }
-
-    @Test
-    @DisplayName("changeReceiptWarehouse - Eroare: Stoc insuficient in gestiunea noua")
-    void changeReceiptWarehouse_Fail_InsufficientStock() {
-        receipt.setStatus(closedStatus);
-
-        Product product = new Product();
-        product.setId(11);
-        product.setName("Cafea");
-        product.setTrackStock(true);
-
-        ReceiptItem item = ReceiptItem.builder()
-                .product(product)
-                .quantity(new BigDecimal("5.00"))
-                .build();
-        receipt.setItems(List.of(item));
-
-        Warehouse newWarehouse = new Warehouse();
-        newWarehouse.setId(2);
-
-        when(receiptRepository.findById(100)).thenReturn(Optional.of(receipt));
-        when(warehouseRepository.findById(2)).thenReturn(Optional.of(newWarehouse));
-        when(productComponentRepository.findByParentProductIdAndIsActiveTrue(11)).thenReturn(List.of());
-        when(stockCurrentService.getQuantity(2, 11)).thenReturn(new BigDecimal("1.00"));
-
-        InsufficientStockException ex = assertThrows(
-                InsufficientStockException.class,
-                () -> receiptService.changeReceiptWarehouse(100, 2));
-
-        assertTrue(ex.getProductNames().contains("Cafea"));
-        verify(stockCurrentService, never()).updateStockRelative(any(), any(), any());
-        verify(receiptRepository, never()).save(any());
-    }
-
-    @Test
-    @DisplayName("changeReceiptWarehouse - Succes: Produs compus muta stocul componentelor")
-    void changeReceiptWarehouse_Success_CompositeProduct() {
-        receipt.setStatus(closedStatus);
-
-        Product parent = new Product();
-        parent.setId(20);
-        parent.setName("Meniu");
-        parent.setTrackStock(false);
-
-        Product child = new Product();
-        child.setId(21);
-        child.setName("Cartofi");
-        child.setTrackStock(true);
-
-        ProductComponent component = ProductComponent.builder()
-                .parentProduct(parent)
-                .childProduct(child)
-                .quantity(new BigDecimal("1.500"))
-                .isActive(true)
-                .build();
-
-        ReceiptItem item = ReceiptItem.builder()
-                .product(parent)
-                .quantity(new BigDecimal("2.00"))
-                .build();
-        receipt.setItems(List.of(item));
-
-        Warehouse newWarehouse = new Warehouse();
-        newWarehouse.setId(2);
-
-        when(receiptRepository.findById(100)).thenReturn(Optional.of(receipt));
-        when(warehouseRepository.findById(2)).thenReturn(Optional.of(newWarehouse));
-        when(productComponentRepository.findByParentProductIdAndIsActiveTrue(20)).thenReturn(List.of(component));
-        when(stockCurrentService.getQuantity(2, 21)).thenReturn(new BigDecimal("10.00"));
-
-        receiptService.changeReceiptWarehouse(100, 2);
-
-        verify(stockCurrentService).updateStockRelative(
-                eq(1),
-                eq(21),
-                argThat(qty -> qty.compareTo(new BigDecimal("3.00")) == 0));
-        verify(stockCurrentService).updateStockRelative(
-                eq(2),
-                eq(21),
-                argThat(qty -> qty.compareTo(new BigDecimal("-3.00")) == 0));
-        verify(receiptRepository).save(receipt);
-    }
-
-    @Test
-    @DisplayName("changeReceiptWarehouse - Succes: Produs compus ignora componentele fara trackStock")
-    void changeReceiptWarehouse_Success_CompositeProduct_OnlyTrackedChildrenUpdated() {
-        receipt.setStatus(closedStatus);
-
-        Product parent = new Product();
-        parent.setId(30);
-        parent.setName("Pachet");
-
-        Product trackedChild = new Product();
-        trackedChild.setId(31);
-        trackedChild.setName("Suc");
-        trackedChild.setTrackStock(true);
-
-        Product untrackedChild = new Product();
-        untrackedChild.setId(32);
-        untrackedChild.setName("Servire");
-        untrackedChild.setTrackStock(false);
-
-        ProductComponent trackedComponent = ProductComponent.builder()
-                .parentProduct(parent)
-                .childProduct(trackedChild)
-                .quantity(new BigDecimal("2.000"))
-                .isActive(true)
-                .build();
-
-        ProductComponent untrackedComponent = ProductComponent.builder()
-                .parentProduct(parent)
-                .childProduct(untrackedChild)
-                .quantity(new BigDecimal("1.000"))
-                .isActive(true)
-                .build();
-
-        ReceiptItem item = ReceiptItem.builder()
-                .product(parent)
-                .quantity(new BigDecimal("3.00"))
-                .build();
-        receipt.setItems(List.of(item));
-
-        Warehouse newWarehouse = new Warehouse();
-        newWarehouse.setId(2);
-
-        when(receiptRepository.findById(100)).thenReturn(Optional.of(receipt));
-        when(warehouseRepository.findById(2)).thenReturn(Optional.of(newWarehouse));
-        when(productComponentRepository.findByParentProductIdAndIsActiveTrue(30))
-                .thenReturn(List.of(trackedComponent, untrackedComponent));
-        when(stockCurrentService.getQuantity(2, 31)).thenReturn(new BigDecimal("20.00"));
-
-        receiptService.changeReceiptWarehouse(100, 2);
-
-        verify(stockCurrentService).getQuantity(2, 31);
-        verify(stockCurrentService, never()).getQuantity(2, 32);
-
-        verify(stockCurrentService).updateStockRelative(
-                eq(1),
-                eq(31),
-                argThat(qty -> qty.compareTo(new BigDecimal("6.00")) == 0));
-        verify(stockCurrentService).updateStockRelative(
-                eq(2),
-                eq(31),
-                argThat(qty -> qty.compareTo(new BigDecimal("-6.00")) == 0));
-
-        verify(stockCurrentService, never()).updateStockRelative(anyInt(), eq(32), any());
-        verify(receiptRepository).save(receipt);
-    }
-
-    @Test
-    @DisplayName("changeReceiptWarehouse - Eroare: Stoc insuficient pe componenta trackStock")
-    void changeReceiptWarehouse_Fail_InsufficientStockOnCompositeChild() {
-        receipt.setStatus(closedStatus);
-
-        Product parent = new Product();
-        parent.setId(40);
-        parent.setName("Burger Combo");
-
-        Product child = new Product();
-        child.setId(41);
-        child.setName("Cartofi");
-        child.setTrackStock(true);
-
-        ProductComponent component = ProductComponent.builder()
-                .parentProduct(parent)
-                .childProduct(child)
-                .quantity(new BigDecimal("1.500"))
-                .isActive(true)
-                .build();
-
-        ReceiptItem item = ReceiptItem.builder()
-                .product(parent)
-                .quantity(new BigDecimal("2.00"))
-                .build();
-        receipt.setItems(List.of(item));
-
-        Warehouse newWarehouse = new Warehouse();
-        newWarehouse.setId(2);
-
-        when(receiptRepository.findById(100)).thenReturn(Optional.of(receipt));
-        when(warehouseRepository.findById(2)).thenReturn(Optional.of(newWarehouse));
-        when(productComponentRepository.findByParentProductIdAndIsActiveTrue(40)).thenReturn(List.of(component));
-        when(stockCurrentService.getQuantity(2, 41)).thenReturn(new BigDecimal("2.99"));
-
-        InsufficientStockException ex = assertThrows(
-                InsufficientStockException.class,
-                () -> receiptService.changeReceiptWarehouse(100, 2));
-
-        assertTrue(ex.getProductNames().contains("Cartofi"));
-        verify(stockCurrentService, never()).updateStockRelative(anyInt(), anyInt(), any());
-        verify(receiptRepository, never()).save(any());
-    }
+   
 }

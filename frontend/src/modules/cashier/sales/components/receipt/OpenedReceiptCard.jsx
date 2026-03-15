@@ -1,214 +1,451 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom'; 
-import PropTypes from 'prop-types';
-import { 
-  Box, 
-  Typography, 
-  Button, 
-  Paper, 
-  Tabs, 
-  Tab, 
-  IconButton, 
-  useTheme, 
-  useMediaQuery, 
-} from '@mui/material';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import SearchIcon from '@mui/icons-material/Search';
-import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner';
-import CategoryIcon from '@mui/icons-material/Category';
-import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import PropTypes from "prop-types";
+import {
+  Box,
+  Typography,
+  Button,
+  Paper,
+  Tabs,
+  Tab,
+  IconButton,
+  useTheme,
+  useMediaQuery,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  List,
+  ListItemButton,
+  CircularProgress,
+} from "@mui/material";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import SearchIcon from "@mui/icons-material/Search";
+import QrCodeScannerIcon from "@mui/icons-material/QrCodeScanner";
+import CategoryIcon from "@mui/icons-material/Category";
+import DeleteForeverIcon from "@mui/icons-material/DeleteForever";
+import AllInclusiveIcon from "@mui/icons-material/AllInclusive";
 
-// Importuri locale
-import ProductCard from './ProductCard';
-import ProductSearch from '../common/ProductSearch';
-import ProductScanner from '../common/ProductScanner';
+import ProductCard from "./ProductCard";
+import ProductSearch from "../common/ProductSearch";
+import ProductScanner from "../common/ProductScanner";
+import { StockCurrentService } from "../../api/StockCurrentService";
 
-/**
- * Componenta detaliată pentru un bon deschis.
- */
-const OpenedReceiptCard = ({ 
-  receipt, 
-  onBack, 
-  onAddPayment, 
-  onAddProduct, 
-  onUpdateItem, 
-  onRemoveItem, 
-  onCancelReceipt 
+const OpenedReceiptCard = ({
+  receipt,
+  warehouses,
+  onBack,
+  onAddPayment,
+  onAddProduct,
+  onUpdateItem,
+  onRemoveItem,
+  onCancelReceipt,
 }) => {
   const [currentTab, setCurrentTab] = useState(0);
   const theme = useTheme();
-  const navigate = useNavigate(); 
-  
-  const isSmallScreen = useMediaQuery(theme.breakpoints.down('sm'));
+  const navigate = useNavigate();
+  const isSmallScreen = useMediaQuery(theme.breakpoints.down("sm"));
 
-  // --- HANDLER NAVIGARE ---
-  const handleTabChange = (event, newValue) => {
-    // 1. Dacă utilizatorul apasă pe tab-ul "Categorii" (index 2)
-    if (newValue === 2) {
-        // 2. Construim parametrii URL (Safe & Bulletproof)
-        const params = new URLSearchParams({
-            receiptId: receipt.id,
-            warehouseId: receipt.warehouseId,
-            tableName: receipt.tableName
-        }).toString();
+  // Picker gestiune
+  const [pendingProduct, setPendingProduct] = useState(null);
+  const [warehousePickerOpen, setWarehousePickerOpen] = useState(false);
 
-        // 3. Facem redirect către pagina Full Screen cu parametrii în URL
-        navigate(`/sales/catalog?${params}`);
-        return; // Nu schimbăm tab-ul local, plecăm de pe pagină
+  // Stocuri per gestiune pentru produsul pending
+  // { [warehouseId]: quantity | null (loading) }
+  const [stockPerWarehouse, setStockPerWarehouse] = useState({});
+  const [stockLoading, setStockLoading] = useState(false);
+
+  // Când se deschide picker-ul, încărcăm stocul produsului pe fiecare gestiune
+  useEffect(() => {
+    if (!pendingProduct || !warehousePickerOpen) {
+      setStockPerWarehouse({});
+      return;
     }
 
-    // Altfel, schimbăm tab-ul local (Search / Scan)
+    // Produse fără trackStock → nu facem call-uri
+    if (pendingProduct.trackStock === false) return;
+
+    setStockLoading(true);
+
+    // Un call per gestiune — sunt max 3-4 gestiuni, e neglijabil
+    Promise.all(
+      warehouses.map((w) =>
+        StockCurrentService.getProductStockLive(w.id, pendingProduct.id)
+          .then((qty) => ({ warehouseId: w.id, qty: Number(qty) }))
+          .catch(() => ({ warehouseId: w.id, qty: 0 })),
+      ),
+    )
+      .then((results) => {
+        const map = {};
+        results.forEach(({ warehouseId, qty }) => {
+          map[warehouseId] = qty;
+        });
+        setStockPerWarehouse(map);
+      })
+      .finally(() => setStockLoading(false));
+  }, [pendingProduct, warehousePickerOpen, warehouses]);
+
+  const handleTabChange = (event, newValue) => {
+    if (newValue === 2) {
+      const params = new URLSearchParams({
+        receiptId: receipt.id,
+        tableName: receipt.tableName,
+      }).toString();
+      navigate(`/sales/catalog?${params}`);
+      return;
+    }
     setCurrentTab(newValue);
   };
 
+  const handleProductSelect = (product) => {
+    if (warehouses.length === 1) {
+      onAddProduct(product, warehouses[0].id);
+      return;
+    }
+    setPendingProduct(product);
+    setWarehousePickerOpen(true);
+  };
+
+  const handleWarehousePick = (warehouseId) => {
+    if (pendingProduct) {
+      onAddProduct(pendingProduct, warehouseId);
+    }
+    setPendingProduct(null);
+    setWarehousePickerOpen(false);
+    setStockPerWarehouse({});
+  };
+
+  const handlePickerClose = () => {
+    setPendingProduct(null);
+    setWarehousePickerOpen(false);
+    setStockPerWarehouse({});
+  };
+
+  const handleMoveToWarehouse = async (
+    receiptItemId,
+    productId,
+    quantity,
+    newWarehouseId,
+  ) => {
+    await onRemoveItem(receiptItemId);
+    onAddProduct({ id: productId }, newWarehouseId, quantity);
+  };
+
   const items = (receipt.items || [])
-    .filter(item => item != null)
+    .filter((item) => item != null)
     .slice()
-    .sort((a, b) => (a.receiptItemId || 0) - (b.receiptItemId || 0)); 
+    .sort((a, b) => (a.receiptItemId || 0) - (b.receiptItemId || 0));
 
   return (
-    <Paper 
-      elevation={3} 
-      sx={{ 
-        p: { xs: 1, sm: 2 }, 
-        display: 'flex', 
-        flexDirection: 'column', 
-        height: '85vh', 
-        maxHeight: '100%',
-        borderRadius: { xs: 0, sm: 2 } 
+    <Paper
+      elevation={3}
+      sx={{
+        p: { xs: 1, sm: 2 },
+        display: "flex",
+        flexDirection: "column",
+        height: "85vh",
+        maxHeight: "100%",
+        borderRadius: { xs: 0, sm: 2 },
       }}
     >
       {/* --- HEADER --- */}
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 1, borderBottom: 1, borderColor: 'divider', pb: 1 }}>
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          mb: 1,
+          borderBottom: 1,
+          borderColor: "divider",
+          pb: 1,
+        }}
+      >
         <IconButton onClick={onBack} size={isSmallScreen ? "small" : "medium"}>
           <ArrowBackIcon />
         </IconButton>
         <Box sx={{ ml: 1, flex: 1, minWidth: 0 }}>
-          <Typography 
-            variant={isSmallScreen ? "h6" : "h5"} 
-            fontWeight="bold" 
-            sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+          <Typography
+            variant={isSmallScreen ? "h6" : "h5"}
+            fontWeight="bold"
+            sx={{
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
           >
             {receipt.tableName}
-            {receipt.note && receipt.note.trim() !== '' && (
-              <span style={{ fontWeight: 'normal', fontStyle: 'italic', color: '#888', marginLeft: 12 }}>
+            {receipt.note && receipt.note.trim() !== "" && (
+              <span
+                style={{
+                  fontWeight: "normal",
+                  fontStyle: "italic",
+                  color: "#888",
+                  marginLeft: 12,
+                }}
+              >
                 &nbsp;| Notă: {receipt.note}
               </span>
             )}
           </Typography>
         </Box>
-        <IconButton 
-            onClick={onCancelReceipt} 
-            color="error" 
-            size={isSmallScreen ? "small" : "medium"}
-            sx={{ border: '1px solid rgba(211, 47, 47, 0.3)', ml: 1 }}
+        <IconButton
+          onClick={onCancelReceipt}
+          color="error"
+          size={isSmallScreen ? "small" : "medium"}
+          sx={{ border: "1px solid rgba(211, 47, 47, 0.3)", ml: 1 }}
         >
-            <DeleteForeverIcon fontSize="small" />
+          <DeleteForeverIcon fontSize="small" />
         </IconButton>
       </Box>
 
       {/* --- TABS --- */}
-      <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-        <Tabs 
-            value={currentTab} 
-            onChange={handleTabChange} 
-            variant="fullWidth" 
-            textColor="primary"
-            indicatorColor="primary"
+      <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
+        <Tabs
+          value={currentTab}
+          onChange={handleTabChange}
+          variant="fullWidth"
+          textColor="primary"
+          indicatorColor="primary"
         >
-          <Tab icon={<SearchIcon />} label={isSmallScreen ? "Caută" : "Căutare"} iconPosition="start" sx={{ minHeight: 48 }} />
-          <Tab icon={<QrCodeScannerIcon />} label={isSmallScreen ? "Scan" : "Scanare"} iconPosition="start" sx={{ minHeight: 48 }} />
-          <Tab icon={<CategoryIcon />} label={isSmallScreen ? "Categ" : "Categorii"} iconPosition="start" sx={{ minHeight: 48 }} />
+          <Tab
+            icon={<SearchIcon />}
+            label={isSmallScreen ? "Caută" : "Căutare"}
+            iconPosition="start"
+            sx={{ minHeight: 48 }}
+          />
+          <Tab
+            icon={<QrCodeScannerIcon />}
+            label={isSmallScreen ? "Scan" : "Scanare"}
+            iconPosition="start"
+            sx={{ minHeight: 48 }}
+          />
+          <Tab
+            icon={<CategoryIcon />}
+            label={isSmallScreen ? "Categ" : "Categorii"}
+            iconPosition="start"
+            sx={{ minHeight: 48 }}
+          />
         </Tabs>
       </Box>
 
-      {/* --- CONTENT ZONA ACTIVĂ --- */}
-      <Box sx={{ my: 2, position: 'relative', zIndex: 10 }}>
-        
-        {/* TAB 0: CĂUTARE */}
+      {/* --- ZONA ACTIVĂ --- */}
+      <Box sx={{ my: 2, position: "relative", zIndex: 10 }}>
         {currentTab === 0 && (
-            <ProductSearch 
-                onProductSelect={onAddProduct} 
-                warehouseId={receipt.warehouseId} 
-            />
+          <ProductSearch
+            onProductSelect={handleProductSelect}
+            warehouses={warehouses}
+          />
         )}
-        
-        {/* TAB 1: SCANARE */}
         {currentTab === 1 && (
-            <ProductScanner 
-                onProductSelect={onAddProduct} 
-            />
+          <ProductScanner onProductSelect={handleProductSelect} />
         )}
-        
-        {/* TAB 2: CATEGORII */}
         {currentTab === 2 && (
-            <Typography sx={{ p: 2, textAlign: 'center', color: 'text.secondary' }}>
-                Se încarcă catalogul...
-            </Typography>
+          <Typography
+            sx={{ p: 2, textAlign: "center", color: "text.secondary" }}
+          >
+            Se încarcă catalogul...
+          </Typography>
         )}
       </Box>
 
       {/* --- LISTA DE PRODUSE --- */}
-      <Box 
-        sx={{ 
-            flex: 1, 
-            overflowY: 'auto',
-            
-            // --- FIX PENTRU LAYOUT SHIFT ---
-            // Această proprietate rezervă spațiul barei de scroll mereu, 
-            // chiar dacă bara nu este vizibilă.
-            scrollbarGutter: 'stable', 
-            
-            my: 1,
-            pr: 0.5, 
-            bgcolor: items.length === 0 ? 'rgba(0,0,0,0.02)' : 'transparent',
-            borderRadius: 1
+      <Box
+        sx={{
+          flex: 1,
+          overflowY: "auto",
+          scrollbarGutter: "stable",
+          my: 1,
+          pr: 0.5,
+          bgcolor: items.length === 0 ? "rgba(0,0,0,0.02)" : "transparent",
+          borderRadius: 1,
         }}
       >
         {items.length === 0 ? (
-          <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" height="100%" color="text.secondary">
+          <Box
+            display="flex"
+            flexDirection="column"
+            alignItems="center"
+            justifyContent="center"
+            height="100%"
+            color="text.secondary"
+          >
             <Typography variant="body1">Bonul este gol.</Typography>
-            <Typography variant="caption">Caută sau scanează un produs.</Typography>
+            <Typography variant="caption">
+              Caută sau scanează un produs.
+            </Typography>
           </Box>
         ) : (
           items.map((item) => (
             <ProductCard
-              key={`${item.receiptItemId}-${item.productId}`} 
+              key={`${item.receiptItemId}-${item.productId}`}
               item={item}
-              onQuantityChange={(productId, newQuantity) => onUpdateItem(receipt.id, productId, newQuantity)}
-              onRemove={() => onRemoveItem(item.receiptItemId)} 
+              warehouses={warehouses}
+              onQuantityChange={(productId, newQuantity, warehouseId) =>
+                onUpdateItem(receipt.id, productId, newQuantity, warehouseId)
+              }
+              onRemove={() => onRemoveItem(item.receiptItemId)}
+              onMoveToWarehouse={(newWarehouseId) =>
+                handleMoveToWarehouse(
+                  item.receiptItemId,
+                  item.productId,
+                  item.quantity,
+                  newWarehouseId,
+                )
+              }
             />
           ))
         )}
       </Box>
 
       {/* --- FOOTER --- */}
-      <Box sx={{ borderTop: 1, borderColor: 'divider', pt: 2, mt: 'auto' }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Typography variant="h6" fontWeight="bold" color="text.secondary">TOTAL:</Typography>
+      <Box sx={{ borderTop: 1, borderColor: "divider", pt: 2, mt: "auto" }}>
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            mb: 2,
+          }}
+        >
+          <Typography variant="h6" fontWeight="bold" color="text.secondary">
+            TOTAL:
+          </Typography>
           <Typography variant="h4" fontWeight="bold" color="primary.main">
-            {receipt.totalAmount.toFixed(2)} <Typography component="span" variant="h6" color="text.secondary">RON</Typography>
+            {receipt.totalAmount.toFixed(2)}{" "}
+            <Typography component="span" variant="h6" color="text.secondary">
+              RON
+            </Typography>
           </Typography>
         </Box>
-        
         <Button
           variant="contained"
           color="primary"
           fullWidth
           size="large"
           onClick={() => onAddPayment()}
-          disabled={items.length === 0} 
-          sx={{ py: 1.5, fontSize: '1.1rem', fontWeight: 'bold' }}
+          disabled={items.length === 0}
+          sx={{ py: 1.5, fontSize: "1.1rem", fontWeight: "bold" }}
         >
           {items.length === 0 ? "Adaugă produse" : "ÎNCASARE / PLĂȚI"}
         </Button>
       </Box>
+
+      {/* --- PICKER GESTIUNE CU STOC --- */}
+      <Dialog
+        open={warehousePickerOpen}
+        onClose={handlePickerClose}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle sx={{ pb: 1 }}>
+          <Typography variant="h6" fontWeight="bold">
+            Selectează gestiunea
+          </Typography>
+          {pendingProduct && (
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+              {pendingProduct.name}
+            </Typography>
+          )}
+        </DialogTitle>
+
+        <DialogContent sx={{ p: 0 }}>
+          {/* Header tabel */}
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              px: 2,
+              py: 1,
+              bgcolor: theme.palette.grey[100],
+              borderBottom: "1px solid",
+              borderColor: "divider",
+            }}
+          >
+            <Typography
+              variant="caption"
+              fontWeight="bold"
+              color="text.secondary"
+            >
+              GESTIUNE
+            </Typography>
+            <Typography
+              variant="caption"
+              fontWeight="bold"
+              color="text.secondary"
+            >
+              STOC DISPONIBIL
+            </Typography>
+          </Box>
+
+          {/* Rânduri gestiuni */}
+          <List disablePadding>
+            {warehouses.map((w) => {
+              const stockQty = stockPerWarehouse[w.id];
+              const isTrackStock = pendingProduct?.trackStock !== false;
+              const isOutOfStock =
+                isTrackStock && !stockLoading && stockQty <= 0.0001;
+
+              return (
+                <ListItemButton
+                  key={w.id}
+                  onClick={() => handleWarehousePick(w.id)}
+                  disabled={isOutOfStock}
+                  sx={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    py: 2,
+                    px: 2,
+                    borderBottom: "1px solid",
+                    borderColor: "divider",
+                    opacity: isOutOfStock ? 0.4 : 1,
+                  }}
+                >
+                  {/* Nume gestiune */}
+                  <Typography variant="body1" fontWeight="500">
+                    {w.name}
+                  </Typography>
+
+                  {/* Stoc */}
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    {!isTrackStock ? (
+                      // Produs fără trackStock → infinit
+                      <AllInclusiveIcon fontSize="small" color="action" />
+                    ) : stockLoading ? (
+                      <CircularProgress size={16} />
+                    ) : (
+                      <Typography
+                        variant="body2"
+                        fontWeight="bold"
+                        sx={{
+                          color: isOutOfStock ? "error.main" : "success.main",
+                        }}
+                      >
+                        {Number(stockQty ?? 0).toLocaleString("ro-RO", {
+                          maximumFractionDigits: 2,
+                        })}
+                      </Typography>
+                    )}
+                  </Box>
+                </ListItemButton>
+              );
+            })}
+          </List>
+        </DialogContent>
+
+        <DialogActions>
+          <Button onClick={handlePickerClose} color="inherit">
+            Anulează
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Paper>
   );
 };
 
 OpenedReceiptCard.propTypes = {
   receipt: PropTypes.object.isRequired,
+  warehouses: PropTypes.array.isRequired,
   onBack: PropTypes.func.isRequired,
   onAddPayment: PropTypes.func.isRequired,
   onAddProduct: PropTypes.func.isRequired,

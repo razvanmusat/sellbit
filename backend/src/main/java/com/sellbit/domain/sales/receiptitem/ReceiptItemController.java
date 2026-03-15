@@ -26,13 +26,14 @@ public class ReceiptItemController {
     private final ReceiptItemService receiptItemService;
 
     @PreAuthorize("hasAnyAuthority('50', '100')")
-    @PostMapping("/sync") // Adaugă sau actualizează un produs pe bon.
+    @PostMapping("/sync") // Adaugă sau actualizează un produs pe bon — gestiunea se trimite per linie.
     public ResponseEntity<ReceiptDTOs.Response> addOrUpdateItem(
             @RequestParam Integer receiptId,
             @RequestParam Integer productId,
-            @RequestParam BigDecimal quantity) {
+            @RequestParam BigDecimal quantity,
+            @RequestParam Integer warehouseId) { // NOU — gestiunea liniei, selectată din UI
 
-        return ResponseEntity.ok(receiptItemService.addOrUpdateItem(receiptId, productId, quantity));
+        return ResponseEntity.ok(receiptItemService.addOrUpdateItem(receiptId, productId, quantity, warehouseId));
     }
 
     @PreAuthorize("hasAnyAuthority('50', '100')")

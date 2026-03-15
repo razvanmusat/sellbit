@@ -11,40 +11,51 @@ import java.util.List;
 @Repository
 public interface ReceiptRepository extends JpaRepository<Receipt, Integer> {
 
+        // Folosit pentru bonuri OPEN (alerte, active) — fără filtru pe gestiune.
         List<Receipt> findByStatus_Code(String statusCode);
 
         /**
-         * OPERAȚIONAL (LIVE UI):
-         * Când dai click pe Tab "Gestiune 1", React va apela:
-         * findByWarehouseIdAndStatus_Code(1, "OPEN")
+         * RAPORTARE: Bonuri care conțin cel puțin o linie pe gestiunea dată.
+         * Înlocuiește findByWarehouseIdAndStatus_CodeAndClosedAtBetween.
+         * DISTINCT previne duplicatele când un bon are mai multe linii pe aceeași gestiune.
          */
-        List<Receipt> findByWarehouseIdAndStatus_Code(@Param("warehouseId") Integer warehouseId,
-                        @Param("statusCode") String statusCode);
+        @Query("""
+                SELECT DISTINCT r FROM Receipt r
+                JOIN r.items i
+                WHERE i.warehouse.id = :warehouseId
+                AND r.status.code = :statusCode
+                AND r.closedAt BETWEEN :start AND :end
+                ORDER BY r.closedAt ASC
+                """)
+        List<Receipt> findByItemWarehouseAndStatusAndClosedAt(
+                        @Param("warehouseId") Integer warehouseId,
+                        @Param("statusCode") String statusCode,
+                        @Param("start") LocalDateTime start,
+                        @Param("end") LocalDateTime end);
 
         /**
-         * RAPORTARE (HISTORY):
-         * Când vrei să vezi ce s-a vândut pe Gestiunea 1 ieri.
-         * @BatchSize pe items previne N+1 pentru items.
-         * findByWarehouseIdAndStatus_CodeAndClosedAtBetween(1, "CLOSED", start, end)
+         * RAPORTARE SUMMARY: Proiecție directă în DTO — filtrată după gestiunea liniilor.
+         * warehouse-ul afișat în summary e cel al primei linii (prin subquery).
          */
-    List<Receipt> findByWarehouseIdAndStatus_CodeAndClosedAtBetween(
-            @Param("warehouseId") Integer warehouseId,
-            @Param("statusCode") String statusCode,
-            @Param("start") LocalDateTime start,
-            @Param("end") LocalDateTime end);
-
-        @Query("SELECT new com.sellbit.domain.sales.receipt.ReceiptDTOs$SummaryResponse(" +
-                        "r.id, s.label, r.tableName, r.totalAmount, w.name, w.id, COALESCE(u.fullName, 'N/A'), " +
-                        "r.createdAt, r.closedAt, o.id) " +
-                        "FROM Receipt r " +
-                        "JOIN r.status s " +
-                        "JOIN r.warehouse w " +
-                        "LEFT JOIN r.user u " +
-                        "LEFT JOIN r.originalReceipt o " +
-                        "WHERE w.id = :warehouseId " +
-                        "AND s.code = :statusCode " +
-                        "AND r.closedAt BETWEEN :start AND :end " +
-                        "ORDER BY r.closedAt ASC")
+        @Query("""
+                SELECT new com.sellbit.domain.sales.receipt.ReceiptDTOs$SummaryResponse(
+                    r.id, s.label, r.tableName, r.totalAmount,
+                    (SELECT i2.warehouse.name FROM ReceiptItem i2 WHERE i2.receipt = r ORDER BY i2.id ASC LIMIT 1),
+                    (SELECT i2.warehouse.id   FROM ReceiptItem i2 WHERE i2.receipt = r ORDER BY i2.id ASC LIMIT 1),
+                    COALESCE(u.fullName, 'N/A'),
+                    r.createdAt, r.closedAt, o.id)
+                FROM Receipt r
+                JOIN r.status s
+                LEFT JOIN r.user u
+                LEFT JOIN r.originalReceipt o
+                WHERE EXISTS (
+                    SELECT 1 FROM ReceiptItem i
+                    WHERE i.receipt = r AND i.warehouse.id = :warehouseId
+                )
+                AND s.code = :statusCode
+                AND r.closedAt BETWEEN :start AND :end
+                ORDER BY r.closedAt ASC
+                """)
         List<ReceiptDTOs.SummaryResponse> findSummaryByWarehouseIdAndStatusCodeAndClosedAtBetween(
                         @Param("warehouseId") Integer warehouseId,
                         @Param("statusCode") String statusCode,
@@ -52,16 +63,22 @@ public interface ReceiptRepository extends JpaRepository<Receipt, Integer> {
                         @Param("end") LocalDateTime end);
 
         /**
-         * JURNAL TOTAL (Audit):
-         * Toate mișcările de pe un tab (Gestiune) indiferent dacă sunt CLOSED sau
-         * CANCELLED.
+         * JURNAL TOTAL (Audit): Bonuri închise/anulate într-un interval,
+         * filtrate după gestiunea liniilor.
          */
-        List<Receipt> findByWarehouseIdAndClosedAtBetween(
-                        Integer warehouseId,
-                        LocalDateTime start,
-                        LocalDateTime end);
+        @Query("""
+                SELECT DISTINCT r FROM Receipt r
+                JOIN r.items i
+                WHERE i.warehouse.id = :warehouseId
+                AND r.closedAt BETWEEN :start AND :end
+                """)
+        List<Receipt> findByItemWarehouseAndClosedAtBetween(
+                        @Param("warehouseId") Integer warehouseId,
+                        @Param("start") LocalDateTime start,
+                        @Param("end") LocalDateTime end);
 
         @Query("SELECT r FROM Receipt r WHERE r.originalReceipt.id = :originalId AND r.status.code = :statusCode")
-        List<Receipt> findRefundsForReceipt(@Param("originalId") Integer originalId,
+        List<Receipt> findRefundsForReceipt(
+                        @Param("originalId") Integer originalId,
                         @Param("statusCode") String statusCode);
 }

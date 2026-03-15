@@ -1,10 +1,9 @@
-
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import {
     Box, Typography, Paper, Table, TableBody, TableCell,
     TableContainer, TableHead, TableRow, TextField,
-    CircularProgress, Alert, Chip, MenuItem
+    CircularProgress, Alert, Chip, MenuItem, Stack
 } from '@mui/material';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
@@ -14,16 +13,22 @@ import HistoryIcon from '@mui/icons-material/History';
 import PersonIcon from '@mui/icons-material/Person';
 import { useSearchParams } from 'react-router-dom';
 import { useCashMovementHistory } from '../hooks/useCashMovementHistory';
-import { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchCashMovementTypes } from '../store/cashMovementHistorySlice';
 
-const CashMovementHistory = ({ warehouseId }) => {
-    const [searchParams, setSearchParams] = useSearchParams();    
+const CashMovementHistory = ({ warehouses }) => {
+    const [searchParams, setSearchParams] = useSearchParams();
+
+    // Selecție gestiune internă — implicit prima din listă
+    const [selectedWarehouseId, setSelectedWarehouseId] = useState(
+        warehouses.length > 0 ? warehouses[0].id : null
+    );
+
     const urlStart = searchParams.get('startDate');
     const urlEnd = searchParams.get('endDate');
     const urlType = searchParams.get('type');
-    const today = dayjs().startOf('day');    
+    const today = dayjs().startOf('day');
+
     const initialFilters = {
         startDate: urlStart ? dayjs(urlStart) : today,
         endDate: urlEnd ? dayjs(urlEnd) : today,
@@ -33,7 +38,7 @@ const CashMovementHistory = ({ warehouseId }) => {
 
     const dispatch = useDispatch();
     const movementTypes = useSelector(state => state.cashMovementHistory.movementTypes);
-    
+
     useEffect(() => {
         if (!movementTypes || movementTypes.length === 0) {
             dispatch(fetchCashMovementTypes());
@@ -50,10 +55,10 @@ const CashMovementHistory = ({ warehouseId }) => {
         setStartDate,
         endDate,
         setEndDate
-    } = useCashMovementHistory(warehouseId, initialFilters);
-    
+    } = useCashMovementHistory(selectedWarehouseId, initialFilters);
+
     React.useEffect(() => {
-        if (!warehouseId || !startDate || !endDate) return;
+        if (!selectedWarehouseId || !startDate || !endDate) return;
         const urlStart = searchParams.get('startDate');
         const urlEnd = searchParams.get('endDate');
         const urlType = searchParams.get('type');
@@ -64,7 +69,6 @@ const CashMovementHistory = ({ warehouseId }) => {
         if (shouldUpdate) {
             const params = new URLSearchParams(searchParams.toString());
             params.set('tab', 'history');
-            params.set('warehouseId', warehouseId);
             params.set('startDate', startDate.format('YYYY-MM-DD'));
             params.set('endDate', endDate.format('YYYY-MM-DD'));
             if (selectedType) {
@@ -74,18 +78,32 @@ const CashMovementHistory = ({ warehouseId }) => {
             }
             setSearchParams(params, { replace: true });
         }
-    }, [warehouseId, startDate, endDate, selectedType]);
+    }, [selectedWarehouseId, startDate, endDate, selectedType]);
 
     const compactCellStyle = { padding: '4px 8px', width: '1%', whiteSpace: 'nowrap' };
     const fluidCellStyle = { padding: '4px 8px', width: 'auto' };
 
-    if (!warehouseId) return null;
-    
     const typeChosen = typeof selectedType === 'string' && (selectedType.length > 0 || selectedType === 'ALL');
 
     return (
         <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="ro">
-            <Box sx={{ p: { xs: 1, sm: 2 } }}>                
+            <Box sx={{ p: { xs: 1, sm: 2 } }}>
+
+                {/* SELECTOR GESTIUNI */}
+                <Stack direction="row" spacing={1} justifyContent="center" sx={{ mb: 2, flexWrap: 'wrap', gap: 1 }}>
+                    {warehouses.map(w => (
+                        <Chip
+                            key={w.id}
+                            label={w.name}
+                            onClick={() => setSelectedWarehouseId(w.id)}
+                            color={selectedWarehouseId === w.id ? 'primary' : 'default'}
+                            variant={selectedWarehouseId === w.id ? 'filled' : 'outlined'}
+                            sx={{ fontSize: '0.95rem', px: 1, py: 2.5 }}
+                        />
+                    ))}
+                </Stack>
+
+                {/* FILTRE */}
                 <Paper elevation={0} sx={{ p: 2, mb: 3, bgcolor: '#f5f5f5', border: '1px solid #e0e0e0' }}>
                     <Box
                         display="flex"
@@ -135,9 +153,7 @@ const CashMovementHistory = ({ warehouseId }) => {
                             }}
                             slotProps={{
                                 select: { displayEmpty: true },
-                                inputLabel: {
-                                    shrink: true
-                                }
+                                inputLabel: { shrink: true }
                             }}
                         >
                             <MenuItem value="">
@@ -148,11 +164,11 @@ const CashMovementHistory = ({ warehouseId }) => {
                                 <MenuItem key={type.code} value={type.code}>
                                     {type.label}
                                 </MenuItem>
-                            ))}                            
+                            ))}
                             {selectedType && selectedType !== 'ALL' &&
                                 !movementTypes.some(t => t.code === selectedType) && (
                                     <MenuItem key={selectedType} value={selectedType}>
-                                        {(() => {                                            
+                                        {(() => {
                                             if (!movementTypes || movementTypes.length === 0) return '';
                                             const foundType = movementTypes.find(t => t.code === selectedType);
                                             if (foundType) return foundType.label;
@@ -166,7 +182,8 @@ const CashMovementHistory = ({ warehouseId }) => {
                         </TextField>
                     </Box>
                 </Paper>
-                {/* ZONA DE TABEL */}
+
+                {/* TABEL */}
                 {!typeChosen ? (
                     <Alert severity="info">
                         Selectează tipul de mișcare numerar pentru a vedea rezultatele.
@@ -231,7 +248,7 @@ const CashMovementHistory = ({ warehouseId }) => {
 };
 
 CashMovementHistory.propTypes = {
-    warehouseId: PropTypes.number.isRequired,
+    warehouses: PropTypes.array.isRequired,
 };
 
 export default CashMovementHistory;

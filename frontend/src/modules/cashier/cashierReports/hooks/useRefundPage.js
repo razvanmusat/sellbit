@@ -2,13 +2,14 @@ import { useState, useEffect } from 'react';
 import dayjs from 'dayjs';
 import { SalesService } from '../../sales/api/SalesService';
 
-export const useRefundPage = (warehouseId, urlDate) => {
+// Fetch bonuri închise pentru TOATE gestiunile, deduplicate după id
+export const useRefundPage = (warehouses, urlDate) => {
   const [receipts, setReceipts] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  // Inițializează selectedDate cu data din URL dacă există, altfel cu ziua curentă
+
   const [selectedDate, setSelectedDate] = useState(urlDate ? dayjs(urlDate) : dayjs());
-  // Sincronizează selectedDate cu modificările din URL (ex: la schimbare warehouse/tab)
+
   useEffect(() => {
     if (!urlDate) return;
     const urlDayjs = dayjs(urlDate);
@@ -21,26 +22,35 @@ export const useRefundPage = (warehouseId, urlDate) => {
   const [selectedReceipt, setSelectedReceipt] = useState(null);
 
   const fetchClosedReceipts = async () => {
-    if (!warehouseId) return;
+    if (!warehouses || warehouses.length === 0) return;
 
     setLoading(true);
-    setReceipts([]); // Resetăm datele vechi pentru UX curat
+    setReceipts([]);
     setError(null);
 
     try {
-      // Standardizare numire variabile (start/end)
       const start = selectedDate.startOf('day').format('YYYY-MM-DDTHH:mm:ss');
       const end = selectedDate.endOf('day').format('YYYY-MM-DDTHH:mm:ss');
 
-      const data = await SalesService.getReceiptsReport(
-        warehouseId, 
-        'CLOSED', 
-        start, 
-        end
+      // Fetch pentru fiecare gestiune în paralel
+      const results = await Promise.all(
+        warehouses.map(w => SalesService.getReceiptsReport(w.id, 'CLOSED', start, end))
       );
-      
-      // Tratare sigură: dacă data e null/undefined, punem array gol
-      const sortedReceipts = [...(data || [])].sort((a, b) => {
+
+      // Merge și deduplică după receipt.id
+      const seen = new Set();
+      const merged = [];
+      for (const batch of results) {
+        for (const receipt of (batch || [])) {
+          if (!seen.has(receipt.id)) {
+            seen.add(receipt.id);
+            merged.push(receipt);
+          }
+        }
+      }
+
+      // Sortare cronologică
+      merged.sort((a, b) => {
         const aTime = dayjs(a?.closedAt);
         const bTime = dayjs(b?.closedAt);
         if (!aTime.isValid() && !bTime.isValid()) return 0;
@@ -49,8 +59,8 @@ export const useRefundPage = (warehouseId, urlDate) => {
         return aTime.diff(bTime);
       });
 
-      setReceipts(sortedReceipts);
-      
+      setReceipts(merged);
+
     } catch (err) {
       console.error("Eroare la căutare bonuri:", err);
       setError("A apărut o eroare la comunicarea cu serverul.");
@@ -62,7 +72,7 @@ export const useRefundPage = (warehouseId, urlDate) => {
   useEffect(() => {
     fetchClosedReceipts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedDate, warehouseId]);
+  }, [selectedDate, warehouses.map(w => w.id).join(',')]);
 
   const handleOpenModal = (receipt) => {
     setSelectedReceipt(receipt);
@@ -74,7 +84,7 @@ export const useRefundPage = (warehouseId, urlDate) => {
   };
 
   const handleRefundSuccess = () => {
-    fetchClosedReceipts(); 
+    fetchClosedReceipts();
   };
 
   return {

@@ -82,6 +82,7 @@ export const useStockAdjustmentPage = (warehouseId) => {
   // Returnăm tot ce are nevoie UI-ul
   return {
     // Data
+    warehouses,
     currentWarehouseName,
     reasons,
     selectedProduct,

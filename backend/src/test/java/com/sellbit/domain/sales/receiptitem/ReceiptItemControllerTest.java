@@ -44,13 +44,14 @@ class ReceiptItemControllerTest {
     @DisplayName("POST /sync - Succes: Adăugare produs")
     void syncItem_Success() throws Exception {
         // Returnăm null sau un obiect dummy, controller-ul verifică doar status 200 aici
-        when(receiptItemService.addOrUpdateItem(anyInt(), anyInt(), any(BigDecimal.class)))
+        when(receiptItemService.addOrUpdateItem(anyInt(), anyInt(), any(BigDecimal.class), anyInt()))
                 .thenReturn(null);
 
         mockMvc.perform(post("/api/sales/receipt-items/sync")
                 .param("receiptId", "100")
                 .param("productId", "50")
-                .param("quantity", "2.5"))
+                .param("quantity", "2.5")
+                .param("warehouseId", "1"))
                 .andExpect(status().isOk());
     }
 
@@ -96,7 +97,9 @@ class ReceiptItemControllerTest {
                 new BigDecimal("19.00"),// vatRate
                 new BigDecimal("50.00"),// lineTotal
                 new BigDecimal("42.02"),// netTotal
-                new BigDecimal("7.98")  // vatTotal
+                new BigDecimal("7.98"), // vatTotal
+                1,                      // warehouseId
+                "Gestiune Standard"     // warehouseName
         );
 
         when(receiptItemService.getItemsByReceipt(100)).thenReturn(List.of(response));
@@ -123,7 +126,9 @@ class ReceiptItemControllerTest {
                 BigDecimal.ZERO,
                 new BigDecimal("100.00"),
                 new BigDecimal("100.00"),
-                BigDecimal.ZERO
+                BigDecimal.ZERO,
+                2,                      // warehouseId
+                "Gestiune Retur"        // warehouseName
         );
 
         when(receiptItemService.getItemsByReceipt(101)).thenReturn(List.of(response));

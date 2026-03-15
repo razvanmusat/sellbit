@@ -1,6 +1,7 @@
 package com.sellbit.domain.sales.receiptitem;
 
 import com.sellbit.domain.catalog.product.Product;
+import com.sellbit.domain.inventory.warehouse.Warehouse;
 import com.sellbit.domain.sales.receipt.Receipt;
 import jakarta.persistence.*;
 import lombok.*;
@@ -29,6 +30,11 @@ public class ReceiptItem {
     @JoinColumn(name = "product_id", nullable = false)
     private Product product;
 
+    // Gestiunea pe care se descarcă această linie — selectată de utilizator la adăugarea produsului.
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "warehouse_id", nullable = false)
+    private Warehouse warehouse;
+
     @Column(precision = 10, scale = 3)
     private BigDecimal quantity;
 
@@ -50,10 +56,10 @@ public class ReceiptItem {
     @Column(name = "vat_total", precision = 10, scale = 2)
     private BigDecimal vatTotal;
 
-    @Column(name = "service_end_at") //Data de finalizare a serviciului cu timp asociat
+    @Column(name = "service_end_at")
     private LocalDateTime serviceEndAt;
 
     @Builder.Default
-    @Column(name = "is_service_time") //Indicativ produs cu timp asociat
+    @Column(name = "is_service_time")
     private boolean isServiceTime = false;
 }

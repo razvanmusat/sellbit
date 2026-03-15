@@ -4,55 +4,49 @@ import { ReceiptItemService } from '../../sales/api/ReceiptItemService';
 import { SalesService } from '../../sales/api/SalesService';
 import { PaymentService } from '../../sales/api/PaymentService';
 import { invalidateCache } from '../store/sellReportsSlice';
+import { getFriendlyErrorMessage } from '../../../../shared/utils/errorHandler';
 
 export const useRefundModal = (open, receipt, onClose, onRefundSuccess) => {
-    // --- STATE ---
     const [items, setItems] = useState([]);
     const [paymentMethods, setPaymentMethods] = useState([]);
-    const [voucherAmount, setVoucherAmount] = useState(0); // Suma voucher-ului pe bon
-    const [originalPayments, setOriginalPayments] = useState([]); // Plățile originale ale bonului
-    
+    const [voucherAmount, setVoucherAmount] = useState(0);
+    const [originalPayments, setOriginalPayments] = useState([]);
     const [loadingItems, setLoadingItems] = useState(false);
     const [submitting, setSubmitting] = useState(false);
-    const [error, setError] = useState(null);
-
     const [refundMap, setRefundMap] = useState({});
-    const [paymentMethodId, setPaymentMethodId] = useState(''); 
+    const [paymentMethodId, setPaymentMethodId] = useState('');
+
+    // Toast în loc de Alert inline
+    const [toastOpen, setToastOpen] = useState(false);
+    const [toastMessage, setToastMessage] = useState('');
+    const [toastSeverity, setToastSeverity] = useState('error');
 
     const { user } = useSelector((state) => state.auth);
-    const dispatch = useDispatch(); 
+    const dispatch = useDispatch();
 
-    // --- EFFECT ---
     useEffect(() => {
         if (open && receipt?.id) {
             setRefundMap({});
-            setPaymentMethodId(''); 
-            setError(null);
+            setPaymentMethodId('');
+            setToastOpen(false);
             setVoucherAmount(0);
             setOriginalPayments([]);
             fetchInitialData();
         }
     }, [open, receipt]);
 
-    // --- API CALLS ---
     const fetchInitialData = async () => {
         setLoadingItems(true);
         try {
             const itemsData = await ReceiptItemService.getItemsByReceipt(receipt.id);
-            if (Array.isArray(itemsData)) {
-                setItems(itemsData);
-            } else {
-                setItems([]);
-            }
+            setItems(Array.isArray(itemsData) ? itemsData : []);
 
             const methodsData = await PaymentService.getActivePaymentMethods();
             if (Array.isArray(methodsData)) {
                 const allowedCodes = ['CASH', 'CARD', 'BANK_TRANSFER'];
-                const filteredMethods = methodsData.filter(method => allowedCodes.includes(method.code));
-                setPaymentMethods(filteredMethods);
+                setPaymentMethods(methodsData.filter(m => allowedCodes.includes(m.code)));
             }
 
-            // Încarcă plățile pentru a detecta vouchere
             const paymentsData = await PaymentService.getPaymentsByReceipt(receipt.id);
             if (Array.isArray(paymentsData)) {
                 setOriginalPayments(paymentsData);
@@ -63,21 +57,29 @@ export const useRefundModal = (open, receipt, onClose, onRefundSuccess) => {
             }
         } catch (err) {
             console.error("Eroare date:", err);
-            setError("Nu s-au putut încărca datele bonului.");
+            showToast("Nu s-au putut încărca datele bonului.", 'error');
         } finally {
             setLoadingItems(false);
         }
     };
 
-    // --- LOGIC ---
-    const getRefundLimit = (item) => {
-        return item.remainingQuantity !== undefined ? item.remainingQuantity : item.quantity;
+    const showToast = (message, severity = 'error') => {
+        setToastMessage(message);
+        setToastSeverity(severity);
+        setToastOpen(true);
     };
+
+    const handleCloseToast = (event, reason) => {
+        if (reason === 'clickaway') return;
+        setToastOpen(false);
+    };
+
+    const getRefundLimit = (item) =>
+        item.remainingQuantity !== undefined ? item.remainingQuantity : item.quantity;
 
     const handleIncrement = (item) => {
         const limit = getRefundLimit(item);
         const currentQty = refundMap[item.id] || 0;
-        
         if (currentQty < limit) {
             setRefundMap(prev => ({ ...prev, [item.id]: currentQty + 1 }));
         }
@@ -97,9 +99,8 @@ export const useRefundModal = (open, receipt, onClose, onRefundSuccess) => {
     };
 
     const handleToggleCheck = (item) => {
-        const limit = getRefundLimit(item); 
+        const limit = getRefundLimit(item);
         if (limit <= 0) return;
-
         if (refundMap[item.id]) {
             const newMap = { ...refundMap };
             delete newMap[item.id];
@@ -111,11 +112,10 @@ export const useRefundModal = (open, receipt, onClose, onRefundSuccess) => {
 
     const handleSubmitRefund = async () => {
         if (!paymentMethodId) {
-            setError("Te rog selectează metoda de restituire.");
+            showToast("Te rog selectează metoda de restituire.", 'warning');
             return;
         }
         setSubmitting(true);
-        setError(null);
 
         try {
             const itemsPayload = Object.entries(refundMap).map(([itemId, qty]) => ({
@@ -125,33 +125,29 @@ export const useRefundModal = (open, receipt, onClose, onRefundSuccess) => {
 
             const request = {
                 userId: user?.id,
-                paymentMethodId: paymentMethodId,
+                paymentMethodId,
                 items: itemsPayload
             };
 
             await SalesService.createPartialRefund(receipt.id, request);
             dispatch(invalidateCache());
-            onRefundSuccess(); 
-            onClose(); 
+            onRefundSuccess();
+            onClose();
         } catch (err) {
-            const msg = err.response?.data?.message || "Eroare la retur.";
-            setError(msg);
+            const msg = getFriendlyErrorMessage(err) || "Eroare la retur.";
+            showToast(msg, 'error');
         } finally {
             setSubmitting(false);
         }
     };
 
-    // --- DERIVED STATE ---
     const totalRefundAmount = items.reduce((acc, item) => {
-        if (refundMap[item.id]) {
-            return acc + (item.unitPrice * refundMap[item.id]);
-        }
+        if (refundMap[item.id]) return acc + (item.unitPrice * refundMap[item.id]);
         return acc;
     }, 0);
 
-    // Scade proporțional voucherul din suma de restituit
     const receiptTotalAmount = receipt?.totalAmount || 0;
-    const adjustedRefundAmount = receiptTotalAmount > 0 
+    const adjustedRefundAmount = receiptTotalAmount > 0
         ? totalRefundAmount - (totalRefundAmount / receiptTotalAmount) * voucherAmount
         : totalRefundAmount;
 
@@ -164,21 +160,22 @@ export const useRefundModal = (open, receipt, onClose, onRefundSuccess) => {
             paymentMethods,
             loadingItems,
             submitting,
-            error,
+            toastOpen,
+            toastMessage,
+            toastSeverity,
             refundMap,
             paymentMethodId,
-            totalRefundAmount: adjustedRefundAmount, // Suma ajustată cu voucher
+            totalRefundAmount: adjustedRefundAmount,
             hasSelection
         },
-        setters: {
-            setPaymentMethodId
-        },
+        setters: { setPaymentMethodId },
         handlers: {
             getRefundLimit,
             handleIncrement,
             handleDecrement,
             handleToggleCheck,
-            handleSubmitRefund
+            handleSubmitRefund,
+            handleCloseToast
         }
     };
 };

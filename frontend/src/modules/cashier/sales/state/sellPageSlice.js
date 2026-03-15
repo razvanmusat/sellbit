@@ -5,9 +5,8 @@ import { PaymentService } from '../api/PaymentService';
 import { ReceiptItemService } from '../api/ReceiptItemService';
 import { CancelReasonService } from '../api/CancelReasonService';
 
-// --- 1. THUNKS (API CALLS) ---
+// --- 1. THUNKS ---
 
-// FETCH WAREHOUSES
 export const fetchActiveWarehouses = createAsyncThunk(
   'sellPage/fetchActiveWarehouses',
   async (_, { rejectWithValue }) => {
@@ -19,32 +18,28 @@ export const fetchActiveWarehouses = createAsyncThunk(
   }
 );
 
-// FETCH OPEN RECEIPTS
 export const fetchOpenReceipts = createAsyncThunk(
   'sellPage/fetchOpenReceipts',
-  async (warehouseId, { rejectWithValue }) => {
+  async (_, { rejectWithValue }) => {
     try {
-      return await SalesService.getActiveReceipts(warehouseId);
+      return await SalesService.getActiveReceipts();
     } catch (error) {
       return rejectWithValue(error.message || 'Nu s-au putut încărca bonurile.');
     }
   }
 );
 
-// CREATE RECEIPT
 export const createNewReceipt = createAsyncThunk(
   'sellPage/createNewReceipt',
-  async ({ warehouseId, tableName, userId, note }, { rejectWithValue }) => {
+  async ({ tableName, userId, note }, { rejectWithValue }) => {
     try {
-      const request = { warehouseId, tableName, userId, note };
-      return await SalesService.createReceipt(request);
+      return await SalesService.createReceipt({ tableName, userId, note });
     } catch (error) {
       return rejectWithValue(error.message || 'Nu s-a putut crea bonul.');
     }
   }
 );
 
-// FETCH ACTIVE PAYMENT METHODS (Advance)
 export const fetchActivePaymentMethods = createAsyncThunk(
   'sellPage/fetchActivePaymentMethods',
   async (_, { rejectWithValue }) => {
@@ -56,45 +51,30 @@ export const fetchActivePaymentMethods = createAsyncThunk(
   }
 );
 
-// REGISTER ADVANCE
 export const registerAdvancePayment = createAsyncThunk(
   'sellPage/registerAdvancePayment',
   async ({ warehouseId, amount, paymentMethodCode, userId, note }, { rejectWithValue }) => {
     try {
-      const request = { warehouseId, amount, paymentMethodCode, userId, note };
-      await SalesService.registerAdvancePayment(request);
+      await SalesService.registerAdvancePayment({ warehouseId, amount, paymentMethodCode, userId, note });
     } catch (error) {
       return rejectWithValue(error.message || 'Nu s-a putut înregistra avansul.');
     }
   }
 );
 
-// ADD ITEM
 export const addOrUpdateReceiptItem = createAsyncThunk(
   'sellPage/addOrUpdateReceiptItem',
-  async ({ receiptId, productId, quantity }, { rejectWithValue }) => {
+  async ({ receiptId, productId, quantity, warehouseId }, { rejectWithValue }) => {
     try {
-      return await ReceiptItemService.addOrUpdateItem(receiptId, productId, quantity);
+      return await ReceiptItemService.addOrUpdateItem(receiptId, productId, quantity, warehouseId);
     } catch (error) {
-      // --- FIX PENTRU FETCH ---
-      
-      // 1. Verificăm dacă eroarea este chiar obiectul JSON trimis de server (are params)
-      if (error.params && error.message) {
-          return rejectWithValue(error); 
-      }
-      
-      // 2. Verificăm stilul Axios (pentru siguranță)
-      if (error.response?.data) {
-          return rejectWithValue(error.response.data);
-      }
-      
-      // 3. Fallback
+      if (error.params && error.message) return rejectWithValue(error);
+      if (error.response?.data) return rejectWithValue(error.response.data);
       return rejectWithValue(error.message || 'Eroare la procesare.');
     }
   }
 );
 
-// REMOVE ITEM
 export const removeReceiptItem = createAsyncThunk(
   'sellPage/removeReceiptItem',
   async (receiptItemId, { rejectWithValue }) => {
@@ -106,7 +86,6 @@ export const removeReceiptItem = createAsyncThunk(
   }
 );
 
-// FETCH CANCEL REASONS
 export const fetchCancelReasons = createAsyncThunk(
   'sellPage/fetchCancelReasons',
   async (_, { rejectWithValue }) => {
@@ -118,38 +97,36 @@ export const fetchCancelReasons = createAsyncThunk(
   }
 );
 
-// CANCEL RECEIPT
 export const cancelReceipt = createAsyncThunk(
   'sellPage/cancelReceipt',
   async ({ receiptId, reasonId }, { rejectWithValue }) => {
     try {
       await CancelReasonService.cancelReceipt(receiptId, reasonId);
-      return Number(receiptId); 
+      return Number(receiptId);
     } catch (error) {
       return rejectWithValue(error.message || 'Eroare la anularea bonului.');
     }
   }
 );
 
-// ADD PAYMENT
+// ADD PAYMENT — acum include warehouseId (gestiunea pe care merge cash-ul)
 export const addPaymentToReceipt = createAsyncThunk(
   'sellPage/addPaymentToReceipt',
-  async ({ receiptId, paymentMethodId, amount, userId }, { rejectWithValue }) => {
+  async ({ receiptId, paymentMethodId, amount, userId, warehouseId }, { rejectWithValue }) => {
     try {
-      await PaymentService.addPayment(receiptId, paymentMethodId, amount, userId);
-      return receiptId; 
+      await PaymentService.addPayment(receiptId, paymentMethodId, amount, userId, warehouseId);
+      return receiptId;
     } catch (error) {
       return rejectWithValue(error.message || 'Eroare la adăugarea plății.');
     }
   }
 );
 
-// APPLY VOUCHER
 export const applyVoucherToReceipt = createAsyncThunk(
   'sellPage/applyVoucherToReceipt',
-  async ({ receiptId, voucherCode, userId }, { rejectWithValue }) => {
+  async ({ receiptId, voucherCode, userId, distributions }, { rejectWithValue }) => {
     try {
-      await PaymentService.applyVoucher(receiptId, voucherCode, userId);
+      await PaymentService.applyVoucher(receiptId, voucherCode, userId, distributions);
       return receiptId;
     } catch (error) {
       return rejectWithValue(error.message || 'Voucher invalid.');
@@ -157,7 +134,6 @@ export const applyVoucherToReceipt = createAsyncThunk(
   }
 );
 
-// REMOVE PAYMENT
 export const removePaymentFromReceipt = createAsyncThunk(
   'sellPage/removePaymentFromReceipt',
   async ({ paymentId, userId, receiptId }, { rejectWithValue }) => {
@@ -170,7 +146,6 @@ export const removePaymentFromReceipt = createAsyncThunk(
   }
 );
 
-// CLOSE RECEIPT
 export const closeReceipt = createAsyncThunk(
   'sellPage/closeReceipt',
   async (receiptId, { rejectWithValue }) => {
@@ -191,17 +166,14 @@ const initialState = {
   paymentMethods: [],
   cancelReasons: [],
   selectedWarehouseId: null,
-  
-  // Loading flags
-  warehousesLoading: 'idle', 
+  warehousesLoading: 'idle',
   receiptsLoading: 'idle',
   paymentMethodsLoading: 'idle',
   cancelReasonsLoading: 'idle',
-  
   error: null,
 };
 
-// --- 3. SLICE & REDUCERS ---
+// --- 3. SLICE ---
 
 const sellPageSlice = createSlice({
   name: 'sellPage',
@@ -209,19 +181,14 @@ const sellPageSlice = createSlice({
   reducers: {
     setSelectedWarehouseId: (state, action) => {
       state.selectedWarehouseId = action.payload;
-      state.receipts = []; 
-      state.receiptsLoading = 'idle';
     },
-    resetSellPageState: () => {
-      return initialState;
-    },
+    resetSellPageState: () => initialState,
     clearError: (state) => {
       state.error = null;
-    }
+    },
   },
   extraReducers: (builder) => {
     builder
-      // --- LOADING STATES (Specifici) ---
       .addCase(fetchActiveWarehouses.pending, (state) => { state.warehousesLoading = 'pending'; })
       .addCase(fetchActiveWarehouses.fulfilled, (state, action) => {
         state.warehousesLoading = 'succeeded';
@@ -242,17 +209,15 @@ const sellPageSlice = createSlice({
 
       .addCase(fetchCancelReasons.pending, (state) => { state.cancelReasonsLoading = 'pending'; })
       .addCase(fetchCancelReasons.fulfilled, (state, action) => {
-        state.cancelReasonsLoading = 'succeeded'; 
-        state.cancelReasons = action.payload; 
+        state.cancelReasonsLoading = 'succeeded';
+        state.cancelReasons = action.payload;
       })
 
-      // --- CREATE RECEIPT ---
       .addCase(createNewReceipt.fulfilled, (state, action) => {
         state.receipts.unshift(action.payload);
         state.error = null;
       })
 
-      // --- UPDATING ITEMS (Add/Remove) - Grupare ---
       .addMatcher(
         isAnyOf(addOrUpdateReceiptItem.fulfilled, removeReceiptItem.fulfilled),
         (state, action) => {
@@ -262,7 +227,6 @@ const sellPageSlice = createSlice({
         }
       )
 
-      // --- REMOVING RECEIPTS (Cancel/Close) - Grupare ---
       .addMatcher(
         isAnyOf(cancelReceipt.fulfilled, closeReceipt.fulfilled),
         (state, action) => {
@@ -271,25 +235,20 @@ const sellPageSlice = createSlice({
         }
       )
 
-      // --- SIMPLE SUCCESSES (Just Clear Error) ---
       .addMatcher(
         isAnyOf(
-            registerAdvancePayment.fulfilled, 
-            addPaymentToReceipt.fulfilled, 
-            applyVoucherToReceipt.fulfilled, 
-            removePaymentFromReceipt.fulfilled
+          registerAdvancePayment.fulfilled,
+          addPaymentToReceipt.fulfilled,
+          applyVoucherToReceipt.fulfilled,
+          removePaymentFromReceipt.fulfilled
         ),
         (state) => { state.error = null; }
       )
 
-      // --- GLOBAL ERROR HANDLER ---
-      // Prinde orice acțiune 'rejected' din acest slice
       .addMatcher(
         (action) => action.type.endsWith('/rejected') && action.type.startsWith('sellPage/'),
         (state, action) => {
           state.error = action.payload;
-          
-          // Resetăm loading-urile specifice pe 'failed' dacă erau 'pending'
           if (state.warehousesLoading === 'pending') state.warehousesLoading = 'failed';
           if (state.receiptsLoading === 'pending') state.receiptsLoading = 'failed';
           if (state.paymentMethodsLoading === 'pending') state.paymentMethodsLoading = 'failed';
@@ -300,5 +259,4 @@ const sellPageSlice = createSlice({
 });
 
 export const { setSelectedWarehouseId, resetSellPageState, clearError } = sellPageSlice.actions;
-
 export default sellPageSlice.reducer;

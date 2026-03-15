@@ -12,9 +12,9 @@ public class ReceiptDTOs {
 
         /**
          * Folosit pentru deschiderea unui bon nou (ex: deschiderea unei mese).
+         * warehouseId eliminat — gestiunea se setează per linie, nu pe bon.
          */
         public record CreateRequest(
-                        @NotNull(message = "ERROR.WAREHOUSE.REQUIRED") Integer warehouseId,
                         @NotBlank(message = "ERROR.TABLE_NAME.REQUIRED") String tableName,
                         @NotNull(message = "ERROR.USER.REQUIRED") Integer userId,
                         String note) {
@@ -22,23 +22,25 @@ public class ReceiptDTOs {
 
         /**
          * DTO pentru un produs de pe bon.
+         * warehouseId și warehouseName adăugate — fiecare linie are gestiunea ei.
          */
         public record ItemResponse(
                         Integer receiptItemId,
                         Integer productId,
                         String name,
                         BigDecimal quantity,
-                        BigDecimal price, // Prețul unitar
-                        BigDecimal lineTotal // Prețul total pe linie
-        ) {
+                        BigDecimal price,
+                        BigDecimal lineTotal,
+                        Integer warehouseId,
+                        String warehouseName) {
         }
 
         public record PaymentSummary(
-                        String methodCode, // "CASH", "CARD", "VOUCHER"
-                        String methodLabel, // "Numerar", "Card Bancar"
+                        String methodCode,
+                        String methodLabel,
                         BigDecimal amount,
-                        String additionalInfo // Codul de voucher
-        ) {
+                        String additionalInfo,
+                        Integer warehouseId) {
         }
 
         /**
@@ -92,10 +94,7 @@ public class ReceiptDTOs {
         public record RefundRequest(
                         @NotNull(message = "ERROR.USER.REQUIRED") Integer userId,
                         @NotEmpty(message = "ERROR.ITEMS.REQUIRED") List<RefundItemRequest> items,
-                        @NotNull(message = "ERROR.PAYMENT_METHOD.REQUIRED") Integer paymentMethodId // <--- ACESTA ESTE
-                                                                                                    // ID-UL DIN TABELUL
-                                                                                                    // TĂU (1, 2 sau 3)
-        ) {
+                        @NotNull(message = "ERROR.PAYMENT_METHOD.REQUIRED") Integer paymentMethodId) {
         }
 
         public record RefundItemRequest(
@@ -107,9 +106,7 @@ public class ReceiptDTOs {
         public record AdvancePaymentRequest(
                         @NotNull(message = "ERROR.WAREHOUSE.REQUIRED") Integer warehouseId,
                         @NotNull(message = "ERROR.AMOUNT.REQUIRED") BigDecimal amount,
-                        @NotBlank(message = "ERROR.PAYMENT_METHOD.REQUIRED") String paymentMethodCode, // "CASH",
-                                                                                                       // "CARD",
-                                                                                                       // "BANK_TRANSFER"
+                        @NotBlank(message = "ERROR.PAYMENT_METHOD.REQUIRED") String paymentMethodCode,
                         @NotNull(message = "ERROR.USER.REQUIRED") Integer userId,
                         String note) {
         }

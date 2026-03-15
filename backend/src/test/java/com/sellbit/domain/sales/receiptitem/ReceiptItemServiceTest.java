@@ -43,6 +43,7 @@ class ReceiptItemServiceTest {
     @Mock private StockCurrentService stockCurrentService;
     @Mock private ReceiptService receiptService;
     @Mock private PurchaseService purchaseService;
+    @Mock private com.sellbit.domain.inventory.warehouse.WarehouseRepository warehouseRepository;
 
     @InjectMocks
     private ReceiptItemService receiptItemService;
@@ -53,11 +54,14 @@ class ReceiptItemServiceTest {
 
     @BeforeEach
     void setUp() {
-        openStatus = new ReceiptStatus();
-        openStatus.setCode("OPEN");
 
+        // Default warehouseRepository mock
         Warehouse warehouse = new Warehouse();
         warehouse.setId(1);
+        lenient().when(warehouseRepository.findById(anyInt())).thenReturn(Optional.of(warehouse));
+
+        openStatus = new ReceiptStatus();
+        openStatus.setCode("OPEN");
 
         receipt = new Receipt();
         receipt.setId(100);
@@ -108,7 +112,7 @@ class ReceiptItemServiceTest {
         when(receiptService.mapToResponse(any(Receipt.class))).thenReturn(expectedResponse);
 
         // Act
-        var result = receiptItemService.addOrUpdateItem(100, 50, new BigDecimal("2.000"));
+        var result = receiptItemService.addOrUpdateItem(100, 50, new BigDecimal("2.000"), 1);
 
         // Assert
         assertNotNull(result);
@@ -131,7 +135,7 @@ class ReceiptItemServiceTest {
 
         // Act & Assert (Vrem 5 bucăți)
         InsufficientStockException ex = assertThrows(InsufficientStockException.class, () -> 
-            receiptItemService.addOrUpdateItem(100, 50, new BigDecimal("5.000")));
+            receiptItemService.addOrUpdateItem(100, 50, new BigDecimal("5.000"), 1));
         
         // CORECTAT: Folosim getProductNames()
         assertTrue(ex.getProductNames().contains("Test Product"));
@@ -164,7 +168,7 @@ class ReceiptItemServiceTest {
 
         // Act & Assert
         InsufficientStockException ex = assertThrows(InsufficientStockException.class, () -> 
-            receiptItemService.addOrUpdateItem(100, 60, new BigDecimal("2.000")));
+            receiptItemService.addOrUpdateItem(100, 60, new BigDecimal("2.000"), 1));
 
         // CORECTAT: getProductNames()
         assertTrue(ex.getProductNames().contains("Meat Patty"));
@@ -177,7 +181,7 @@ class ReceiptItemServiceTest {
         when(productRepository.findById(999)).thenReturn(Optional.empty());
 
         RuntimeException ex = assertThrows(RuntimeException.class, () -> 
-            receiptItemService.addOrUpdateItem(100, 999, BigDecimal.ONE));
+            receiptItemService.addOrUpdateItem(100, 999, BigDecimal.ONE, 1));
 
         assertEquals("ERROR.PRODUCT.NOT_FOUND", ex.getMessage());
     }
@@ -192,7 +196,7 @@ class ReceiptItemServiceTest {
         when(receiptRepository.findById(100)).thenReturn(Optional.of(receipt));
 
         RuntimeException ex = assertThrows(RuntimeException.class, () -> 
-            receiptItemService.addOrUpdateItem(100, 50, BigDecimal.ONE));
+            receiptItemService.addOrUpdateItem(100, 50, BigDecimal.ONE, 1));
         
         assertEquals("ERROR.RECEIPT.NOT_OPEN", ex.getMessage());
     }
@@ -201,12 +205,15 @@ class ReceiptItemServiceTest {
     @DisplayName("removeItem - Succes: Ștergere linie și sync stoc")
     void removeItem_Success() {
         // Arrange
+        Warehouse warehouse = new Warehouse();
+        warehouse.setId(1);
         ReceiptItem item = ReceiptItem.builder()
-                .id(500)
-                .receipt(receipt)
-                .product(product)
-                .quantity(new BigDecimal("1.000"))
-                .build();
+            .id(500)
+            .receipt(receipt)
+            .product(product)
+            .warehouse(warehouse)
+            .quantity(new BigDecimal("1.000"))
+            .build();
         receipt.getItems().add(item);
 
         when(itemRepository.findById(500)).thenReturn(Optional.of(item));

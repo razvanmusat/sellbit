@@ -27,19 +27,19 @@ public class ReceiptController {
     private final ReceiptService receiptService;
 
     @PreAuthorize("hasAuthority('100')")
-    @GetMapping("/{id}") // Endpoint: GET /api/sales/receipts/97
+    @GetMapping("/{id}")
     public ResponseEntity<ReceiptDTOs.Response> getById(@PathVariable Integer id) {
         return ResponseEntity.ok(receiptService.getReceiptById(id));
     }
 
     @PreAuthorize("hasAnyAuthority('50', '100')")
-    @PostMapping // POS: Deschide o masă nouă (sau un bon nou).
+    @PostMapping
     public ResponseEntity<ReceiptDTOs.Response> create(@RequestBody @Valid ReceiptDTOs.CreateRequest request) {
         return ResponseEntity.ok(receiptService.createReceipt(request));
     }
 
     @PreAuthorize("hasAuthority('100')")
-    @GetMapping("/reports/profit") // RAPORTARE: Obține profitul net (filtru opțional pe gestiune)
+    @GetMapping("/reports/profit")
     public ResponseEntity<BigDecimal> getProfit(
             @RequestParam(required = false) Integer warehouseId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
@@ -47,14 +47,16 @@ public class ReceiptController {
         return ResponseEntity.ok(receiptService.getGrossProfitReport(start, end, warehouseId));
     }
 
+    // POS: Toate bonurile deschise — fără filtru pe gestiune.
     @PreAuthorize("hasAnyAuthority('50', '100')")
-    @GetMapping("/active") // POS: Obține bonurile deschise pentru o gestiune.
-    public ResponseEntity<List<ReceiptDTOs.Response>> getActive(@RequestParam Integer warehouseId) {
-        return ResponseEntity.ok(receiptService.getActiveReceipts(warehouseId));
+    @GetMapping("/active")
+    public ResponseEntity<List<ReceiptDTOs.Response>> getActive() {
+        return ResponseEntity.ok(receiptService.getActiveReceipts());
     }
 
+    // RAPORT: Bonurile unui interval, filtrate după gestiunea liniilor.
     @PreAuthorize("hasAnyAuthority('50', '100')")
-    @GetMapping("/report") // RAPORT: Bonurile într-un interval de timp, filtrat după gestiune si stare
+    @GetMapping("/report")
     public ResponseEntity<List<ReceiptDTOs.Response>> getReport(
             @RequestParam Integer warehouseId,
             @RequestParam String status,
@@ -74,58 +76,47 @@ public class ReceiptController {
     }
 
     @PreAuthorize("hasAnyAuthority('50', '100')")
-    @GetMapping("/alerts") // ALERTE: Bonuri uitate deschise de ieri.
+    @GetMapping("/alerts")
     public ResponseEntity<List<ReceiptDTOs.UnclosedAlert>> getAlerts() {
         return ResponseEntity.ok(receiptService.getUnclosedAlerts());
     }
 
     @PreAuthorize("hasAnyAuthority('50', '100')")
-    @PatchMapping("/{id}/cancel") // POS: Anulează bonul deschis si returneaza stocurile. Cere motiv.
+    @PatchMapping("/{id}/cancel")
     public ResponseEntity<Void> cancel(@PathVariable Integer id, @RequestParam Integer reasonId) {
         receiptService.cancelOpenReceipt(id, reasonId);
         return ResponseEntity.noContent().build();
     }
 
     @PreAuthorize("hasAnyAuthority('50', '100')")
-    @PostMapping("/{id}/close") // POS: Închidere Bon (Plată).
+    @PostMapping("/{id}/close")
     public ResponseEntity<Void> close(@PathVariable Integer id) {
         receiptService.closeReceipt(id);
         return ResponseEntity.ok().build();
     }
 
     @PreAuthorize("hasAnyAuthority('50', '100')")
-    @PostMapping("/{id}/refund") // POS: Refundare parțială a unui bon.
+    @PostMapping("/{id}/refund")
     public ResponseEntity<ReceiptDTOs.Response> refund(@PathVariable Integer id,
             @RequestBody @Valid ReceiptDTOs.RefundRequest request) {
         return ResponseEntity.ok(receiptService.createPartialRefund(id, request));
     }
 
     @PreAuthorize("hasAnyAuthority('50', '100')")
-    @GetMapping("/{id}/print-bill-note") // POS: Printare Nota de plată.
+    @GetMapping("/{id}/print-bill-note")
     public ResponseEntity<ReceiptPrintDTO> getBillNoteForPrint(@PathVariable Integer id) {
         return ResponseEntity.ok(receiptService.getBillNoteData(id));
     }
 
     @PreAuthorize("hasAnyAuthority('50', '100')")
-    @PostMapping("/advance") // POS: Incasare Avans direct în gestiune.
+    @PostMapping("/advance")
     public ResponseEntity<Void> registerAdvance(@RequestBody @Valid ReceiptDTOs.AdvancePaymentRequest request) {
-
         receiptService.registerAdvancePayment(
                 request.warehouseId(),
                 request.amount(),
                 request.paymentMethodCode(),
                 request.userId(),
                 request.note());
-
         return ResponseEntity.ok().build();
-    }
-
-    @PreAuthorize("hasAnyAuthority('50', '100')")
-    @PatchMapping("/{id}/change-warehouse") //Schimbare gestiune pentru un bon
-    public ResponseEntity<Void> changeWarehouse(
-            @PathVariable Integer id,
-            @RequestParam Integer newWarehouseId) {
-        receiptService.changeReceiptWarehouse(id, newWarehouseId);
-        return ResponseEntity.ok().build();
-    }
+    }   
 }

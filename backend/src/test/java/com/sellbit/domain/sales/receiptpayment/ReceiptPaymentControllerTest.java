@@ -42,18 +42,18 @@ class ReceiptPaymentControllerTest {
     private PasswordEncoder passwordEncoder;   
 
     // --- POST /api/sales/receipt-payments ---
-    @Test
-    @DisplayName("POST / - Succes: Adăugare plată")
-    void addPayment_Success() throws Exception {
-        doNothing().when(paymentService).addPayment(anyInt(), anyInt(), any(BigDecimal.class), anyInt());
+        @Test
+        @DisplayName("POST / - Succes: Adăugare plată")
+        void addPayment_Success() throws Exception {
+                doNothing().when(paymentService).addPayment(anyInt(), anyInt(), any(BigDecimal.class), anyInt(), any());
 
-        mockMvc.perform(post("/api/sales/receipt-payments")
-                .param("receiptId", "10")
-                .param("paymentMethodId", "1")
-                .param("amount", "100.00")
-                .param("userId", "99"))
-                .andExpect(status().isOk());
-    }
+                mockMvc.perform(post("/api/sales/receipt-payments")
+                                .param("receiptId", "10")
+                                .param("paymentMethodId", "1")
+                                .param("amount", "100.00")
+                                .param("userId", "99"))
+                                .andExpect(status().isOk());
+        }
 
     @Test
     @DisplayName("POST / - Fail: Parametri lipsă")
@@ -110,7 +110,7 @@ class ReceiptPaymentControllerTest {
                 .param("end", "2026-01-31T23:59:59")
                 .param("methodCode", "CASH"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].totalAmount").value(1100.00))
+                .andExpect(jsonPath("$[0].total").value(1100.00))
                 .andExpect(jsonPath("$[0].methodCode").value("CASH"));
     }
 
@@ -127,7 +127,7 @@ class ReceiptPaymentControllerTest {
                 .param("start", "2026-01-01T00:00:00")
                 .param("end", "2026-01-31T23:59:59"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].totalAmount").value(10.00))
+                .andExpect(jsonPath("$[0].total").value(10.00))
                 .andExpect(jsonPath("$[0].methodCode").isEmpty());
     }
 

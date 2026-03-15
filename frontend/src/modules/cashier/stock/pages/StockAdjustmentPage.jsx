@@ -14,6 +14,7 @@ import { useStockAdjustmentPage } from '../hooks/useStockAdjustmentPage';
 const StockAdjustmentPage = ({ warehouseId }) => {
   
   const {
+    warehouses,
     currentWarehouseName,
     reasons,
     selectedProduct,
@@ -41,7 +42,7 @@ const StockAdjustmentPage = ({ warehouseId }) => {
 
         {!selectedProduct ? (
           <ProductSearch 
-            warehouseId={warehouseId} 
+            warehouses={warehouses.filter(w => w.id === Number(warehouseId))} 
             onProductSelect={handleProductSelect} 
             onlyTrackStock={true} 
           />

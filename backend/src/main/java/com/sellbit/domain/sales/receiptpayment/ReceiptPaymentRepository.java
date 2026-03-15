@@ -11,28 +11,41 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface ReceiptPaymentRepository extends JpaRepository<ReceiptPayment, Integer> {
-	List<ReceiptPayment> findByReceiptId(Integer receiptId);
 
-	@Query("SELECT COALESCE(SUM(rp.amount * (rp.receipt.totalNet / rp.receipt.totalAmount)), 0) FROM ReceiptPayment rp " +
-			"WHERE rp.paymentMethod.code = 'VOUCHER' " +
-			"AND rp.receipt.status.code = 'CLOSED' " +
-			"AND rp.receipt.closedAt BETWEEN :start AND :end " +
-			"AND (:warehouseId IS NULL OR rp.receipt.warehouse.id = :warehouseId)")
-	BigDecimal getTotalVoucherDiscounts(
-			@Param("start") LocalDateTime start,
-			@Param("end") LocalDateTime end,
-			@Param("warehouseId") Integer warehouseId);
+        List<ReceiptPayment> findByReceiptId(Integer receiptId);
 
-	@Query("SELECT COALESCE(SUM(rp.amount), 0) " +
-			"FROM ReceiptPayment rp " +
-			"WHERE rp.receipt.status.code = 'CLOSED' " +
-			"AND rp.receipt.closedAt BETWEEN :start AND :end " +
-			"AND (:warehouseId IS NULL OR rp.receipt.warehouse.id = :warehouseId) " +
-			"AND (:methodCode IS NULL OR rp.paymentMethod.code = :methodCode) " +
-			"AND rp.paymentMethod.code != 'ADVANCE'")
-	BigDecimal calculatePaymentsSum(
-			@Param("start") LocalDateTime start,
-			@Param("end") LocalDateTime end,
-			@Param("methodCode") String methodCode,
-			@Param("warehouseId") Integer warehouseId);
+        /**
+         * Suma discount-urilor prin vouchere per gestiune.
+         * Acum că voucherul are warehouseId explicit, filtrăm direct după el.
+         * Dacă warehouseId = null → toate gestiunile.
+         */
+        @Query("SELECT COALESCE(SUM(rp.amount), 0) " +
+                        "FROM ReceiptPayment rp " +
+                        "WHERE rp.paymentMethod.code = 'VOUCHER' " +
+                        "AND rp.receipt.status.code = 'CLOSED' " +
+                        "AND rp.receipt.closedAt BETWEEN :start AND :end " +
+                        "AND (:warehouseId IS NULL OR rp.warehouse.id = :warehouseId)")
+        BigDecimal getTotalVoucherDiscounts(
+                        @Param("start") LocalDateTime start,
+                        @Param("end") LocalDateTime end,
+                        @Param("warehouseId") Integer warehouseId);
+
+        /**
+         * Suma încasărilor per metodă de plată, filtrate direct după warehouseId al plății.
+         * Dacă warehouseId = null → toate gestiunile.
+         * VOUCHER și ADVANCE excluse — tratate separat.
+         */
+        @Query("SELECT COALESCE(SUM(rp.amount), 0) " +
+                        "FROM ReceiptPayment rp " +
+                        "WHERE rp.receipt.status.code = 'CLOSED' " +
+                        "AND rp.receipt.closedAt BETWEEN :start AND :end " +
+                        "AND (:warehouseId IS NULL OR rp.warehouse.id = :warehouseId) " +
+                        "AND (:methodCode IS NULL OR rp.paymentMethod.code = :methodCode) " +
+                        "AND rp.paymentMethod.code != 'ADVANCE' " +
+                        "AND rp.paymentMethod.code != 'VOUCHER'")
+        BigDecimal calculatePaymentsSum(
+                        @Param("start") LocalDateTime start,
+                        @Param("end") LocalDateTime end,
+                        @Param("methodCode") String methodCode,
+                        @Param("warehouseId") Integer warehouseId);
 }

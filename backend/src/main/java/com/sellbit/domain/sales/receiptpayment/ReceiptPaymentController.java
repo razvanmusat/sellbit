@@ -17,30 +17,52 @@ public class ReceiptPaymentController {
     private final ReceiptPaymentService paymentService;
 
     @PreAuthorize("hasAnyAuthority('50', '100')")
-    @PostMapping // Adaugă o plată pe bon deschis. "Cash" actualizează automat și sertarul de bani
+    @PostMapping
     public ResponseEntity<Void> addPayment(
             @RequestParam Integer receiptId,
             @RequestParam Integer paymentMethodId,
             @RequestParam BigDecimal amount,
-            @RequestParam Integer userId) {
+            @RequestParam Integer userId,
+            @RequestParam(required = false) Integer warehouseId) {
 
-        paymentService.addPayment(receiptId, paymentMethodId, amount, userId);
+        paymentService.addPayment(receiptId, paymentMethodId, amount, userId, warehouseId);
         return ResponseEntity.ok().build();
     }
 
+    /**
+     * Preview voucher — returnează suma calculată fără a consuma voucherul.
+     * Folosit de frontend pentru a afișa picker-ul de distribuție per gestiune.
+     */
     @PreAuthorize("hasAnyAuthority('50', '100')")
-    @PostMapping("/apply-voucher") // Aplică un voucher pe bonul deschis. Scade valoarea voucherului din totalul de plată.
+    @GetMapping("/voucher-preview")
+    public ResponseEntity<ReceiptPaymentDTO.VoucherPreview> previewVoucher(
+            @RequestParam Integer receiptId,
+            @RequestParam String voucherCode) {
+
+        return ResponseEntity.ok(paymentService.previewVoucher(receiptId, voucherCode));
+    }
+
+    /**
+     * Aplică un voucher pe bon.
+     * Body opțional — dacă distributions e furnizat, creează câte o plată per gestiune.
+     * Dacă distributions e null → plată unică fără gestiune (comportament vechi).
+     */
+    @PreAuthorize("hasAnyAuthority('50', '100')")
+    @PostMapping("/apply-voucher")
     public ResponseEntity<Void> applyVoucher(
             @RequestParam Integer receiptId,
             @RequestParam String voucherCode,
-            @RequestParam Integer userId) {
+            @RequestParam Integer userId,
+            @RequestBody(required = false) ReceiptPaymentDTO.VoucherDistributionsWrapper body) {
 
-        paymentService.applyVoucher(receiptId, voucherCode, userId);
+        List<ReceiptPaymentDTO.VoucherDistribution> distributions =
+                body != null ? body.distributions() : null;
+        paymentService.applyVoucher(receiptId, voucherCode, userId, distributions);
         return ResponseEntity.ok().build();
     }
 
     @PreAuthorize("hasAnyAuthority('50', '100')")
-    @DeleteMapping("/{id}") // Șterge o plată de pe bon (doar dacă bonul este încă deschis). "CASH" scoate banii înapoi din sertar
+    @DeleteMapping("/{id}")
     public ResponseEntity<Void> removePayment(
             @PathVariable Integer id,
             @RequestParam Integer userId) {
@@ -50,17 +72,20 @@ public class ReceiptPaymentController {
     }
 
     @PreAuthorize("hasAnyAuthority('50', '100')")
-    @GetMapping("/receipt/{receiptId}") // Obține toate plățile pentru un anumit bon. Folosit in UI pentru a afișa platit vs rest.
-    public ResponseEntity<List<ReceiptPaymentDTO.Response>> getPaymentsByReceipt(@PathVariable Integer receiptId) {
+    @GetMapping("/receipt/{receiptId}")
+    public ResponseEntity<List<ReceiptPaymentDTO.Response>> getPaymentsByReceipt(
+            @PathVariable Integer receiptId) {
         return ResponseEntity.ok(paymentService.getPaymentsByReceipt(receiptId));
     }
 
     @PreAuthorize("hasAnyAuthority('100')")
-    @GetMapping("/report/sum") // RAPORT: Total încasări pe metodă de plată (grupat pentru interval de date)
+    @GetMapping("/report/sum")
     public ResponseEntity<List<ReceiptPaymentDTO.ReportResponse>> getPaymentsReport(
             @RequestParam(required = false) Integer warehouseId,
-            @RequestParam @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
-            @RequestParam @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE_TIME) LocalDateTime end,
+            @RequestParam @org.springframework.format.annotation.DateTimeFormat(
+                    iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
+            @RequestParam @org.springframework.format.annotation.DateTimeFormat(
+                    iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE_TIME) LocalDateTime end,
             @RequestParam(required = false) String methodCode) {
 
         return ResponseEntity.ok(paymentService.getPaymentsReport(start, end, methodCode, warehouseId));

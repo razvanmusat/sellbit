@@ -1,9 +1,8 @@
-import { useState, useEffect, useMemo } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useState, useEffect, useMemo } from "react";
+import { useDispatch, useSelector } from "react-redux";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   fetchActiveWarehouses,
-  setSelectedWarehouseId,
   fetchOpenReceipts,
   createNewReceipt,
   fetchActivePaymentMethods,
@@ -16,21 +15,18 @@ import {
   addPaymentToReceipt,
   removePaymentFromReceipt,
   closeReceipt,
-  applyVoucherToReceipt
-} from '../state/sellPageSlice';
+  applyVoucherToReceipt,
+} from "../state/sellPageSlice";
 
-import { invalidateCache } from '../../cashierReports/store/sellReportsSlice';
-
-// 1. IMPORTĂM UTILITARUL CENTRAL
-import { getFriendlyErrorMessage } from '../../../../shared/utils/errorHandler';
+import { invalidateCache } from "../../cashierReports/store/sellReportsSlice";
+import { getFriendlyErrorMessage } from "../../../../shared/utils/errorHandler";
 
 export const useSellPage = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const { warehouseId, receiptId } = useParams();
+  const { receiptId } = useParams();
   const { user } = useSelector((state) => state.auth);
 
-  // --- REDUX STATE ---
   const {
     warehouses,
     receipts,
@@ -38,166 +34,179 @@ export const useSellPage = () => {
     paymentMethods,
     paymentMethodsLoading,
     warehousesLoading,
-    error, 
+    error,
     cancelReasons,
-    cancelReasonsLoading
+    cancelReasonsLoading,
   } = useSelector((state) => state.sellPage);
 
-  // Filtrare: excludem gestiunea cu codul "GP"
   const filteredWarehouses = useMemo(
-    () => warehouses.filter(w => w.code !== "GP"),
-    [warehouses]
+    () => warehouses.filter((w) => w.code !== "GP"),
+    [warehouses],
   );
-  // --- LOCAL STATE (Modale & UI) ---
+
   const [modals, setModals] = useState({
     addReceipt: false,
     advance: false,
     addPayment: false,
-    cancel: false
+    cancel: false,
   });
 
   const [feedback, setFeedback] = useState({
     message: null,
-    severity: 'warning'
+    severity: "warning",
   });
 
-  // Calculare bon curent
-  const editingReceipt = useMemo(() => 
-    receiptId ? receipts.find(r => r.id == receiptId) : null, 
-    [receiptId, receipts]
+  const editingReceipt = useMemo(
+    () => (receiptId ? receipts.find((r) => r.id == receiptId) : null),
+    [receiptId, receipts],
   );
 
-  // --- ACTIONS (Helpers pentru state local) ---
   const toggleModal = (modalName, isOpen) => {
-    setModals(prev => ({ ...prev, [modalName]: isOpen }));
+    setModals((prev) => ({ ...prev, [modalName]: isOpen }));
   };
 
-  const showFeedback = (message, severity = 'success') => {
+  const showFeedback = (message, severity = "success") => {
     setFeedback({ message, severity });
   };
 
   const clearFeedback = () => {
-    setFeedback({ ...feedback, message: null });
+    setFeedback((prev) => ({ ...prev, message: null }));
   };
 
-  // --- EFFECTS ---
-  
-  // 1. Încărcare date inițiale
   useEffect(() => {
     if (warehouses.length === 0) dispatch(fetchActiveWarehouses());
     dispatch(fetchActivePaymentMethods());
     dispatch(fetchCancelReasons());
   }, [dispatch, warehouses.length]);
 
-  // 2. Încărcare bonuri la schimbarea gestiunii
   useEffect(() => {
-    if (warehouseId) {
-      dispatch(setSelectedWarehouseId(warehouseId));
-      dispatch(fetchOpenReceipts(warehouseId));
-    }
-  }, [warehouseId, dispatch]);
+    dispatch(fetchOpenReceipts());
+  }, [dispatch]);
 
-  // 3. Refresh la schimbarea bonului
   useEffect(() => {
-    if (receiptId && warehouseId) {
-      dispatch(fetchOpenReceipts(warehouseId));
-    }
-  }, [receiptId, warehouseId, dispatch]);
+    if (receiptId) dispatch(fetchOpenReceipts());
+  }, [receiptId, dispatch]);
 
-  // 4. MONITORIZARE ERORI (NOU)
-  // Ascultăm dacă apare o eroare în Redux și o afișăm în Snackbar
   useEffect(() => {
     if (error) {
       const msg = getFriendlyErrorMessage(error);
-      showFeedback(msg, 'error');
-      
-      // Opțional: Curățăm eroarea din Redux imediat, ca să nu rămână agățată
-      dispatch(clearError()); 
+      showFeedback(msg, "error");
+      dispatch(clearError());
     }
-  }, [error, dispatch]); 
-
-
-  // --- HANDLERS (Business Logic) ---
+  }, [error, dispatch]);
 
   const actions = {
-    // Navigare
-    changeWarehouse: (e, newValue) => navigate(`/home/sell/${newValue}`),
-    openReceipt: (id) => navigate(`/home/sell/${warehouseId}/${id}`),
-    backToDashboard: () => navigate(`/home/sell/${warehouseId}`),
+    openReceipt: (id) => navigate(`/home/sell/${id}`),
+    backToDashboard: () => navigate("/home/sell"),
 
-    // Creare Bon
     createReceipt: ({ tableName, note }) => {
-      if (warehouseId && user?.id) {
-        dispatch(createNewReceipt({ warehouseId, tableName, userId: user.id, note }));
-        toggleModal('addReceipt', false);
+      if (user?.id) {
+        dispatch(createNewReceipt({ tableName, userId: user.id, note }));
+        toggleModal("addReceipt", false);
       }
     },
 
-    // Avans Rapid
-    createAdvance: ({ amount, paymentMethodCode, note }) => {
-      if (warehouseId && user?.id) {
-        dispatch(registerAdvancePayment({ warehouseId, amount, paymentMethodCode, userId: user.id, note }));
-        showFeedback('Avans înregistrat cu succes!', 'success');
-        toggleModal('advance', false);
+    createAdvance: ({ warehouseId, amount, paymentMethodCode, note }) => {
+      if (user?.id) {
+        dispatch(
+          registerAdvancePayment({
+            warehouseId,
+            amount,
+            paymentMethodCode,
+            userId: user.id,
+            note,
+          }),
+        );
+        showFeedback("Avans înregistrat cu succes!", "success");
+        toggleModal("advance", false);
       }
     },
 
-    // Produse (Add/Update/Remove)
-    addProduct: (product) => {
-      if (!receiptId || !editingReceipt) return;
-      
+    addProduct: (product, warehouseId, quantity = 1) => {
+      if (!receiptId || !editingReceipt || !warehouseId) return;
       const productId = product.id || product;
-      const existingItem = editingReceipt.items.find(item => item.productId === productId);
-      const newQuantity = existingItem ? existingItem.quantity + 1 : 1;
-
-      dispatch(addOrUpdateReceiptItem({ receiptId, productId, quantity: newQuantity }));
+      const existingItem = editingReceipt.items.find(
+        (item) =>
+          item.productId === productId && item.warehouseId === warehouseId,
+      );
+      const newQuantity = existingItem
+        ? existingItem.quantity + quantity
+        : quantity;
+      dispatch(
+        addOrUpdateReceiptItem({
+          receiptId,
+          productId,
+          quantity: newQuantity,
+          warehouseId,
+        }),
+      );
     },
 
-    updateItemQuantity: (receiptId, productId, newQuantity) => {
-      dispatch(addOrUpdateReceiptItem({ receiptId, productId, quantity: newQuantity }));
+    updateItemQuantity: (receiptId, productId, newQuantity, warehouseId) => {
+      dispatch(
+        addOrUpdateReceiptItem({
+          receiptId,
+          productId,
+          quantity: newQuantity,
+          warehouseId,
+        }),
+      );
     },
 
     removeItem: (receiptItemId) => {
-      dispatch(removeReceiptItem(receiptItemId));
+      return dispatch(removeReceiptItem(receiptItemId));
     },
 
-    // Plăți
-    addPayment: async (paymentMethodId, amount, changeDue) => {
+    // warehouseId — gestiunea pe care merge cash-ul (selectată de casier din picker)
+    addPayment: async (paymentMethodId, amount, changeDue, warehouseId) => {
       if (receiptId && user?.id) {
-        const result = await dispatch(addPaymentToReceipt({
-          receiptId, paymentMethodId, amount: parseFloat(amount), userId: user.id
-        }));
-
+        const result = await dispatch(
+          addPaymentToReceipt({
+            receiptId,
+            paymentMethodId,
+            amount: parseFloat(amount),
+            userId: user.id,
+            warehouseId, // transmis direct la backend
+          }),
+        );
         if (addPaymentToReceipt.fulfilled.match(result)) {
-          dispatch(fetchOpenReceipts(warehouseId));
-          showFeedback('Plată adăugată.', 'success');
+          dispatch(fetchOpenReceipts());
+          showFeedback("Plată adăugată.", "success");
         } else if (addPaymentToReceipt.rejected.match(result)) {
-          throw new Error(result.payload || 'Eroare la adăugarea plății.');
+          throw new Error(result.payload || "Eroare la adăugarea plății.");
         }
       }
     },
 
     removePayment: async (paymentId) => {
       if (receiptId && user?.id) {
-        const result = await dispatch(removePaymentFromReceipt({ paymentId, userId: user.id, receiptId }));
+        const result = await dispatch(
+          removePaymentFromReceipt({ paymentId, userId: user.id, receiptId }),
+        );
         if (removePaymentFromReceipt.fulfilled.match(result)) {
-          dispatch(fetchOpenReceipts(warehouseId));
-          showFeedback('Plata a fost ștearsă.', 'success');
+          dispatch(fetchOpenReceipts());
+          showFeedback("Plata a fost ștearsă.", "success");
         } else if (removePaymentFromReceipt.rejected.match(result)) {
-          throw new Error(result.payload || 'Eroare la ștergerea plății.');
+          throw new Error(result.payload || "Eroare la ștergerea plății.");
         }
       }
     },
 
-    applyVoucher: async (voucherCode) => {
+    applyVoucher: async (voucherCode, distributions = null) => {
       if (receiptId && user?.id) {
-        const result = await dispatch(applyVoucherToReceipt({ receiptId, voucherCode, userId: user.id }));
+        const result = await dispatch(
+          applyVoucherToReceipt({
+            receiptId,
+            voucherCode,
+            userId: user.id,
+            distributions,
+          }),
+        );
         if (applyVoucherToReceipt.fulfilled.match(result)) {
-          dispatch(fetchOpenReceipts(warehouseId));
-          showFeedback('Voucher aplicat cu succes!', 'success');
+          dispatch(fetchOpenReceipts());
+          showFeedback("Voucher aplicat cu succes!", "success");
         } else if (applyVoucherToReceipt.rejected.match(result)) {
-          // La rejected, aruncăm throw pentru ca catch-ul din usePaymentModal să funcționeze
-          throw new Error(result.payload || 'Eroare aplicare voucher');
+          throw new Error(result.payload || "Eroare aplicare voucher");
         }
       }
     },
@@ -207,41 +216,30 @@ export const useSellPage = () => {
         const result = await dispatch(closeReceipt(receiptId));
         if (closeReceipt.fulfilled.match(result)) {
           dispatch(invalidateCache());
-          toggleModal('addPayment', false);
-          showFeedback('Bon închis cu succes!', 'success');
+          toggleModal("addPayment", false);
+          showFeedback("Bon închis cu succes!", "success");
           actions.backToDashboard();
         }
       }
     },
 
-    // Anulare
     cancelReceipt: async (reasonId) => {
       if (receiptId) {
         const result = await dispatch(cancelReceipt({ receiptId, reasonId }));
         if (cancelReceipt.fulfilled.match(result)) {
           dispatch(invalidateCache());
-          toggleModal('cancel', false);
-          showFeedback('Bonul a fost anulat cu succes.', 'success');
+          toggleModal("cancel", false);
+          showFeedback("Bonul a fost anulat cu succes.", "success");
           actions.backToDashboard();
         }
       }
     },
 
-    afterWarehouseTransfer: () => {
-      if (warehouseId) {
-        dispatch(fetchOpenReceipts(warehouseId));
-      }
-      dispatch(invalidateCache());
-    },
-    
-    // Erori
     clearError: () => dispatch(clearError()),
-    clearFeedback
+    clearFeedback,
   };
 
   return {
-    // Data
-    warehouseId,
     receiptId,
     warehouses: filteredWarehouses,
     receipts,
@@ -249,26 +247,18 @@ export const useSellPage = () => {
     paymentMethods,
     cancelReasons,
     user,
-    
-    // Loading States
     loading: {
       receipts: receiptsLoading,
       paymentMethods: paymentMethodsLoading,
       cancelReasons: cancelReasonsLoading,
-      warehouses: warehousesLoading
+      warehouses: warehousesLoading,
     },
-    
-    // UI States
     modals,
     toggleModal,
     feedback,
     error,
-    
-    // Utilitar
     getFriendlyErrorMessage,
-
-    // Actions
-    actions
+    actions,
   };
 };
 

@@ -174,7 +174,6 @@ CREATE INDEX idx_products_category ON products(category_id);
 CREATE INDEX idx_products_type ON products(product_type_id);
 CREATE INDEX idx_products_vat ON products(vat_rate_id);
 
--- NOU: Tabela de retetar (Product Components)
 CREATE TABLE product_components (
     id SERIAL PRIMARY KEY,
     parent_product_id INTEGER NOT NULL REFERENCES products(id),
@@ -204,7 +203,7 @@ CREATE TABLE receipts (
     created_at TIMESTAMP DEFAULT NOW(),
     closed_at TIMESTAMP,
     user_id INT REFERENCES users(id),
-    warehouse_id INT NOT NULL REFERENCES warehouses(id),
+    warehouse_id INT REFERENCES warehouses(id),   -- nullable: gestiunea e per linie, nu pe bon
     total_net DECIMAL(10, 2),
     total_vat DECIMAL(10, 2),
     cancel_reason_id INT REFERENCES cancel_reasons(id),
@@ -263,6 +262,7 @@ CREATE TABLE receipt_items (
     id SERIAL PRIMARY KEY,
     product_id INT NOT NULL REFERENCES products(id),
     receipt_id INT NOT NULL REFERENCES receipts(id),
+    warehouse_id INT NOT NULL REFERENCES warehouses(id),   -- gestiunea liniei, selectata per produs
     quantity DECIMAL(10, 3),
     unit_price DECIMAL(10, 2),
     purchase_unit_price DECIMAL(10, 2),
@@ -290,6 +290,7 @@ CREATE TABLE receipt_payments (
     receipt_id INT NOT NULL REFERENCES receipts(id),
     payment_method_id INT NOT NULL REFERENCES payment_methods(id),
     amount DECIMAL(10, 2) NOT NULL,
+    warehouse_id INT REFERENCES warehouses(id),   -- nullable: gestiunea e per linie, nu pe bon
     paid_at TIMESTAMP DEFAULT NOW()
 );
 
@@ -347,10 +348,13 @@ CREATE TABLE catering_orders (
 -------------------------------------------------------------------------------
 -- 7. INDEXURI ADITIONALE
 -------------------------------------------------------------------------------
+
 CREATE INDEX idx_receipts_warehouse ON receipts(warehouse_id);
 CREATE INDEX idx_receipts_created ON receipts(created_at);
+CREATE INDEX idx_receipt_items_warehouse ON receipt_items(warehouse_id);
 CREATE INDEX idx_stock_current_product ON stock_current(product_id);
 CREATE INDEX idx_customer_vouchers_code ON customer_vouchers(code);
 CREATE INDEX idx_cash_movements_receipt_id ON cash_movements(receipt_id);
+
 ALTER TABLE voucher_campaigns ADD CONSTRAINT fk_vc_required_product FOREIGN KEY (required_product_id) REFERENCES products(id);
 ALTER TABLE voucher_campaigns ADD CONSTRAINT fk_vc_applicable_product FOREIGN KEY (applicable_product_id) REFERENCES products(id);

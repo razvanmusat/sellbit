@@ -154,7 +154,7 @@ function App() {
         <Route index element={<Home />} />
         
         {/* 1. Vânzare */}
-        <Route path="sell/:warehouseId?/:receiptId?" element={<SellPage />} />
+        <Route path="sell/:receiptId?" element={<SellPage />} />
         {/* Pagina de schimbare gestiune bonuri */}
         
         {/* 2. Casierie */}

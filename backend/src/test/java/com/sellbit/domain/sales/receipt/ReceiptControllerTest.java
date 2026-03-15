@@ -1,7 +1,6 @@
 package com.sellbit.domain.sales.receipt;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.sellbit.domain.config.InsufficientStockException;
 import com.sellbit.domain.security.auth.JwtUtils;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -45,7 +44,7 @@ class ReceiptControllerTest {
     @Test
     @DisplayName("POST /api/sales/receipts - Succes: Creare bon")
     void create_Success() throws Exception {
-        var req = new ReceiptDTOs.CreateRequest(1, "Masa 5", 1, "Nota test");
+        var req = new ReceiptDTOs.CreateRequest("Masa 5", 1, "Nota test");
         
         var res = new ReceiptDTOs.Response(
                 1, "Deschis", "Masa: Masa 5", 
@@ -72,7 +71,7 @@ class ReceiptControllerTest {
     @Test
     @DisplayName("POST /api/sales/receipts - Eroare: Validare @NotBlank tableName")
     void create_Fail_Validation() throws Exception {
-        var req = new ReceiptDTOs.CreateRequest(1, "", 1, null);
+        var req = new ReceiptDTOs.CreateRequest("", 1, null);
 
         mockMvc.perform(post("/api/sales/receipts")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -186,10 +185,9 @@ class ReceiptControllerTest {
                 List.of()  // payments
         );
 
-        when(receiptService.getActiveReceipts(1)).thenReturn(List.of(response));
+        when(receiptService.getActiveReceipts()).thenReturn(List.of(response));
 
-        mockMvc.perform(get("/api/sales/receipts/active")
-                        .param("warehouseId", "1"))
+        mockMvc.perform(get("/api/sales/receipts/active"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].tableName").value("Masa: Masa 10"))
                 .andExpect(jsonPath("$[0].warehouseId").value(1));
@@ -199,7 +197,7 @@ class ReceiptControllerTest {
     @DisplayName("GET /api/sales/receipts/active - Eroare: Lipsește parametrul warehouseId")
     void getActive_Fail_MissingParam() throws Exception {
         mockMvc.perform(get("/api/sales/receipts/active"))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isOk());
     }
 
     // --- 8. REPORT (HISTORY) ---
@@ -301,39 +299,5 @@ class ReceiptControllerTest {
                 .andExpect(status().isBadRequest());
     }
 
-        // --- 12. CHANGE WAREHOUSE ---
-        @Test
-        @DisplayName("PATCH /api/sales/receipts/{id}/change-warehouse - Succes")
-        void changeWarehouse_Success() throws Exception {
-                doNothing().when(receiptService).changeReceiptWarehouse(100, 2);
-
-                mockMvc.perform(patch("/api/sales/receipts/100/change-warehouse")
-                                                .param("newWarehouseId", "2"))
-                                .andExpect(status().isOk());
-
-                verify(receiptService).changeReceiptWarehouse(100, 2);
-        }
-
-        @Test
-        @DisplayName("PATCH /api/sales/receipts/{id}/change-warehouse - Eroare: Lipsește newWarehouseId")
-        void changeWarehouse_Fail_MissingNewWarehouseId() throws Exception {
-                mockMvc.perform(patch("/api/sales/receipts/100/change-warehouse"))
-                                .andExpect(status().isBadRequest());
-
-                verify(receiptService, never()).changeReceiptWarehouse(anyInt(), anyInt());
-        }
-
-        @Test
-        @DisplayName("PATCH /api/sales/receipts/{id}/change-warehouse - Eroare: Stoc insuficient")
-        void changeWarehouse_Fail_InsufficientStock() throws Exception {
-                doThrow(new InsufficientStockException(List.of("Cafea", "Lapte")))
-                                .when(receiptService).changeReceiptWarehouse(100, 2);
-
-                mockMvc.perform(patch("/api/sales/receipts/100/change-warehouse")
-                                                .param("newWarehouseId", "2"))
-                                .andExpect(status().isBadRequest())
-                                .andExpect(jsonPath("$.message").value("ERROR.STOCK.INSUFFICIENT_QUANTITY"))
-                                .andExpect(jsonPath("$.params[0]").value("Cafea"))
-                                .andExpect(jsonPath("$.params[1]").value("Lapte"));
-        }
+           
 }

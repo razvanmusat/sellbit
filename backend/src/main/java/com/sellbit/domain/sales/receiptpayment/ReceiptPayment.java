@@ -1,5 +1,6 @@
 package com.sellbit.domain.sales.receiptpayment;
 
+import com.sellbit.domain.inventory.warehouse.Warehouse;
 import com.sellbit.domain.lookup.paymentmethod.PaymentMethod;
 import com.sellbit.domain.sales.receipt.Receipt;
 import jakarta.persistence.*;
@@ -25,6 +26,10 @@ public class ReceiptPayment {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "receipt_id", nullable = false)
     private Receipt receipt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "warehouse_id", nullable = true)
+    private Warehouse warehouse;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "payment_method_id", nullable = false)

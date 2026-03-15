@@ -3,29 +3,19 @@ import { emitSalesDataChanged } from '../../../../shared/utils/salesSyncEvents';
 
 export class SalesService {
 
-  // @PostMapping
-  // POS: Deschide o masă nouă (sau un bon nou).
   static async createReceipt(request) {
-    const response = await client('sales/receipts', { body: request });
-    return response;
+    return await client('sales/receipts', { body: request });
   }
 
-  // @GetMapping("/active")
-  // POS: Obține bonurile deschise pentru o gestiune.
-  static async getActiveReceipts(warehouseId) {
-    const response = await client(`sales/receipts/active?warehouseId=${warehouseId}`);
-    return response;
+  // Fără warehouseId — backend returnează toate bonurile OPEN
+  static async getActiveReceipts() {
+    return await client('sales/receipts/active');
   }
 
-  // @GetMapping("/alerts")
-  // ALERTE: Bonuri uitate deschise de ieri. (Are auth '50')
   static async getUnclosedAlerts() {
-    const response = await client('sales/receipts/alerts');
-    return response;
+    return await client('sales/receipts/alerts');
   }
 
-  // @PatchMapping("/{id}/cancel")
-  // POS: Anulează bonul deschis.
   static async cancelOpenReceipt(id, reasonId) {
     const response = await client(`sales/receipts/${id}/cancel?reasonId=${reasonId}`, {
       method: 'PATCH'
@@ -34,47 +24,45 @@ export class SalesService {
     return response;
   }
 
-  // @PostMapping("/{id}/close")
-  // POS: Închidere Bon (Plată).
   static async closeReceipt(id) {
     await client(`sales/receipts/${id}/close`, { method: 'POST' });
     emitSalesDataChanged({ type: 'receipt-closed' });
   }
 
-  // @PostMapping("/{id}/refund")
-  // POS: Refundare parțială.
   static async createPartialRefund(id, request) {
     const response = await client(`sales/receipts/${id}/refund`, { body: request });
     emitSalesDataChanged({ type: 'receipt-refunded' });
     return response;
   }
 
-  // @GetMapping("/{id}/print-bill-note")
-  // POS: Date pentru printare Nota de plată.
   static async getBillNoteData(id) {
-    const response = await client(`sales/receipts/${id}/print-bill-note`);
-    return response;
+    return await client(`sales/receipts/${id}/print-bill-note`);
   }
 
-  // @PostMapping("/advance")
-  // POS: Încasare Avans.
   static async registerAdvancePayment(request) {
     await client('sales/receipts/advance', { body: request });
     emitSalesDataChanged({ type: 'advance-registered', warehouseId: request?.warehouseId ?? null });
   }
 
-  // @GetMapping("/report")
   static async getReceiptsReport(warehouseId, status, start, end) {
-    const endpoint = `sales/receipts/report?warehouseId=${warehouseId}&status=${status}&start=${start}&end=${end}`;
-    return await client(endpoint);
+    return await client(
+      `sales/receipts/report?warehouseId=${warehouseId}&status=${status}&start=${start}&end=${end}`
+    );
   }
 
-  // @PatchMapping("/{id}/change-warehouse")
-  // Schimbă gestiunea unui bon închis.
-  static async changeReceiptWarehouse(id, newWarehouseId) {
-    await client(`sales/receipts/${id}/change-warehouse?newWarehouseId=${newWarehouseId}`, {
-      method: 'PATCH'
-    });
-    emitSalesDataChanged({ type: 'receipt-warehouse-changed', warehouseId: newWarehouseId });
+  static async getReceiptsReportSummary(warehouseId, status, start, end) {
+    return await client(
+      `sales/receipts/report/summary?warehouseId=${warehouseId}&status=${status}&start=${start}&end=${end}`
+    );
+  }
+
+  static async getReceiptById(id) {
+    return await client(`sales/receipts/${id}`);
+  }
+
+  static async getGrossProfitReport(warehouseId, start, end) {
+    return await client(
+      `sales/receipts/reports/profit?warehouseId=${warehouseId}&start=${start}&end=${end}`
+    );
   }
 }
