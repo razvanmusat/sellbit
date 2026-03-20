@@ -57,7 +57,7 @@ public class VoucherCampaignController {
     
     //Verifică ce prefixe sunt deja folosite (ex: JOACA-, VARA-).
     //Helper pentru formularul de creare campanie (să nu duplicăm prefixele).
-    @PreAuthorize("hasAuthority('100')")
+    @PreAuthorize("hasAnyAuthority('50','100')")
     @GetMapping("/active-prefixes")
     public ResponseEntity<List<String>> getActivePrefixes() {
         return ResponseEntity.ok(campaignService.getActivePrefixes(LocalDate.now()));
