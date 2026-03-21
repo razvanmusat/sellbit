@@ -38,7 +38,6 @@ const AddPaymentModal = (props) => {
 
   const displayChange = changeDue > 0 ? changeDue : lastChange;
 
-  // Label pentru picker — diferit pentru voucher vs plată normală
   const pendingMethod = paymentMethods.find(m => m.id === pendingPayment?.methodId);
   const pickerTitle = pendingPayment?.voucherCode ? 'Pe ce gestiune se aplică voucherul?' : 'Pe ce gestiune?';
   const pickerSubtitle = pendingPayment?.voucherCode
@@ -57,7 +56,7 @@ const AddPaymentModal = (props) => {
         <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', minHeight: '72px' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <AttachMoneyIcon fontSize="large" color="primary" />
-            <Typography variant="h6" fontWeight="bold">Adaugă Plată</Typography>
+            <Typography variant="h6" fontWeight="bold" component="span">Adaugă Plată</Typography>
           </Box>
           <Chip label={`Total: ${receipt.totalAmount.toFixed(2)} Lei`} color="primary" sx={{ fontWeight: 'bold' }} />
         </DialogTitle>
@@ -146,18 +145,36 @@ const AddPaymentModal = (props) => {
                 <List dense sx={{ p: 0 }}>
                   {localPayments.map((payment, index) => (
                     <React.Fragment key={payment.id}>
-                      <ListItem secondaryAction={
-                        <IconButton edge="end" color="error" onClick={() => handleRemove(payment.id)} disabled={loading}>
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
-                      }>
-                        <ListItemText
-                          primary={<Typography fontWeight="600" variant="body2">{payment.paymentMethodLabel}</Typography>}
-                        />
-                        <Typography fontWeight="bold" color="primary" variant="body1">
-                          {payment.amount.toFixed(2)} Lei
-                        </Typography>
-                      </ListItem>
+                      <ListItem
+  secondaryAction={
+    <IconButton edge="end" color="error" onClick={() => handleRemove(payment.id)} disabled={loading}>
+      <DeleteIcon fontSize="small" />
+    </IconButton>
+  }
+>
+  <ListItemText
+    primary={
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pr: 1 }}>
+        <Typography fontWeight="600" variant="body2">
+          {payment.paymentMethodLabel}
+        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+          {payment.warehouseName && (
+            <>
+              <StoreIcon sx={{ fontSize: '0.75rem', color: 'text.secondary' }} />
+              <Typography variant="caption" color="text.secondary">
+                {payment.warehouseName}
+              </Typography>
+            </>
+          )}
+          <Typography fontWeight="bold" color="primary" variant="body1" sx={{ ml: 1 }}>
+            {payment.amount.toFixed(2)} Lei
+          </Typography>
+        </Box>
+      </Box>
+    }
+  />
+</ListItem>
                       {index < localPayments.length - 1 && <Divider component="li" />}
                     </React.Fragment>
                   ))}
@@ -253,11 +270,14 @@ const AddPaymentModal = (props) => {
       </Dialog>
 
       {/* ============================================================
-          PICKER GESTIUNE — același pentru plăți normale și voucher
+          PICKER GESTIUNE
       ============================================================ */}
-      <Dialog open={pickerOpen} onClose={handlePickerClose} maxWidth="xs" fullWidth>
+      <Dialog open={pickerOpen} onClose={handlePickerClose} maxWidth="xs" fullWidth
+        disableRestoreFocus
+        disableEnforceFocus
+      >
         <DialogTitle sx={{ pb: 1 }}>
-          <Typography variant="h6" fontWeight="bold">{pickerTitle}</Typography>
+          <Typography variant="h6" fontWeight="bold" component="span">{pickerTitle}</Typography>
           {pendingPayment && (
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
               {pickerSubtitle}

@@ -58,7 +58,7 @@ public class ReceiptController {
     @PreAuthorize("hasAnyAuthority('50', '100')")
     @GetMapping("/report")
     public ResponseEntity<List<ReceiptDTOs.Response>> getReport(
-            @RequestParam Integer warehouseId,
+            @RequestParam(required = false) Integer warehouseId,
             @RequestParam String status,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end) {
@@ -68,7 +68,7 @@ public class ReceiptController {
     @PreAuthorize("hasAnyAuthority('50', '100')")
     @GetMapping("/report/summary")
     public ResponseEntity<List<ReceiptDTOs.SummaryResponse>> getReportSummary(
-            @RequestParam Integer warehouseId,
+            @RequestParam(required = false) Integer warehouseId,
             @RequestParam String status,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end) {

@@ -15,8 +15,8 @@ export const useRefundModal = (open, receipt, onClose, onRefundSuccess) => {
     const [submitting, setSubmitting] = useState(false);
     const [refundMap, setRefundMap] = useState({});
     const [paymentMethodId, setPaymentMethodId] = useState('');
+    const [refundNote, setRefundNote] = useState('');
 
-    // Toast în loc de Alert inline
     const [toastOpen, setToastOpen] = useState(false);
     const [toastMessage, setToastMessage] = useState('');
     const [toastSeverity, setToastSeverity] = useState('error');
@@ -28,6 +28,7 @@ export const useRefundModal = (open, receipt, onClose, onRefundSuccess) => {
         if (open && receipt?.id) {
             setRefundMap({});
             setPaymentMethodId('');
+            setRefundNote('');
             setToastOpen(false);
             setVoucherAmount(0);
             setOriginalPayments([]);
@@ -126,6 +127,7 @@ export const useRefundModal = (open, receipt, onClose, onRefundSuccess) => {
             const request = {
                 userId: user?.id,
                 paymentMethodId,
+                note: refundNote?.trim() || null,
                 items: itemsPayload
             };
 
@@ -165,10 +167,11 @@ export const useRefundModal = (open, receipt, onClose, onRefundSuccess) => {
             toastSeverity,
             refundMap,
             paymentMethodId,
+            refundNote,
             totalRefundAmount: adjustedRefundAmount,
             hasSelection
         },
-        setters: { setPaymentMethodId },
+        setters: { setPaymentMethodId, setRefundNote },
         handlers: {
             getRefundLimit,
             handleIncrement,

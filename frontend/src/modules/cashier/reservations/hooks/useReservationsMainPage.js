@@ -10,26 +10,30 @@ import { getFriendlyErrorMessage } from '../../../../shared/utils/errorHandler';
 import { invalidateDailyOrders } from '../../catering/store/calendarSlice';
 
 export const useReservationsMainPage = () => {
-  const navigate = useNavigate(); 
+  const navigate = useNavigate();
   const dispatch = useDispatch();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  // --- REDUX STATE ---
-  const { 
-    selectedDate: selectedDateStr, 
-    reservations: dayReservations, 
-    loading: loadingList, 
-    error: listError 
+  const {
+    selectedDate: selectedDateStr,
+    reservations: dayReservations,
+    loading: loadingList,
+    error: listError
   } = useSelector((state) => state.reservations);
   const user = useSelector((state) => state.auth?.user);
 
   const selectedDate = useMemo(() => dayjs(selectedDateStr), [selectedDateStr]);
   const prevDateRef = useRef(selectedDateStr);
 
-  // --- LOCAL STATE ---
+  // ← REF care ține mereu valoarea curentă, evită closure stale pe telefon
+  const selectedDateStrRef = useRef(selectedDateStr);
+  useEffect(() => {
+    selectedDateStrRef.current = selectedDateStr;
+  }, [selectedDateStr]);
+
   const [openModal, setOpenModal] = useState(false);
   const [editingReservation, setEditingReservation] = useState(null);
-  const [deleteId, setDeleteId] = useState(null); 
+  const [deleteId, setDeleteId] = useState(null);
   const [cateringModalOpen, setCateringModalOpen] = useState(false);
   const [reservationForCatering, setReservationForCatering] = useState(null);
   const [cateringConflict, setCateringConflict] = useState(null);
@@ -48,11 +52,10 @@ export const useReservationsMainPage = () => {
 
   const isAdmin = user?.authorityLevel === 100;
 
-  // --- LOGICA FETCH ---
   const loadData = useCallback((force = false) => {
     if (!selectedDateStr) return;
     if (!force && !listError && !loadingList && dayReservations && dayReservations.length > 0) {
-        return; 
+      return;
     }
     dispatch(fetchReservations(selectedDateStr));
   }, [dispatch, selectedDateStr, listError, loadingList, dayReservations]);
@@ -64,7 +67,6 @@ export const useReservationsMainPage = () => {
       const start = dayjs(startDate).startOf('day').format('YYYY-MM-DDTHH:mm:ss');
       const end = dayjs(endDate).endOf('day').format('YYYY-MM-DDTHH:mm:ss');
       const data = await ReservationsService.getByInterval(start, end);
-
       setIntervalReservations(data || []);
       setActiveRange({ start: dayjs(startDate).startOf('day'), end: dayjs(endDate).endOf('day') });
       setViewMode(mode);
@@ -76,32 +78,26 @@ export const useReservationsMainPage = () => {
     }
   }, []);
 
-
-  // --- ARHITECTURA URL-FIRST ---
-
   // 1. URL -> REDUX
   useEffect(() => {
     const urlDate = searchParams.get('date');
-    
     if (urlDate && dayjs(urlDate).isValid()) {
-        if (urlDate !== selectedDateStr) {
-            dispatch(setSelectedDate(urlDate));
-        }
+      if (urlDate !== selectedDateStr) {
+        dispatch(setSelectedDate(urlDate));
+      }
     } else {
-        if (selectedDateStr) {
-            setSearchParams({ date: selectedDateStr }, { replace: true });
-        }
+      if (selectedDateStr) {
+        setSearchParams({ date: selectedDateStr }, { replace: true });
+      }
     }
-  }, [searchParams]); 
-
+  }, [searchParams]);
 
   // 2. REDUX UPDATE TRIGGER
   useEffect(() => {
     const isDateChanged = prevDateRef.current !== selectedDateStr;
-    loadData(isDateChanged); 
+    loadData(isDateChanged);
     prevDateRef.current = selectedDateStr;
-  }, [selectedDateStr]); 
-
+  }, [selectedDateStr]);
 
   // --- HANDLERS NAVIGARE ---
   const handleChangeDate = (newDate) => {
@@ -113,24 +109,22 @@ export const useReservationsMainPage = () => {
 
   const handlePrevDay = () => handleChangeDate(selectedDate.subtract(1, 'day'));
   const handleNextDay = () => handleChangeDate(selectedDate.add(1, 'day'));
+
   const handleGoToToday = () => {
     setViewMode('day');
     setFilterOption('');
-    const today = dayjs();
-    const todayStr = today.format('YYYY-MM-DD');
+    const todayStr = dayjs().format('YYYY-MM-DD');
     setSearchParams({ date: todayStr });
-
-    if (selectedDateStr === todayStr) {
-      loadData(true);
+    if (selectedDateStrRef.current === todayStr) {
+      dispatch(fetchReservations(todayStr));
     }
   };
 
   const handleRefresh = () => {
     if (viewMode === 'day') {
-      loadData(true);
+      dispatch(fetchReservations(selectedDateStrRef.current));
       return;
     }
-
     if (activeRange) {
       loadIntervalData(activeRange.start, activeRange.end, viewMode);
     }
@@ -138,12 +132,10 @@ export const useReservationsMainPage = () => {
 
   const handleFilterOptionChange = (option) => {
     setFilterOption(option);
-
     if (option === 'currentMonth') {
       loadIntervalData(dayjs().startOf('month'), dayjs().endOf('month'), 'currentMonth');
       return;
     }
-
     if (option === 'customInterval') {
       if (activeRange && viewMode === 'customInterval') {
         setRangeStart(dayjs(activeRange.start));
@@ -168,12 +160,10 @@ export const useReservationsMainPage = () => {
       setToast({ open: true, message: 'Te rog selectează ambele date.', severity: 'warning' });
       return;
     }
-
     if (dayjs(rangeStart).isAfter(dayjs(rangeEnd), 'day')) {
       setToast({ open: true, message: 'Data de început trebuie să fie înainte de data de sfârșit.', severity: 'warning' });
       return;
     }
-
     await loadIntervalData(rangeStart, rangeEnd, 'customInterval');
     setRangeModalOpen(false);
     setFilterOption('customInterval');
@@ -182,8 +172,8 @@ export const useReservationsMainPage = () => {
   // --- MODAL HANDLERS ---
   const handleOpenAdd = () => {
     if (selectedDate.isBefore(dayjs().startOf('day'))) {
-        setToast({ open: true, message: 'Nu poți adăuga rezervări în trecut!', severity: 'warning' });
-        return; 
+      setToast({ open: true, message: 'Nu poți adăuga rezervări în trecut!', severity: 'warning' });
+      return;
     }
     setEditingReservation(null);
     setOpenModal(true);
@@ -191,19 +181,22 @@ export const useReservationsMainPage = () => {
 
   const handleOpenEdit = (reservation) => {
     if (dayjs(reservation.startAt).isBefore(dayjs().startOf('day'))) {
-        setToast({ open: true, message: 'Nu poți modifica o rezervare din trecut!', severity: 'warning' });
-        return;
+      setToast({ open: true, message: 'Nu poți modifica o rezervare din trecut!', severity: 'warning' });
+      return;
     }
     setEditingReservation(reservation);
     setOpenModal(true);
   };
 
-  const handleCloseModal = () => { setOpenModal(false); setEditingReservation(null); };
+  const handleCloseModal = () => {
+    setOpenModal(false);
+    setEditingReservation(null);
+  };
 
   const handleOpenDelete = (reservation) => {
     if (dayjs(reservation.startAt).isBefore(dayjs().startOf('day'))) {
-        setToast({ open: true, message: 'Nu poți șterge o rezervare din trecut!', severity: 'warning' });
-        return;
+      setToast({ open: true, message: 'Nu poți șterge o rezervare din trecut!', severity: 'warning' });
+      return;
     }
     setDeleteId(reservation.id);
   };
@@ -222,15 +215,13 @@ export const useReservationsMainPage = () => {
 
   const handleConfirmInvitation = async () => {
     if (!confirmInvitationReservation?.id) return;
-
     setSubmitting(true);
     try {
       await ReservationsService.confirmDigitalInvitation(confirmInvitationReservation.id);
       setToast({ open: true, message: 'Invitația digitală a fost confirmată.', severity: 'success' });
       setConfirmInvitationReservation(null);
-
       if (viewMode === 'day') {
-        loadData(true);
+        dispatch(fetchReservations(selectedDateStrRef.current));
       } else if (activeRange) {
         await loadIntervalData(activeRange.start, activeRange.end, viewMode);
       }
@@ -244,22 +235,22 @@ export const useReservationsMainPage = () => {
 
   const handleOpenCatering = async (reservation) => {
     try {
-        const dateStr = dayjs(reservation.startAt).format('YYYY-MM-DD');
-        const dailyOrders = await CateringService.getDailyOrders(dateStr);
-        const exists = dailyOrders && dailyOrders.some(order => order.reservationId === reservation.id);
-        if (exists) { setCateringConflict(reservation); return; }
-        setReservationForCatering(reservation);
-        setCateringModalOpen(true);
+      const dateStr = dayjs(reservation.startAt).format('YYYY-MM-DD');
+      const dailyOrders = await CateringService.getDailyOrders(dateStr);
+      const exists = dailyOrders && dailyOrders.some(order => order.reservationId === reservation.id);
+      if (exists) { setCateringConflict(reservation); return; }
+      setReservationForCatering(reservation);
+      setCateringModalOpen(true);
     } catch (err) {
-        setToast({ open: true, message: 'Eroare la verificarea comenzilor.', severity: 'error' });
+      setToast({ open: true, message: 'Eroare la verificarea comenzilor.', severity: 'error' });
     }
   };
 
   const handleRedirectToCatering = () => {
-      if (!cateringConflict) return;
-      const dateStr = dayjs(cateringConflict.startAt).format('YYYY-MM-DD');
-      navigate(`/home/catering?date=${dateStr}`);
-      setCateringConflict(null);
+    if (!cateringConflict) return;
+    const dateStr = dayjs(cateringConflict.startAt).format('YYYY-MM-DD');
+    navigate(`/home/catering?date=${dateStr}`);
+    setCateringConflict(null);
   };
 
   const handleCloseConflict = () => setCateringConflict(null);
@@ -268,54 +259,49 @@ export const useReservationsMainPage = () => {
   const handleSubmitCatering = async (itemsPayload) => {
     setSubmitting(true);
     try {
-        await CateringService.create(itemsPayload);
-        setToast({ open: true, message: 'Comanda a fost salvată!', severity: 'success' });
-        handleCloseCatering();
-        dispatch(invalidateDailyOrders());
+      await CateringService.create(itemsPayload);
+      setToast({ open: true, message: 'Comanda a fost salvată!', severity: 'success' });
+      handleCloseCatering();
+      dispatch(invalidateDailyOrders());
     } catch (err) {
-        const msg = getFriendlyErrorMessage(err.response?.data?.message || err.message);
-        setToast({ open: true, message: msg, severity: 'error' });
+      const msg = getFriendlyErrorMessage(err.response?.data?.message || err.message);
+      setToast({ open: true, message: msg, severity: 'error' });
     } finally {
-        setSubmitting(false);
+      setSubmitting(false);
     }
   };
 
   const handleSubmit = async (data) => {
     setSubmitting(true);
     try {
-        let shouldRefresh = true;
-        if (editingReservation) {
-            await ReservationsService.update(editingReservation.id, data);
-            
-            // --- MODIFICARE MAJORĂ AICI ---
-            // Invalidăm comenzile ORICÂND facem update (pentru că s-a putut schimba ora, numele, nota)
-            dispatch(invalidateDailyOrders()); 
-            // -----------------------------
+      let shouldRefresh = true;
+      if (editingReservation) {
+        await ReservationsService.update(editingReservation.id, data);
+        dispatch(invalidateDailyOrders());
 
-            const oldDate = dayjs(editingReservation.startAt).format('YYYY-MM-DD');
-            const newDate = dayjs(data.startAt).format('YYYY-MM-DD');
-            
-            // Logica de redirect dacă s-a schimbat data
-            if (oldDate !== newDate) {
-                setSearchParams({ date: newDate });
-                shouldRefresh = false; 
-            }
-            setToast({ open: true, message: 'Rezervare actualizată!', severity: 'success' });
-        } else {
-            await ReservationsService.create(data);
-            setToast({ open: true, message: 'Rezervare creată!', severity: 'success' });
+        const oldDate = dayjs(editingReservation.startAt).format('YYYY-MM-DD');
+        const newDate = dayjs(data.startAt).format('YYYY-MM-DD');
+
+        if (oldDate !== newDate) {
+          setSearchParams({ date: newDate });
+          shouldRefresh = false;
         }
-        
-        if (shouldRefresh) {
-            loadData(true);
-        }
-        
-        handleCloseModal();
+        setToast({ open: true, message: 'Rezervare actualizată!', severity: 'success' });
+      } else {
+        await ReservationsService.create(data);
+        setToast({ open: true, message: 'Rezervare creată!', severity: 'success' });
+      }
+
+      if (shouldRefresh) {
+        dispatch(fetchReservations(selectedDateStrRef.current)); // ← ref, nu closure
+      }
+
+      handleCloseModal();
     } catch (err) {
-        const msg = getFriendlyErrorMessage(err.response?.data?.message || err.message);
-        setToast({ open: true, message: msg, severity: 'error' });
+      const msg = getFriendlyErrorMessage(err.response?.data?.message || err.message);
+      setToast({ open: true, message: msg, severity: 'error' });
     } finally {
-        setSubmitting(false);
+      setSubmitting(false);
     }
   };
 
@@ -323,16 +309,16 @@ export const useReservationsMainPage = () => {
     if (!deleteId) return;
     setSubmitting(true);
     try {
-        await ReservationsService.delete(deleteId);
-        setToast({ open: true, message: 'Rezervare ștearsă!', severity: 'success' });
-        loadData(true);
-        dispatch(invalidateDailyOrders());
-        handleCloseDelete();
+      await ReservationsService.delete(deleteId);
+      setToast({ open: true, message: 'Rezervare ștearsă!', severity: 'success' });
+      dispatch(fetchReservations(selectedDateStrRef.current)); // ← ref, nu closure
+      dispatch(invalidateDailyOrders());
+      handleCloseDelete();
     } catch (err) {
-        const msg = getFriendlyErrorMessage(err.response?.data?.message || err.message);
-        setToast({ open: true, message: msg, severity: 'error' });
+      const msg = getFriendlyErrorMessage(err.response?.data?.message || err.message);
+      setToast({ open: true, message: msg, severity: 'error' });
     } finally {
-        setSubmitting(false);
+      setSubmitting(false);
     }
   };
 
@@ -387,7 +373,7 @@ export const useReservationsMainPage = () => {
     handleOpenConfirmInvitation,
     handleCloseConfirmInvitation,
     handleConfirmInvitation,
-    handleOpenAdd, handleOpenEdit, handleCloseModal, handleOpenDelete, handleCloseDelete, 
-    handleSubmit, handleConfirmDelete, handleOpenCatering, handleCloseCatering, handleSubmitCatering    
+    handleOpenAdd, handleOpenEdit, handleCloseModal, handleOpenDelete, handleCloseDelete,
+    handleSubmit, handleConfirmDelete, handleOpenCatering, handleCloseCatering, handleSubmitCatering
   };
 };

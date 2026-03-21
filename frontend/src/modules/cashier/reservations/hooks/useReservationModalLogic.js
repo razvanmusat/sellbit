@@ -11,8 +11,9 @@ export const useReservationModalLogic = ({ open, editData, selectedDate, onSubmi
   const [digitalInvitationTouched, setDigitalInvitationTouched] = useState(false);
   const [errors, setErrors] = useState({});
 
-  // --- B. REFS ---
-  const nameRef = useRef(null);
+  // --- B. REFS ---  
+  const childNameRef = useRef(null);
+  const childAgeRef = useRef(null);
   const phoneRef = useRef(null);
   const amountRef = useRef(null);
   const themeRef = useRef(null);
@@ -40,8 +41,20 @@ export const useReservationModalLogic = ({ open, editData, selectedDate, onSubmi
       }
       setErrors({});
 
-      setTimeout(() => {
-        if (nameRef.current) nameRef.current.value = editData?.parentName || '';
+      setTimeout(() => {        
+        if (editData?.parentName) {          
+          const match = editData.parentName.match(/^(.*?),\s*(\d{1,2})\s*ani\s*$/i);
+          if (match) {
+            if (childNameRef.current) childNameRef.current.value = match[1].trim();
+            if (childAgeRef.current) childAgeRef.current.value = match[2].trim();
+          } else {            
+            if (childNameRef.current) childNameRef.current.value = editData.parentName.trim();
+            if (childAgeRef.current) childAgeRef.current.value = '';
+          }
+        } else {
+          if (childNameRef.current) childNameRef.current.value = '';
+          if (childAgeRef.current) childAgeRef.current.value = '';
+        }
         if (themeRef.current) themeRef.current.value = editData?.theme || '';
         if (noteRef.current) noteRef.current.value = editData?.note || '';
         if (amountRef.current && editData?.advanceAmount) {
@@ -99,15 +112,18 @@ export const useReservationModalLogic = ({ open, editData, selectedDate, onSubmi
   const handleSubmit = () => {
      const newErrors = {};
 
-     const nameVal = nameRef.current?.value || '';
+     const childNameVal = childNameRef.current?.value || '';
+     const childAgeVal = childAgeRef.current?.value || '';
      const themeVal = themeRef.current?.value || '';
      const noteVal = noteRef.current?.value || '';
      const amountVal = amountRef.current?.value || '';
-     const phoneVal = phoneRef.current?.getValue() || ''; 
+     const phoneVal = phoneRef.current?.getValue() || '';
 
      if (!startTime || !startTime.isValid()) newErrors.startAt = "Ora obligatorie.";
-     if (!nameVal.trim()) newErrors.parentName = "Nume obligatoriu.";
-     
+     if (!childNameVal.trim()) newErrors.childName = "Nume copil obligatoriu.";
+     if (!childAgeVal.trim()) newErrors.childAge = "Vârsta este obligatorie.";
+     else if (!/^[0-9]+$/.test(childAgeVal) || Number(childAgeVal) < 1 || Number(childAgeVal) > 18) newErrors.childAge = "Vârstă invalidă (1-18).";
+
      if (!phoneVal) newErrors.parentPhone = "Telefon obligatoriu.";
      else if (phoneVal.startsWith('00')) {
          if (phoneVal.length < 5) newErrors.parentPhone = "Nr. invalid.";
@@ -125,10 +141,13 @@ export const useReservationModalLogic = ({ open, editData, selectedDate, onSubmi
        return;
      }
 
+     // Concatenează pentru backend
+     const parentName = `${childNameVal.trim()}, ${childAgeVal.trim()} ani`;
+
      const payload = {
        startAt: startTime.format('YYYY-MM-DDTHH:mm:ss'), 
        endAt: endTime.format('YYYY-MM-DDTHH:mm:ss'),
-       parentName: nameVal,
+       parentName,
        parentPhone: phoneVal, 
        advanceAmount: advancePaid ? Number(amountVal) : 0, 
        digitalInvitation,
@@ -141,8 +160,8 @@ export const useReservationModalLogic = ({ open, editData, selectedDate, onSubmi
 
   return {
     startTime, endTime, advancePaid, digitalInvitation, digitalInvitationTouched, errors,
-    nameRef, amountRef, themeRef, noteRef, phoneRef, 
+    childNameRef, childAgeRef, amountRef, themeRef, noteRef, phoneRef, 
     setAdvancePaid, setDigitalInvitation, setDigitalInvitationTouched,
-    handleTimeChange, handleDateChange, handleSubmit // Exportăm și handleDateChange
+    handleTimeChange, handleDateChange, handleSubmit
   };
 };

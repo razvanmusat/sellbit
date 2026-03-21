@@ -1,6 +1,5 @@
-import React, { useCallback } from 'react';
-import PropTypes from 'prop-types';
-import { useSearchParams } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useSearchParams, useOutletContext } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
 import { resetCache } from '../store/cashMovementHistorySlice';
 import {
@@ -20,37 +19,36 @@ import PersonIcon from '@mui/icons-material/Person';
 import RefundModal from '../components/RefundModal';
 import { useRefundPage } from '../hooks/useRefundPage';
 
-const RefundPage = ({ warehouses }) => {
+const RefundPage = () => {
+  const { warehouses } = useOutletContext() || { warehouses: [] };
   const dispatch = useDispatch();
   const [searchParams, setSearchParams] = useSearchParams();
-  const urlRefundDate = searchParams.get('refundDate');
 
-  const [selectedDate, setSelectedDate] = React.useState(
+  const urlRefundDate = searchParams.get('refundDate');
+  const [selectedDate, setSelectedDate] = useState(
     urlRefundDate ? dayjs(urlRefundDate) : dayjs()
   );
 
-  React.useEffect(() => {
+  // Sincronizare URL -> state (la refresh)
+  useEffect(() => {
     if (!urlRefundDate) {
-      const today = dayjs();
-      setSelectedDate(today);
-      const params = new URLSearchParams(searchParams.toString());
-      params.set('refundDate', today.format('YYYY-MM-DD'));
-      setSearchParams(params, { replace: true });
-      return;
-    }
-    const urlDayjs = dayjs(urlRefundDate);
-    if (!selectedDate || !selectedDate.isSame(urlDayjs, 'day')) {
-      setSelectedDate(urlDayjs);
+      const current = Object.fromEntries(searchParams);
+      setSearchParams({ ...current, refundDate: dayjs().format('YYYY-MM-DD') }, { replace: true });
+    } else {
+      const urlDayjs = dayjs(urlRefundDate);
+      if (urlDayjs.isValid() && (!selectedDate || !selectedDate.isSame(urlDayjs, 'day'))) {
+        setSelectedDate(urlDayjs);
+      }
     }
   }, [urlRefundDate]);
 
-  React.useEffect(() => {
+  // Sincronizare state -> URL
+  useEffect(() => {
     if (!selectedDate) return;
     const formatted = selectedDate.format('YYYY-MM-DD');
     if (searchParams.get('refundDate') !== formatted) {
-      const params = new URLSearchParams(searchParams.toString());
-      params.set('refundDate', formatted);
-      setSearchParams(params, { replace: true });
+      const current = Object.fromEntries(searchParams);
+      setSearchParams({ ...current, refundDate: formatted }, { replace: true });
     }
   }, [selectedDate]);
 
@@ -189,10 +187,6 @@ const RefundPage = ({ warehouses }) => {
       </Box>
     </LocalizationProvider>
   );
-};
-
-RefundPage.propTypes = {
-  warehouses: PropTypes.array.isRequired,
 };
 
 export default RefundPage;

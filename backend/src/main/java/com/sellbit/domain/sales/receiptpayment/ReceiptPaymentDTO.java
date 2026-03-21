@@ -13,6 +13,7 @@ public class ReceiptPaymentDTO {
             String paymentMethodCode,
             BigDecimal amount,
             Integer warehouseId,
+            String warehouseName,
             LocalDateTime paidAt) {
     }
 
@@ -23,19 +24,9 @@ public class ReceiptPaymentDTO {
             LocalDateTime end) {
     }
 
-    /**
-     * Distribuție voucher per gestiune.
-     * Frontend calculează distribuția, backend validează și salvează.
-     */
     public record VoucherDistribution(Integer warehouseId, BigDecimal amount) {}
 
-    /**
-     * Wrapper pentru body-ul opțional din apply-voucher.
-     */
     public record VoucherDistributionsWrapper(List<VoucherDistribution> distributions) {}
 
-    /**
-     * Preview voucher — returnează suma calculată fără a consuma voucherul.
-     */
     public record VoucherPreview(BigDecimal amount) {}
 }

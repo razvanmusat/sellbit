@@ -1,45 +1,35 @@
 import React from 'react';
-import { useSearchParams } from 'react-router-dom';
 import { 
     Box, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, 
     Typography, CircularProgress, MenuItem, Select, FormControl, InputLabel,
     Stack, Chip, IconButton, Paper, Accordion, AccordionSummary, AccordionDetails
 } from '@mui/material';
-
-// --- IMPORTURI DATE ---
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import dayjs from 'dayjs';
-import 'dayjs/locale/ro'; 
+import 'dayjs/locale/ro';
 
-// ICONS
 import InfoIcon from '@mui/icons-material/Info';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 
-// API & MODAL & HOOK
 import ReceiptDetailModal from './ReceiptDetailModal';
-import { useReceipts } from '../hooks/useReceipts'; // Import Hook
+import { useReceipts } from '../hooks/useReceipts';
 
 const Receipts = () => {
-    // Păstrăm useSearchParams DOAR pentru a citi warehouseId din URL-ul paginii părinte
-    const [searchParams] = useSearchParams();
-    const warehouseId = searchParams.get('warehouseId') ? parseInt(searchParams.get('warehouseId')) : null;
-
-    // Folosim Hook-ul pentru date și logică
     const {
         startDate, endDate, status,
         groupedReceipts, loading,
         setDate, setStatus,
         selectedReceipt, setSelectedReceipt,
         modalOpen, setModalOpen, openReceipt
-    } = useReceipts(warehouseId);
+    } = useReceipts(); // fără warehouseId
 
     return (
         <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="ro">
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, height: '100%', bgcolor: '#f8f9fa', p: 2 }}>
-                
+
                 <Paper elevation={1} sx={{ p: 2, flexShrink: 0, borderRadius: 2 }}>
                     <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} justifyContent="space-between" alignItems="center">
                         <Stack direction="row" spacing={2}>
@@ -54,12 +44,11 @@ const Receipts = () => {
                                 slotProps={{ textField: { size: 'small' } }}
                             />
                         </Stack>
-
                         <FormControl size="small" sx={{ minWidth: 250 }}>
                             <InputLabel id="status-label" shrink>Status Bon</InputLabel>
-                            <Select 
+                            <Select
                                 labelId="status-label"
-                                value={status} 
+                                value={status}
                                 label="Status Bon"
                                 displayEmpty
                                 onChange={(e) => setStatus(e.target.value)}
@@ -76,12 +65,7 @@ const Receipts = () => {
                     </Stack>
                 </Paper>
 
-                <Box sx={{ 
-                    flex: 1, 
-                    overflowY: 'auto', 
-                    scrollbarGutter: 'stable', 
-                    pr: 0.5 
-                }}>
+                <Box sx={{ flex: 1, overflowY: 'auto', scrollbarGutter: 'stable', pr: 0.5 }}>
                     {!status ? (
                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'text.secondary' }}>
                             <Typography variant="h5">Alege un status pentru a genera raportul.</Typography>
@@ -96,13 +80,13 @@ const Receipts = () => {
                         groupedReceipts.map(group => (
                             <Paper key={group.date} elevation={2} sx={{ mb: 1, overflow: 'hidden', borderRadius: 2, border: '1px solid #eee' }}>
                                 <Accordion disableGutters sx={{ boxShadow: 'none', '&:before': { display: 'none' } }}>
-                                    <AccordionSummary 
-                                        expandIcon={<ExpandMoreIcon />} 
-                                        sx={{ 
-                                            minHeight: 52, 
-                                            bgcolor: '#fff', 
+                                    <AccordionSummary
+                                        expandIcon={<ExpandMoreIcon />}
+                                        sx={{
+                                            minHeight: 52,
+                                            bgcolor: '#fff',
                                             '&.Mui-expanded': { borderBottom: '1px solid #f0f0f0', minHeight: 52 },
-                                            '& .MuiAccordionSummary-content': { m: 0 } 
+                                            '& .MuiAccordionSummary-content': { m: 0 }
                                         }}
                                     >
                                         <Stack direction="row" justifyContent="space-between" width="100%" alignItems="center" sx={{ mr: 2 }}>
@@ -140,8 +124,8 @@ const Receipts = () => {
                                                                 {r.originalReceiptId ? (
                                                                     <Box component="span">
                                                                         {r.tableName.split(`#${r.originalReceiptId}`)[0]}
-                                                                        <Box 
-                                                                            component="span" 
+                                                                        <Box
+                                                                            component="span"
                                                                             onClick={() => openReceipt(r.originalReceiptId)}
                                                                             sx={{ color: 'primary.main', cursor: 'pointer', fontWeight: 'bold', textDecoration: 'underline' }}
                                                                         >
@@ -172,10 +156,10 @@ const Receipts = () => {
                     )}
                 </Box>
 
-                <ReceiptDetailModal 
-                    open={modalOpen} 
-                    onClose={() => setModalOpen(false)} 
-                    receipt={selectedReceipt} 
+                <ReceiptDetailModal
+                    open={modalOpen}
+                    onClose={() => setModalOpen(false)}
+                    receipt={selectedReceipt}
                     onOpenOther={openReceipt}
                 />
             </Box>

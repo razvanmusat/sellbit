@@ -11,18 +11,12 @@ import java.util.List;
 @Repository
 public interface ReceiptRepository extends JpaRepository<Receipt, Integer> {
 
-        // Folosit pentru bonuri OPEN (alerte, active) — fără filtru pe gestiune.
         List<Receipt> findByStatus_Code(String statusCode);
 
-        /**
-         * RAPORTARE: Bonuri care conțin cel puțin o linie pe gestiunea dată.
-         * Înlocuiește findByWarehouseIdAndStatus_CodeAndClosedAtBetween.
-         * DISTINCT previne duplicatele când un bon are mai multe linii pe aceeași gestiune.
-         */
         @Query("""
                 SELECT DISTINCT r FROM Receipt r
                 JOIN r.items i
-                WHERE i.warehouse.id = :warehouseId
+                WHERE (:warehouseId IS NULL OR i.warehouse.id = :warehouseId)
                 AND r.status.code = :statusCode
                 AND r.closedAt BETWEEN :start AND :end
                 ORDER BY r.closedAt ASC
@@ -33,10 +27,6 @@ public interface ReceiptRepository extends JpaRepository<Receipt, Integer> {
                         @Param("start") LocalDateTime start,
                         @Param("end") LocalDateTime end);
 
-        /**
-         * RAPORTARE SUMMARY: Proiecție directă în DTO — filtrată după gestiunea liniilor.
-         * warehouse-ul afișat în summary e cel al primei linii (prin subquery).
-         */
         @Query("""
                 SELECT new com.sellbit.domain.sales.receipt.ReceiptDTOs$SummaryResponse(
                     r.id, s.label, r.tableName, r.totalAmount,
@@ -48,10 +38,10 @@ public interface ReceiptRepository extends JpaRepository<Receipt, Integer> {
                 JOIN r.status s
                 LEFT JOIN r.user u
                 LEFT JOIN r.originalReceipt o
-                WHERE EXISTS (
+                WHERE (:warehouseId IS NULL OR EXISTS (
                     SELECT 1 FROM ReceiptItem i
                     WHERE i.receipt = r AND i.warehouse.id = :warehouseId
-                )
+                ))
                 AND s.code = :statusCode
                 AND r.closedAt BETWEEN :start AND :end
                 ORDER BY r.closedAt ASC
@@ -62,14 +52,10 @@ public interface ReceiptRepository extends JpaRepository<Receipt, Integer> {
                         @Param("start") LocalDateTime start,
                         @Param("end") LocalDateTime end);
 
-        /**
-         * JURNAL TOTAL (Audit): Bonuri închise/anulate într-un interval,
-         * filtrate după gestiunea liniilor.
-         */
         @Query("""
                 SELECT DISTINCT r FROM Receipt r
                 JOIN r.items i
-                WHERE i.warehouse.id = :warehouseId
+                WHERE (:warehouseId IS NULL OR i.warehouse.id = :warehouseId)
                 AND r.closedAt BETWEEN :start AND :end
                 """)
         List<Receipt> findByItemWarehouseAndClosedAtBetween(

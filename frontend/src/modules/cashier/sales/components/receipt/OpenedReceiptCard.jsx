@@ -337,7 +337,7 @@ const OpenedReceiptCard = ({
         fullWidth
       >
         <DialogTitle sx={{ pb: 1 }}>
-          <Typography variant="h6" fontWeight="bold">
+          <Typography variant="h6" fontWeight="bold" component="span">
             Selectează gestiunea
           </Typography>
           {pendingProduct && (

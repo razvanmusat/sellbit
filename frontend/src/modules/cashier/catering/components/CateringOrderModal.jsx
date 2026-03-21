@@ -14,7 +14,7 @@ import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
 import DeleteIcon from '@mui/icons-material/Delete';
 import RestaurantMenuIcon from '@mui/icons-material/RestaurantMenu';
-import CloseIcon from '@mui/icons-material/Close'; // <--- IMPORT NOU
+import CloseIcon from '@mui/icons-material/Close';
 
 import { useCateringOrderModal } from '../hooks/useCateringOrderModal';
 
@@ -39,10 +39,9 @@ const CateringOrderModal = ({ open, onClose, onSubmit, editData, context }) => {
   }, [open, editData]);
 
   const onAddItem = (prod) => {
-    handleAddToBasket(prod);
-    setTimeout(() => {
-        inputRef.current?.focus();
-    }, 0);
+    setShowDropdown(false);
+    handleAddToBasket(prod);    
+    setSearchTerm('');
   };
 
   const handleKeyDown = (e) => {
@@ -121,8 +120,9 @@ const CateringOrderModal = ({ open, onClose, onSubmit, editData, context }) => {
                     inputRef={inputRef}
                     fullWidth
                     label="Caută Produs..."
-                    value={searchTerm}
-                    onFocus={() => setShowDropdown(true)}
+                    placeholder="Caută Produs..."
+                    value={searchTerm}                    
+                    onClick={() => setShowDropdown(true)}
                     onKeyDown={handleKeyDown} 
                     onChange={(e) => { setSearchTerm(e.target.value); setShowDropdown(true); }}
                     autoComplete="off"

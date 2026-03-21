@@ -24,11 +24,8 @@ export const usePaymentModal = ({
     const [activePrefixes, setActivePrefixes] = useState([]);
     const [isInitialLoading, setIsInitialLoading] = useState(false);
 
-    // Un singur picker pentru toate tipurile de plată inclusiv voucher
     const [pickerOpen, setPickerOpen] = useState(false);
     const [pendingPayment, setPendingPayment] = useState(null);
-    // pendingPayment: { methodId, amount, change } pentru plăți normale
-    //                 { voucherCode, amount } pentru voucher
 
     const [toastOpen, setToastOpen] = useState(false);
     const [toastMessage, setToastMessage] = useState('');
@@ -194,12 +191,10 @@ export const usePaymentModal = ({
             }
 
             try {
-                // Preview — obținem suma fără a consuma voucherul
                 const preview = await PaymentService.previewVoucher(receipt.id, fullCode);
                 const voucherAmt = preview.amount;
 
                 if (isSingleWarehouse) {
-                    // O singură gestiune → aplicăm direct
                     const whId = warehouseTotals[0]?.warehouseId || null;
                     const distributions = whId ? [{ warehouseId: whId, amount: voucherAmt }] : null;
                     await onApplyVoucher(fullCode, distributions);
@@ -210,8 +205,6 @@ export const usePaymentModal = ({
                     setPaymentMethodId('');
                     refreshPayments(false);
                 } else {
-                    // Mai multe gestiuni → același picker ca la plăți normale
-                    // casierul selectează gestiunea pe care se aplică voucherul
                     setPendingPayment({ voucherCode: fullCode, amount: voucherAmt });
                     setPickerOpen(true);
                 }
@@ -252,6 +245,7 @@ export const usePaymentModal = ({
             return;
         }
 
+        // Multi-gestiune: dacă suma acoperă tot ce a rămas → split proporțional automat
         if (amountToSend >= remainingAmount - 0.001) {
             await splitAndPayProportionally(paymentMethodId, amountToSend, currentChange);
             refreshPayments(false);
@@ -260,6 +254,7 @@ export const usePaymentModal = ({
             return;
         }
 
+        // Suma parțială → picker
         setPendingPayment({ methodId: paymentMethodId, amount: amountToSend, change: currentChange });
         setPickerOpen(true);
     };
@@ -285,15 +280,15 @@ export const usePaymentModal = ({
 
     /**
      * Casierul a selectat gestiunea din picker.
-     * Dacă e voucher → aplicăm cu distributions pe gestiunea selectată.
-     * Dacă e plată normală → addPayment pe gestiunea selectată.
+     *
+     * Dacă suma depășește ce mai e de plătit pe gestiunea selectată,
+     * surplusul se distribuie automat pe celelalte gestiuni cu remaining > 0.
      */
     const handlePickerSelect = async (warehouseId) => {
         if (!pendingPayment) return;
         setPickerOpen(false);
 
         if (pendingPayment.voucherCode) {
-            // Voucher — distribuție pe gestiunea selectată de casier
             try {
                 const distributions = [{ warehouseId, amount: pendingPayment.amount }];
                 await onApplyVoucher(pendingPayment.voucherCode, distributions);
@@ -306,8 +301,33 @@ export const usePaymentModal = ({
                 showToast(getFriendlyErrorMessage(err), 'error');
             }
         } else {
-            // Plată normală
-            await onAddPayment(pendingPayment.methodId, pendingPayment.amount, pendingPayment.change, warehouseId);
+            // Cât mai e de plătit pe gestiunea selectată
+            const selectedWh = remainingPerWarehouse.find(wh => wh.warehouseId === warehouseId);
+            const maxForSelected = selectedWh?.remaining ?? pendingPayment.amount;
+
+            // Suma care merge pe gestiunea selectată (cel mult cât are de plătit)
+            const amountForSelected = parseFloat(Math.min(pendingPayment.amount, maxForSelected).toFixed(2));
+
+            await onAddPayment(pendingPayment.methodId, amountForSelected, pendingPayment.change, warehouseId);
+
+            // Dacă a mai rămas de distribuit, merge pe celelalte gestiuni în ordine
+            const leftover = parseFloat((pendingPayment.amount - amountForSelected).toFixed(2));
+            if (leftover > 0.001) {
+                const others = remainingPerWarehouse.filter(
+                    wh => wh.warehouseId !== warehouseId && wh.remaining > 0
+                );
+                let rest = leftover;
+                for (let i = 0; i < others.length; i++) {
+                    const wh = others[i];
+                    const whAmount = i === others.length - 1
+                        ? parseFloat(rest.toFixed(2))
+                        : parseFloat(Math.min(rest, wh.remaining).toFixed(2));
+                    if (whAmount <= 0.001) continue;
+                    await onAddPayment(pendingPayment.methodId, whAmount, 0, wh.warehouseId);
+                    rest = parseFloat((rest - whAmount).toFixed(2));
+                    if (rest <= 0.001) break;
+                }
+            }
         }
 
         setPendingPayment(null);

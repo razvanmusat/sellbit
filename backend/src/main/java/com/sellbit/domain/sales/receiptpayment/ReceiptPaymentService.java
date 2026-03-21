@@ -253,13 +253,14 @@ public class ReceiptPaymentService {
     }
 
     private ReceiptPaymentDTO.Response mapToResponse(ReceiptPayment payment) {
-        return new ReceiptPaymentDTO.Response(
-                payment.getId(),
-                payment.getPaymentMethod().getId(),
-                payment.getPaymentMethod().getLabel(),
-                payment.getPaymentMethod().getCode(),
-                payment.getAmount(),
-                payment.getWarehouse() != null ? payment.getWarehouse().getId() : null,
-                payment.getPaidAt());
-    }
+    return new ReceiptPaymentDTO.Response(
+            payment.getId(),
+            payment.getPaymentMethod().getId(),
+            payment.getPaymentMethod().getLabel(),
+            payment.getPaymentMethod().getCode(),
+            payment.getAmount(),
+            payment.getWarehouse() != null ? payment.getWarehouse().getId() : null,
+            payment.getWarehouse() != null ? payment.getWarehouse().getName() : null,
+            payment.getPaidAt());
+}
 }

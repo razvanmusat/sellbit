@@ -1,9 +1,9 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { 
-    Box, Paper, Typography, Divider, Stack, Alert, Select, MenuItem, 
-    FormControl, InputLabel, Accordion, AccordionSummary, AccordionDetails, 
-    Table, TableBody, TableCell, TableContainer, TableHead, TableRow, CircularProgress 
+import {
+    Box, Paper, Typography, Divider, Stack, Alert, Select, MenuItem,
+    FormControl, InputLabel, Accordion, AccordionSummary, AccordionDetails,
+    Table, TableBody, TableCell, TableContainer, TableHead, TableRow, CircularProgress
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -26,42 +26,40 @@ import { onSalesDataChanged } from '../../../../shared/utils/salesSyncEvents';
 
 const REAL_INCOME_METHODS = ['CASH', 'CARD', 'BANK_TRANSFER'];
 
-const PaymentStats = ({ warehouseId }) => {
+const PaymentStats = ({ warehouses }) => {
     const dispatch = useDispatch();
-    
+
     const [startDate, setStartDate] = useState(dayjs().startOf('month'));
     const [endDate, setEndDate] = useState(dayjs());
     const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('');
-    
     const [selectedReceipt, setSelectedReceipt] = useState(null);
     const [modalOpen, setModalOpen] = useState(false);
 
     const { list: receipts, loading, error } = useSelector((state) => state.receipts);
 
     useEffect(() => {
-        if (warehouseId && startDate.isValid() && endDate.isValid()) {
+        if (startDate.isValid() && endDate.isValid()) {
             dispatch(setFilters({
                 startDate: startDate.startOf('day').format('YYYY-MM-DDTHH:mm:ss'),
                 endDate: endDate.endOf('day').format('YYYY-MM-DDTHH:mm:ss'),
                 status: 'CLOSED'
             }));
-            dispatch(fetchReceipts({ warehouseId, force: true }));
+            dispatch(fetchReceipts({ force: true }));
         }
-    }, [warehouseId, startDate, endDate, dispatch]);
+    }, [startDate, endDate, dispatch]);
 
-    // Refresh la fiecare vânzare (emitSalesDataChanged)
     useEffect(() => {
-        if (!warehouseId || !startDate.isValid() || !endDate.isValid()) return;
+        if (!startDate.isValid() || !endDate.isValid()) return;
         const unsubscribe = onSalesDataChanged(() => {
             dispatch(setFilters({
                 startDate: startDate.startOf('day').format('YYYY-MM-DDTHH:mm:ss'),
                 endDate: endDate.endOf('day').format('YYYY-MM-DDTHH:mm:ss'),
                 status: 'CLOSED'
             }));
-            dispatch(fetchReceipts({ warehouseId, force: true }));
+            dispatch(fetchReceipts({ force: true }));
         });
         return unsubscribe;
-    }, [dispatch, warehouseId, startDate, endDate]);
+    }, [dispatch, startDate, endDate]);
 
     const getMethodDetails = (code) => {
         switch (code) {
@@ -74,47 +72,68 @@ const PaymentStats = ({ warehouseId }) => {
         }
     };
 
+    const getAmountPerWarehouse = (receipt, methodCode, warehouseId) => {
+        return (receipt.payments || [])
+            .filter(p => p.methodCode === methodCode && p.warehouseId === warehouseId)
+            .reduce((sum, p) => sum + (p.amount || 0), 0);
+    };
+
+    const formatAmount = (value) => {
+        if (value === 0) return '0.00 RON';
+        return `${Number(value).toLocaleString('ro-RO', { minimumFractionDigits: 2 })} RON`;
+    };
+
     const processedData = useMemo(() => {
-        // Dacă selectăm ALL, returnăm harta completă, chiar dacă sumele sunt 0
         if (!selectedPaymentMethod || selectedPaymentMethod === 'ALL') {
             const totalsMap = {
-                'CASH': { methodCode: 'CASH', totalAmount: 0 },
-                'CARD': { methodCode: 'CARD', totalAmount: 0 },
-                'BANK_TRANSFER': { methodCode: 'BANK_TRANSFER', totalAmount: 0 },
-                'VOUCHER': { methodCode: 'VOUCHER', totalAmount: 0 },
-                'ADVANCE': { methodCode: 'ADVANCE', totalAmount: 0 }
+                'CASH': { methodCode: 'CASH', totalAmount: 0, perWarehouse: {} },
+                'CARD': { methodCode: 'CARD', totalAmount: 0, perWarehouse: {} },
+                'BANK_TRANSFER': { methodCode: 'BANK_TRANSFER', totalAmount: 0, perWarehouse: {} },
+                'VOUCHER': { methodCode: 'VOUCHER', totalAmount: 0, perWarehouse: {} },
+                'ADVANCE': { methodCode: 'ADVANCE', totalAmount: 0, perWarehouse: {} }
             };
 
-            if (receipts && receipts.length > 0) {
-                receipts.forEach(r => {
-                    (r.payments || []).forEach(p => {
-                        const code = p.methodCode;
-                        if (totalsMap[code]) {
-                            totalsMap[code].totalAmount += Number(p.amount || 0);
-                        }
-                    });
+            warehouses.forEach(w => {
+                Object.keys(totalsMap).forEach(code => {
+                    totalsMap[code].perWarehouse[w.id] = 0;
                 });
-            }
-            return Object.values(totalsMap); // Am scos filtrul de > 0
+            });
+
+            (receipts || []).forEach(r => {
+                (r.payments || []).forEach(p => {
+                    const code = p.methodCode;
+                    if (totalsMap[code]) {
+                        totalsMap[code].totalAmount += Number(p.amount || 0);
+                        if (p.warehouseId && totalsMap[code].perWarehouse[p.warehouseId] !== undefined) {
+                            totalsMap[code].perWarehouse[p.warehouseId] += Number(p.amount || 0);
+                        }
+                    }
+                });
+            });
+            return Object.values(totalsMap);
         } else {
             if (!receipts) return [];
             return receipts.reduce((acc, r) => {
                 const methodPayments = (r.payments || []).filter(p => p.methodCode === selectedPaymentMethod);
                 if (methodPayments.length > 0) {
                     const sum = methodPayments.reduce((s, p) => s + (p.amount || 0), 0);
-                    acc.push({ ...r, totalAmount: sum });
+                    const perWarehouse = {};
+                    warehouses.forEach(w => {
+                        perWarehouse[w.id] = getAmountPerWarehouse(r, selectedPaymentMethod, w.id);
+                    });
+                    acc.push({ ...r, totalAmount: sum, perWarehouse });
                 }
                 return acc;
             }, []);
         }
-    }, [receipts, selectedPaymentMethod]);
+    }, [receipts, selectedPaymentMethod, warehouses]);
 
     const totalGeneral = useMemo(() => {
         if (!processedData || processedData.length === 0) return 0;
         return processedData.reduce((sum, item) => {
             if (!selectedPaymentMethod || selectedPaymentMethod === 'ALL') {
-                return REAL_INCOME_METHODS.includes(item.methodCode) 
-                    ? sum + Number(item.totalAmount || 0) 
+                return REAL_INCOME_METHODS.includes(item.methodCode)
+                    ? sum + Number(item.totalAmount || 0)
                     : sum;
             }
             return sum + Number(item.totalAmount || 0);
@@ -127,13 +146,17 @@ const PaymentStats = ({ warehouseId }) => {
         processedData.forEach(item => {
             const rawDate = item.closedAt || item.createdAt;
             const key = rawDate ? dayjs(rawDate).format('YYYY-MM-DD') : 'no-date';
-            if (!groupedMap[key]) groupedMap[key] = { date: key, items: [], total: 0, count: 0 };
+            if (!groupedMap[key]) groupedMap[key] = { date: key, items: [], total: 0, count: 0, perWarehouse: {} };
+            warehouses.forEach(w => {
+                if (groupedMap[key].perWarehouse[w.id] === undefined) groupedMap[key].perWarehouse[w.id] = 0;
+                groupedMap[key].perWarehouse[w.id] += Number(item.perWarehouse?.[w.id] || 0);
+            });
             groupedMap[key].items.push(item);
             groupedMap[key].total += Number(item.totalAmount ?? 0);
             groupedMap[key].count += 1;
         });
         return Object.values(groupedMap).sort((a, b) => b.date.localeCompare(a.date));
-    }, [processedData, selectedPaymentMethod]);
+    }, [processedData, selectedPaymentMethod, warehouses]);
 
     const openReceipt = async (id) => {
         try {
@@ -149,18 +172,15 @@ const PaymentStats = ({ warehouseId }) => {
                     <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
                         <DatePicker label="De la" value={startDate} format="DD/MM/YYYY" onChange={setStartDate} slotProps={{ textField: { size: 'small' } }} />
                         <DatePicker label="Până la" value={endDate} format="DD/MM/YYYY" onChange={setEndDate} slotProps={{ textField: { size: 'small' } }} />
-                        
                         <Divider orientation="vertical" flexItem sx={{ display: { xs: 'none', sm: 'block' } }} />
-                        
                         <FormControl size="small" sx={{ minWidth: 240 }}>
-                            <InputLabel id="payment-method-label">Metodă plată</InputLabel>
+                            <InputLabel id="payment-method-label">Metodă de plată</InputLabel>
                             <Select
                                 labelId="payment-method-label"
                                 value={selectedPaymentMethod}
-                                label="Metodă plată"
+                                label="Metodă de plată"
                                 onChange={(e) => setSelectedPaymentMethod(e.target.value)}
                             >
-                                <MenuItem value=""><em>Selectează metoda</em></MenuItem>
                                 <MenuItem value="ALL" sx={{ fontWeight: 'bold' }}>Toate metodele de plată</MenuItem>
                                 <MenuItem value="CASH">Numerar</MenuItem>
                                 <MenuItem value="CARD">Card Bancar</MenuItem>
@@ -169,7 +189,6 @@ const PaymentStats = ({ warehouseId }) => {
                                 <MenuItem value="ADVANCE">Avans Petrecere</MenuItem>
                             </Select>
                         </FormControl>
-
                         {selectedPaymentMethod !== '' && (
                             <Stack direction="row" spacing={1} alignItems="center">
                                 <Typography variant="subtitle2" color="text.secondary" fontWeight="bold">TOTAL:</Typography>
@@ -189,83 +208,145 @@ const PaymentStats = ({ warehouseId }) => {
                         <Box sx={{ display: 'flex', justifyContent: 'center', py: 10, color: 'text.secondary' }}>
                             <Typography variant="h6">Selectează un filtru.</Typography>
                         </Box>
-                    ) : (
-                        <Box>
-                            {selectedPaymentMethod === 'ALL' ? (
-                                processedData.map(item => {
-                                    const details = getMethodDetails(item.methodCode);
-                                    return (
-                                        <Paper key={item.methodCode} elevation={2} sx={{ mb: 1, borderRadius: 2 }}>
-                                            <Accordion disableGutters sx={{ boxShadow: 'none' }}>
-                                                <AccordionSummary sx={{ minHeight: 52 }}>
-                                                    <Stack direction="row" justifyContent="space-between" width="100%" alignItems="center" sx={{ mr: 2 }}>
-                                                        <Stack direction="row" spacing={2} alignItems="center">                                
+                    ) : selectedPaymentMethod === 'ALL' ? (
+                        <Paper elevation={2} sx={{ borderRadius: 2, overflow: 'hidden' }}>
+                            <TableContainer>
+                                <Table size="small">
+                                    <TableHead sx={{ bgcolor: '#f5f5f5' }}>
+                                        <TableRow>
+                                            <TableCell sx={{ fontWeight: 'bold' }}>Metodă</TableCell>
+                                            {warehouses.map(w => (
+                                                <TableCell key={w.id} align="right" sx={{ fontWeight: 'bold' }}>{w.name}</TableCell>
+                                            ))}
+                                            <TableCell align="right" sx={{ fontWeight: 'bold' }}>TOTAL</TableCell>
+                                        </TableRow>
+                                    </TableHead>
+                                    <TableBody>
+                                        {processedData.map(item => {
+                                            const details = getMethodDetails(item.methodCode);
+                                            return (
+                                                <TableRow key={item.methodCode} hover>
+                                                    <TableCell>
+                                                        <Stack direction="row" spacing={1} alignItems="center">
                                                             {details.icon}
-                                                            <Typography fontWeight="bold">{details.label}</Typography>
+                                                            <Typography variant="body2" fontWeight="bold">{details.label}</Typography>
                                                         </Stack>
-                                                        <Typography fontWeight="bold" color={item.totalAmount > 0 ? "primary.main" : "text.disabled"} variant="h6">
-                                                            {Number(item.totalAmount).toLocaleString('ro-RO', { minimumFractionDigits: 2 })} RON
+                                                    </TableCell>
+                                                    {warehouses.map(w => (
+                                                        <TableCell key={w.id} align="right">
+                                                            <Typography
+                                                                variant="body2"
+                                                                color={item.perWarehouse[w.id] < 0 ? 'error.main' : item.perWarehouse[w.id] > 0 ? 'text.primary' : 'text.disabled'}
+                                                            >
+                                                                {formatAmount(item.perWarehouse[w.id])}
+                                                            </Typography>
+                                                        </TableCell>
+                                                    ))}
+                                                    <TableCell align="right">
+                                                        <Typography
+                                                            variant="body2"
+                                                            fontWeight="bold"
+                                                            color={item.totalAmount < 0 ? 'error.main' : item.totalAmount > 0 ? 'primary.main' : 'text.disabled'}
+                                                        >
+                                                            {formatAmount(item.totalAmount)}
                                                         </Typography>
-                                                    </Stack>
-                                                </AccordionSummary>
-                                            </Accordion>
-                                        </Paper>
-                                    );
-                                })
-                            ) : (processedData.length === 0 && !loading) ? (
-                                <Box sx={{ display: 'flex', justifyContent: 'center', py: 10, color: 'text.secondary' }}>
-                                    <Typography variant="h6">Nu există tranzacții.</Typography>
-                                </Box>
-                            ) : (
-                                groupedArray.map(group => (
-                                    <Paper key={group.date} elevation={2} sx={{ mb: 1, borderRadius: 2, overflow: 'hidden' }}>
-                                        <Accordion disableGutters sx={{ boxShadow: 'none' }} defaultExpanded={groupedArray.length === 1}>
-                                            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                                                <Stack direction="row" justifyContent="space-between" width="100%" alignItems="center" sx={{ mr: 2 }}>
-                                                    <Stack direction="row" spacing={2} alignItems="center">
-                                                        <Typography fontWeight="bold" sx={{ textTransform: 'uppercase' }}>
-                                                            {dayjs(group.date).format('DD MMMM YYYY')}
-                                                        </Typography>
-                                                        <Typography variant="caption" color="text.secondary">{group.count} bonuri</Typography>
-                                                    </Stack>
-                                                    <Typography fontWeight="bold" color="primary.main" variant="h6">
-                                                        {group.total.toLocaleString('ro-RO', { minimumFractionDigits: 2 })} RON
-                                                    </Typography>
-                                                </Stack>
-                                            </AccordionSummary>
-                                            <AccordionDetails sx={{ p: 0, bgcolor: '#fafafa' }}>
-                                                <TableContainer>
-                                                    <Table size="small">
-                                                        <TableHead>
-                                                            <TableRow>
-                                                                <TableCell sx={{ fontWeight: 'bold' }}>ORA</TableCell>
-                                                                <TableCell sx={{ fontWeight: 'bold' }}>ID BON</TableCell>
-                                                                <TableCell align="right" sx={{ fontWeight: 'bold' }}>VALOARE</TableCell>
-                                                            </TableRow>
-                                                        </TableHead>
-                                                        <TableBody>
-                                                            {group.items.map((r, idx) => (
-                                                                <TableRow key={idx} hover>
-                                                                    <TableCell>{dayjs(r.closedAt || r.createdAt).format('HH:mm')}</TableCell>
-                                                                    <TableCell>
-                                                                        <Box component="span" onClick={() => openReceipt(r.id)} sx={{ color: 'primary.main', cursor: 'pointer', fontWeight: 'bold', textDecoration: 'underline' }}>
-                                                                            #{r.id}
-                                                                        </Box>
-                                                                    </TableCell>
-                                                                    <TableCell align="right" sx={{ fontWeight: 'bold' }}>{Number(r.totalAmount).toLocaleString('ro-RO', { minimumFractionDigits: 2 })} RON</TableCell>
-                                                                </TableRow>
-                                                            ))}
-                                                        </TableBody>
-                                                    </Table>
-                                                </TableContainer>
-                                            </AccordionDetails>
-                                        </Accordion>
-                                    </Paper>
-                                ))
-                            )}
+                                                    </TableCell>
+                                                </TableRow>
+                                            );
+                                        })}
+                                    </TableBody>
+                                </Table>
+                            </TableContainer>
+                        </Paper>
+                    ) : processedData.length === 0 && !loading ? (
+                        <Box sx={{ display: 'flex', justifyContent: 'center', py: 10, color: 'text.secondary' }}>
+                            <Typography variant="h6">Nu există tranzacții.</Typography>
                         </Box>
+                    ) : (
+                        groupedArray.map(group => (
+                            <Paper key={group.date} elevation={2} sx={{ mb: 1, borderRadius: 2, overflow: 'hidden' }}>
+                                <Accordion disableGutters sx={{ boxShadow: 'none' }} defaultExpanded={groupedArray.length === 1}>
+                                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                                        <Stack direction="row" justifyContent="space-between" width="100%" alignItems="center" sx={{ mr: 2 }}>
+                                            <Stack direction="row" spacing={2} alignItems="center">
+                                                <Typography fontWeight="bold" sx={{ textTransform: 'uppercase' }}>
+                                                    {dayjs(group.date).format('DD MMMM YYYY')}
+                                                </Typography>
+                                                <Typography variant="caption" color="text.secondary">{group.count} bonuri</Typography>
+                                            </Stack>
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                {warehouses.map(w => (
+                                                    <Box key={w.id} sx={{ width: 180, textAlign: 'left' }}>
+                                                        <Typography
+                                                            variant="caption"
+                                                            color={group.perWarehouse[w.id] < 0 ? 'error.main' : 'text.secondary'}
+                                                        >
+                                                            {w.name}: <b>{formatAmount(group.perWarehouse[w.id])}</b>
+                                                        </Typography>
+                                                    </Box>
+                                                ))}
+                                                <Box sx={{ width: 180, textAlign: 'left' }}>
+                                                    <Typography
+                                                        fontWeight="bold"
+                                                        color={group.total < 0 ? 'error.main' : 'primary.main'}
+                                                        variant="h6"
+                                                    >
+                                                        {formatAmount(group.total)}
+                                                    </Typography>
+                                                </Box>
+                                            </Box>
+                                        </Stack>
+                                    </AccordionSummary>
+                                    <AccordionDetails sx={{ p: 0, bgcolor: '#fafafa' }}>
+                                        <TableContainer>
+                                            <Table size="small">
+                                                <TableHead>
+                                                    <TableRow>
+                                                        <TableCell sx={{ fontWeight: 'bold' }}>ORA</TableCell>
+                                                        <TableCell sx={{ fontWeight: 'bold' }}>ID BON</TableCell>
+                                                        {warehouses.map(w => (
+                                                            <TableCell key={w.id} align="right" sx={{ fontWeight: 'bold' }}>{w.name}</TableCell>
+                                                        ))}
+                                                        <TableCell align="right" sx={{ fontWeight: 'bold' }}>TOTAL</TableCell>
+                                                    </TableRow>
+                                                </TableHead>
+                                                <TableBody>
+                                                    {group.items.map((r, idx) => (
+                                                        <TableRow key={idx} hover>
+                                                            <TableCell>{dayjs(r.closedAt || r.createdAt).format('HH:mm')}</TableCell>
+                                                            <TableCell>
+                                                                <Box component="span" onClick={() => openReceipt(r.id)}
+                                                                    sx={{ color: 'primary.main', cursor: 'pointer', fontWeight: 'bold', textDecoration: 'underline' }}>
+                                                                    #{r.id}
+                                                                </Box>
+                                                            </TableCell>
+                                                            {warehouses.map(w => (
+                                                                <TableCell
+                                                                    key={w.id}
+                                                                    align="right"
+                                                                    sx={{ color: (r.perWarehouse?.[w.id] ?? 0) < 0 ? 'error.main' : 'inherit' }}
+                                                                >
+                                                                    {formatAmount(r.perWarehouse?.[w.id] ?? 0)}
+                                                                </TableCell>
+                                                            ))}
+                                                            <TableCell
+                                                                align="right"
+                                                                sx={{ fontWeight: 'bold', color: Number(r.totalAmount) < 0 ? 'error.main' : 'inherit' }}
+                                                            >
+                                                                {formatAmount(Number(r.totalAmount))}
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    ))}
+                                                </TableBody>
+                                            </Table>
+                                        </TableContainer>
+                                    </AccordionDetails>
+                                </Accordion>
+                            </Paper>
+                        ))
                     )}
                 </Box>
+
                 <ReceiptDetailModal open={modalOpen} onClose={() => setModalOpen(false)} receipt={selectedReceipt} />
             </Box>
         </LocalizationProvider>

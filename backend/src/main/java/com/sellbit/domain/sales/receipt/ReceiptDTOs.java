@@ -40,7 +40,8 @@ public class ReceiptDTOs {
                         String methodLabel,
                         BigDecimal amount,
                         String additionalInfo,
-                        Integer warehouseId) {
+                        Integer warehouseId,
+                        String warehouseName) {
         }
 
         /**
@@ -94,7 +95,8 @@ public class ReceiptDTOs {
         public record RefundRequest(
                         @NotNull(message = "ERROR.USER.REQUIRED") Integer userId,
                         @NotEmpty(message = "ERROR.ITEMS.REQUIRED") List<RefundItemRequest> items,
-                        @NotNull(message = "ERROR.PAYMENT_METHOD.REQUIRED") Integer paymentMethodId) {
+                        @NotNull(message = "ERROR.PAYMENT_METHOD.REQUIRED") Integer paymentMethodId,
+                        String note) {
         }
 
         public record RefundItemRequest(

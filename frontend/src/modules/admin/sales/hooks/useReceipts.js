@@ -5,33 +5,33 @@ import { fetchReceipts, setFilters, selectGroupedReceipts } from '../store/recei
 import { SalesService } from '../api/SalesService';
 import { onSalesDataChanged } from '../../../../shared/utils/salesSyncEvents';
 
-export const useReceipts = (warehouseId) => {
+export const useReceipts = (warehouseId = null) => {
     const dispatch = useDispatch();
     const { startDate, endDate, status, loading, list, loadedWarehouseId } = useSelector(state => state.receipts);
     const groupedReceipts = useSelector(selectGroupedReceipts);
     const [selectedReceipt, setSelectedReceipt] = useState(null);
     const [modalOpen, setModalOpen] = useState(false);
 
+    const cacheKey = warehouseId ?? 'ALL';
+
     useEffect(() => {
-        if (warehouseId && status && loadedWarehouseId !== warehouseId) {
+        if (status && loadedWarehouseId !== cacheKey) {
             dispatch(fetchReceipts({ warehouseId, summary: true }));
         }
     }, [warehouseId, status, loadedWarehouseId, dispatch]);
 
     useEffect(() => {
-        if (!warehouseId || !status) {
-            return;
-        }
-
+        if (!status) return;
         const unsubscribe = onSalesDataChanged(() => {
             dispatch(fetchReceipts({ warehouseId, force: true, summary: true }));
         });
-
         return unsubscribe;
     }, [dispatch, warehouseId, status]);
 
     const setDate = (type, val) => {
-        const fmt = type === 'start' ? val.startOf('day').format('YYYY-MM-DDTHH:mm:ss') : val.endOf('day').format('YYYY-MM-DDTHH:mm:ss');
+        const fmt = type === 'start'
+            ? val.startOf('day').format('YYYY-MM-DDTHH:mm:ss')
+            : val.endOf('day').format('YYYY-MM-DDTHH:mm:ss');
         dispatch(setFilters({ [type === 'start' ? 'startDate' : 'endDate']: fmt }));
         dispatch(fetchReceipts({ warehouseId, force: true, summary: true }));
     };

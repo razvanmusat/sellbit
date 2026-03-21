@@ -11,7 +11,11 @@ import Home from './modules/cashier/sales/pages/Home';
 import SellPage from './modules/cashier/sales/pages/SellPage';
 
 // Import Casierie (Rapoarte/Sertar)
-import CashierReportsTabs from './modules/cashier/cashierReports/components/CashierReportsTabs';
+import CashierMainPage from './modules/cashier/cashierReports/pages/CashierMainPage';
+import CashDrawerPage from './modules/cashier/cashierReports/pages/CashDrawerPage';
+import SellReports from './modules/cashier/cashierReports/pages/SellReports';
+import CashMovementHistory from './modules/cashier/cashierReports/pages/CashMovementHistory';
+import RefundPage from './modules/cashier/cashierReports/pages/RefundPage';
 
 // Import Rezervări
 import ReservationsMainPage from './modules/cashier/reservations/pages/ReservationsMainPage';
@@ -158,7 +162,12 @@ function App() {
         {/* Pagina de schimbare gestiune bonuri */}
         
         {/* 2. Casierie */}
-        <Route path="cashier" element={<CashierReportsTabs />} />
+        <Route path="cashier" element={<CashierMainPage />}>
+          <Route path="drawer" element={<CashDrawerPage />} />
+          <Route path="reports" element={<SellReports />} />
+          <Route path="history" element={<CashMovementHistory />} />
+          <Route path="refund" element={<RefundPage />} />
+        </Route>
 
         {/* 3. Rezervări */}
         <Route path="reservations" element={<ReservationsMainPage />} />

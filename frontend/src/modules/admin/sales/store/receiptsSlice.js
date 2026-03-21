@@ -5,15 +5,14 @@ import { getFriendlyErrorMessage } from '../../../../shared/utils/errorHandler';
 
 export const fetchReceipts = createAsyncThunk(
     'receipts/fetch',
-    async ({ warehouseId, force = false, summary = false }, { getState, rejectWithValue }) => {
+    async ({ warehouseId = null, force = false, summary = false }, { getState, rejectWithValue }) => {
         const { startDate, endDate, status, loadedWarehouseId, list } = getState().receipts;
-        
-        // STOP dacă datele sunt deja aici (evită flash-ul de loading)
-        if (!force && loadedWarehouseId === warehouseId && list.length > 0) {
+
+        if (!force && loadedWarehouseId === (warehouseId ?? 'ALL') && list.length > 0) {
             return { data: list, warehouseId, cached: true };
         }
 
-        if (!warehouseId || !status) return rejectWithValue("Lipsă parametri");
+        if (!status) return rejectWithValue('Lipsă parametri');
 
         try {
             const apiStatus = status === 'REFUNDED' ? 'CLOSED' : status;
@@ -24,7 +23,7 @@ export const fetchReceipts = createAsyncThunk(
                 : await SalesService.getReceiptsHistory({
                     start: startDate, end: endDate, warehouseId, status: apiStatus
                 });
-            return { data: data || [], warehouseId, cached: false }; 
+            return { data: data || [], warehouseId: warehouseId ?? 'ALL', cached: false };
         } catch (err) {
             return rejectWithValue(getFriendlyErrorMessage(err));
         }
@@ -34,9 +33,9 @@ export const fetchReceipts = createAsyncThunk(
 const initialState = {
     startDate: dayjs().startOf('month').format('YYYY-MM-DDTHH:mm:ss'),
     endDate: dayjs().endOf('day').format('YYYY-MM-DDTHH:mm:ss'),
-    status: 'CLOSED', 
+    status: 'CLOSED',
     list: [],
-    loadedWarehouseId: null, 
+    loadedWarehouseId: null,
     loading: false,
     error: null
 };
@@ -47,15 +46,15 @@ const receiptsSlice = createSlice({
     reducers: {
         setFilters: (state, action) => {
             Object.assign(state, action.payload);
-            state.loadedWarehouseId = null; // Invalidează pentru a forța fetch pe noile filtre
+            state.loadedWarehouseId = null;
         },
         resetReceipts: () => initialState
     },
     extraReducers: (builder) => {
         builder
             .addCase(fetchReceipts.pending, (state, action) => {
-                // Nu arătăm loading dacă avem deja date cache-uite (evită flicker)
-                if (!action.meta.arg.force && state.loadedWarehouseId === action.meta.arg.warehouseId) return;
+                const incomingId = action.meta.arg.warehouseId ?? 'ALL';
+                if (!action.meta.arg.force && state.loadedWarehouseId === incomingId) return;
                 state.loading = true;
             })
             .addCase(fetchReceipts.fulfilled, (state, action) => {
@@ -72,7 +71,6 @@ const receiptsSlice = createSlice({
     }
 });
 
-// SELECTOR DE VITEZĂ: Grupare instantanee
 export const selectGroupedReceipts = createSelector(
     [state => state.receipts.list, state => state.receipts.status],
     (list, statusFilter) => {

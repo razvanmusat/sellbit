@@ -72,7 +72,6 @@ public class ReceiptService {
                 return mapToResponse(receipt);
         }
 
-        // OPERAȚIONAL: Toate bonurile deschise, fără filtru pe gestiune.
         @Transactional(readOnly = true)
         public List<ReceiptDTOs.Response> getActiveReceipts() {
                 return receiptRepository.findByStatus_Code("OPEN")
@@ -81,7 +80,6 @@ public class ReceiptService {
                                 .collect(Collectors.toList());
         }
 
-        // RAPORTARE: Istoric bonuri filtrate după gestiunea liniilor.
         @Transactional(readOnly = true)
         public List<ReceiptDTOs.Response> getReceiptsReport(Integer warehouseId, String statusCode,
                         LocalDateTime start, LocalDateTime end) {
@@ -99,7 +97,6 @@ public class ReceiptService {
                                 warehouseId, statusCode, start, end);
         }
 
-        // Deschide un bon nou (status OPEN) — fără gestiune pe header.
         @Transactional
         public ReceiptDTOs.Response createReceipt(ReceiptDTOs.CreateRequest request) {
                 ReceiptStatus openStatus = statusRepository.findByCode("OPEN")
@@ -123,7 +120,6 @@ public class ReceiptService {
                 return mapToResponse(receiptRepository.save(receipt));
         }
 
-        // Returnează bonurile deschise din zilele anterioare (Alerte UX).
         @Transactional(readOnly = true)
         public List<ReceiptDTOs.UnclosedAlert> getUnclosedAlerts() {
                 LocalDateTime startOfToday = LocalDateTime.of(LocalDate.now(), LocalTime.MIN);
@@ -146,7 +142,6 @@ public class ReceiptService {
                                 .collect(Collectors.toList());
         }
 
-        // Anulează un bon deschis și returnează stocul live.
         @Transactional
         public void cancelOpenReceipt(Integer receiptId, Integer reasonId) {
                 Receipt receipt = receiptRepository.findById(receiptId)
@@ -184,23 +179,17 @@ public class ReceiptService {
                 receiptRepository.save(receipt);
         }
 
-        // Finalizează vânzarea, verifică plățile și descarcă gestiunea (FIFO).
-        // Mișcările de numerar sunt deja create de ReceiptPaymentService.addPayment —
-        // nu se mai creează aici pentru a evita dublarea.
         @Transactional
         public void closeReceipt(Integer receiptId) {
-                // 1. Căutăm bonul
                 Receipt receipt = receiptRepository.findById(receiptId)
                                 .orElseThrow(() -> new RuntimeException("ERROR.RECEIPT.NOT_FOUND"));
 
-                // 2. Validăm statusul
                 if (!"OPEN".equals(receipt.getStatus().getCode())) {
                         throw new RuntimeException("ERROR.RECEIPT.NOT_OPEN");
                 }
 
                 validateCateringPrices(receipt);
 
-                // 3. Validăm plățile
                 BigDecimal paidAmount = receipt.getPayments().stream()
                                 .map(ReceiptPayment::getAmount)
                                 .reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -209,7 +198,6 @@ public class ReceiptService {
                         throw new RuntimeException("ERROR.RECEIPT.INCOMPLETE_PAYMENT");
                 }
 
-                // 4. DESCĂRCARE GESTIUNE (FIFO) — warehouse vine de pe linie
                 for (ReceiptItem item : receipt.getItems()) {
                         if (item.getQuantity().compareTo(BigDecimal.ZERO) != 0) {
                                 Warehouse itemWarehouse = productService.resolveWarehouse(
@@ -223,23 +211,16 @@ public class ReceiptService {
                         }
                 }
 
-                // 5. Finalizare status
-                // Mișcările cash NU se mai creează aici — sunt deja înregistrate
-                // în ReceiptPaymentService.addPayment la momentul plății.
                 ReceiptStatus closedStatus = statusRepository.findByCode("CLOSED")
                                 .orElseThrow(() -> new RuntimeException("ERROR.STATUS.NOT_FOUND"));
 
                 receipt.setStatus(closedStatus);
                 receipt.setClosedAt(LocalDateTime.now());
-
-                // 6. Salvare finală
                 receiptRepository.save(receipt);
 
-                // 7. Emitere VOUCHERE
                 voucherService.checkAndIssueVouchers(receipt);
         }
 
-        // Recalculează header-ul bonului (apelată din ReceiptItemService).
         @Transactional
         public void updateReceiptTotals(Integer receiptId) {
                 Receipt receipt = receiptRepository.findById(receiptId)
@@ -261,7 +242,6 @@ public class ReceiptService {
                 receiptRepository.save(receipt);
         }
 
-        // Mapper pentru Response DTO.
         public ReceiptDTOs.Response mapToResponse(Receipt receipt) {
                 List<ReceiptDTOs.ItemResponse> itemDTOs = receipt.getItems().stream()
                                 .sorted(Comparator.comparing(ReceiptItem::getId))
@@ -293,6 +273,8 @@ public class ReceiptService {
                                                                 p.getAmount(),
                                                                 info,
                                                                 p.getWarehouse() != null ? p.getWarehouse().getId()
+                                                                                : null,
+                                                                p.getWarehouse() != null ? p.getWarehouse().getName()
                                                                                 : null);
                                         })
                                         .collect(Collectors.toList());
@@ -361,6 +343,7 @@ public class ReceiptService {
                                 .user(userRepository.getReferenceById(request.userId()))
                                 .tableName("Retur Bon #" + original.getId())
                                 .originalReceipt(original)
+                                .note(request.note())
                                 .totalAmount(BigDecimal.ZERO)
                                 .totalNet(BigDecimal.ZERO)
                                 .totalVat(BigDecimal.ZERO)
@@ -448,8 +431,7 @@ public class ReceiptService {
                 String typeCode = "CASH".equals(refundMethod.getCode()) ? "REFUND" : "REFUND_CARD";
                 BigDecimal totalRefund = tAmount.abs();
 
-                // Split refund proporțional pe gestiunile returnate (ultima primește restul
-                // exact)
+                // Cash movements per gestiune
                 List<Map.Entry<Integer, BigDecimal>> entries = new ArrayList<>(warehouseRefundTotals.entrySet());
                 BigDecimal allocated = BigDecimal.ZERO;
 
@@ -477,20 +459,20 @@ public class ReceiptService {
                                         original.getId());
                 }
 
-                Warehouse refundWarehouse = warehouseRefundTotals.isEmpty() ? null
-                                : warehouseRepository
-                                                .getReferenceById(warehouseRefundTotals.keySet().iterator().next());
-
-                ReceiptPayment refundPayment = ReceiptPayment.builder()
-                                .receipt(refundReceipt)
-                                .paymentMethod(refundMethod)
-                                .amount(tAmount)
-                                .warehouse(refundWarehouse)
-                                .paidAt(LocalDateTime.now())
-                                .build();
-
-                refundReceipt.addPayment(refundPayment);
-                paymentRepository.save(refundPayment);
+                // Plată per gestiune — câte una pentru fiecare gestiune returnată
+                // astfel încât rapoartele să afișeze corect metoda și gestiunea
+                for (Map.Entry<Integer, BigDecimal> entry : warehouseRefundTotals.entrySet()) {
+                        Warehouse refundWarehouse = warehouseRepository.getReferenceById(entry.getKey());
+                        ReceiptPayment refundPayment = ReceiptPayment.builder()
+                                        .receipt(refundReceipt)
+                                        .paymentMethod(refundMethod)
+                                        .amount(entry.getValue().negate()) // negativ — e retur
+                                        .warehouse(refundWarehouse)
+                                        .paidAt(LocalDateTime.now())
+                                        .build();
+                        refundReceipt.addPayment(refundPayment);
+                        paymentRepository.save(refundPayment);
+                }
 
                 return mapToResponse(receiptRepository.save(refundReceipt));
         }
@@ -548,7 +530,6 @@ public class ReceiptService {
                                 receipt.getCreatedAt());
         }
 
-        // Înregistrează un AVANS rapid.
         @Transactional
         public void registerAdvancePayment(Integer warehouseId, BigDecimal amount, String paymentMethodCode,
                         Integer userId, String note) {

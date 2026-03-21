@@ -106,9 +106,9 @@ export const useSellPage = () => {
       }
     },
 
-    createAdvance: ({ warehouseId, amount, paymentMethodCode, note }) => {
+    createAdvance: async ({ warehouseId, amount, paymentMethodCode, note }) => {
       if (user?.id) {
-        dispatch(
+        const result = await dispatch(
           registerAdvancePayment({
             warehouseId,
             amount,
@@ -117,8 +117,11 @@ export const useSellPage = () => {
             note,
           }),
         );
-        showFeedback("Avans înregistrat cu succes!", "success");
-        toggleModal("advance", false);
+        if (registerAdvancePayment.fulfilled.match(result)) {
+          dispatch(invalidateCache());
+          showFeedback("Avans înregistrat cu succes!", "success");
+          toggleModal("advance", false);
+        }
       }
     },
 
@@ -157,7 +160,6 @@ export const useSellPage = () => {
       return dispatch(removeReceiptItem(receiptItemId));
     },
 
-    // warehouseId — gestiunea pe care merge cash-ul (selectată de casier din picker)
     addPayment: async (paymentMethodId, amount, changeDue, warehouseId) => {
       if (receiptId && user?.id) {
         const result = await dispatch(
@@ -166,7 +168,7 @@ export const useSellPage = () => {
             paymentMethodId,
             amount: parseFloat(amount),
             userId: user.id,
-            warehouseId, // transmis direct la backend
+            warehouseId,
           }),
         );
         if (addPaymentToReceipt.fulfilled.match(result)) {

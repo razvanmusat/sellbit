@@ -653,7 +653,7 @@ class ReceiptServiceTest {
         receipt.getPayments()
                 .add(ReceiptPayment.builder().paymentMethod(cash).amount(new BigDecimal("100.00")).build());
 
-        var req = new ReceiptDTOs.RefundRequest(1, List.of(new ReceiptDTOs.RefundItemRequest(1, BigDecimal.ONE)), 1);
+        var req = new ReceiptDTOs.RefundRequest(1, List.of(new ReceiptDTOs.RefundItemRequest(1, BigDecimal.ONE)), 1, null);
 
         when(receiptRepository.findById(100)).thenReturn(Optional.of(receipt));
         when(statusRepository.findByCode("CLOSED")).thenReturn(Optional.of(closedStatus));
@@ -698,7 +698,7 @@ class ReceiptServiceTest {
         when(receiptRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
         receiptService.createPartialRefund(100,
-                new ReceiptDTOs.RefundRequest(1, List.of(new ReceiptDTOs.RefundItemRequest(1, BigDecimal.ONE)), 1));
+                new ReceiptDTOs.RefundRequest(1, List.of(new ReceiptDTOs.RefundItemRequest(1, BigDecimal.ONE)), 1, null));
 
         verify(cashMovementService).createMovement(eq(1), eq("REFUND_CARD"), any(BigDecimal.class), eq(1), anyString(),
                 eq(100));
@@ -712,7 +712,7 @@ class ReceiptServiceTest {
         when(receiptRepository.findById(100)).thenReturn(Optional.of(receipt));
 
         var req = new ReceiptDTOs.RefundRequest(1,
-                List.of(new ReceiptDTOs.RefundItemRequest(1, new BigDecimal("2.00"))), 1);
+                List.of(new ReceiptDTOs.RefundItemRequest(1, new BigDecimal("2.00"))), 1, null);
         assertThrows(RuntimeException.class, () -> receiptService.createPartialRefund(100, req));
     }
 

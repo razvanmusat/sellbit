@@ -122,7 +122,7 @@ class ReceiptControllerTest {
     @DisplayName("POST /api/sales/receipts/{id}/refund - Succes: Valorile negative din Response")
     void refund_Success() throws Exception {
         var itemReq = new ReceiptDTOs.RefundItemRequest(1, new BigDecimal("1.00"));
-        var refundReq = new ReceiptDTOs.RefundRequest(1, List.of(itemReq), 1);
+        var refundReq = new ReceiptDTOs.RefundRequest(1, List.of(itemReq), 1, null);
         
         var response = new ReceiptDTOs.Response(
                 101, "Inchis", "Stornare la Bon #100", 

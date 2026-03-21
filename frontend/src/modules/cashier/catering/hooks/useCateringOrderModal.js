@@ -23,7 +23,7 @@ export const useCateringOrderModal = (open, editData, context, onSubmit) => {
   useEffect(() => {
     if (open) {
       setSearchTerm('');
-      setShowDropdown(false);
+      setShowDropdown(!editData);
 
       if (editData) {
         const initialBasket = editData.items.map(item => ({
