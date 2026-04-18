@@ -5,6 +5,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
@@ -31,10 +33,10 @@ public class CashMovementController {
             @RequestParam Integer warehouseId,
             @RequestParam String typeCode,
             @RequestParam BigDecimal amount,
-            @RequestParam Integer userId,
             @RequestParam(required = false) String note) {
-        
-        cashMovementService.createMovement(warehouseId, typeCode, amount, userId, note);
+
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        cashMovementService.createMovement(warehouseId, typeCode, amount, auth.getName(), note);
         return ResponseEntity.ok().build();
     }
 

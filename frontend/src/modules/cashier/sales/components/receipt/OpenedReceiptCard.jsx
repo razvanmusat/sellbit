@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import PropTypes from "prop-types";
 import {
@@ -135,6 +135,33 @@ const OpenedReceiptCard = ({
     .filter((item) => item != null)
     .slice()
     .sort((a, b) => (a.receiptItemId || 0) - (b.receiptItemId || 0));
+
+  // Headroom per gestiune = items_W - payments_W.
+  // O linie pe W poate fi redusă/ștearsă/mutată doar cât timp
+  // după operație rămâne items_W >= payments_W.
+  const headroomPerWarehouse = useMemo(() => {
+    const paid = {};
+    (receipt.payments || []).forEach((p) => {
+      if (p.warehouseId) {
+        paid[p.warehouseId] = (paid[p.warehouseId] || 0) + (p.amount || 0);
+      }
+    });
+    const totals = {};
+    (receipt.items || []).forEach((i) => {
+      if (i && i.warehouseId) {
+        totals[i.warehouseId] = (totals[i.warehouseId] || 0) + (i.lineTotal || 0);
+      }
+    });
+    const map = {};
+    Object.keys(totals).forEach((whId) => {
+      map[whId] = {
+        items: totals[whId] || 0,
+        payments: paid[whId] || 0,
+        headroom: (totals[whId] || 0) - (paid[whId] || 0),
+      };
+    });
+    return map;
+  }, [receipt.items, receipt.payments]);
 
   return (
     <Paper
@@ -274,25 +301,43 @@ const OpenedReceiptCard = ({
             </Typography>
           </Box>
         ) : (
-          items.map((item) => (
-            <ProductCard
-              key={`${item.receiptItemId}-${item.productId}`}
-              item={item}
-              warehouses={warehouses}
-              onQuantityChange={(productId, newQuantity, warehouseId) =>
-                onUpdateItem(receipt.id, productId, newQuantity, warehouseId)
-              }
-              onRemove={() => onRemoveItem(item.receiptItemId)}
-              onMoveToWarehouse={(newWarehouseId) =>
-                handleMoveToWarehouse(
-                  item.receiptItemId,
-                  item.productId,
-                  item.quantity,
-                  newWarehouseId,
-                )
-              }
-            />
-          ))
+          items.map((item) => {
+            const wh = headroomPerWarehouse[item.warehouseId];
+            const headroom = wh ? wh.headroom : Infinity;
+            const paidOnWh = wh ? wh.payments : 0;
+            const lineTotal = item.lineTotal || 0;
+            const unitPrice =
+              item.quantity > 0 ? lineTotal / item.quantity : 0;
+            const EPS = 0.001;
+            const canChangeWarehouse =
+              paidOnWh === 0 || lineTotal <= headroom + EPS;
+            const canDecrement =
+              paidOnWh === 0 || unitPrice <= headroom + EPS;
+            const canRemove =
+              paidOnWh === 0 || lineTotal <= headroom + EPS;
+            return (
+              <ProductCard
+                key={`${item.receiptItemId}-${item.productId}`}
+                item={item}
+                warehouses={warehouses}
+                canChangeWarehouse={canChangeWarehouse}
+                canDecrement={canDecrement}
+                canRemove={canRemove}
+                onQuantityChange={(productId, newQuantity, warehouseId) =>
+                  onUpdateItem(receipt.id, productId, newQuantity, warehouseId)
+                }
+                onRemove={() => onRemoveItem(item.receiptItemId)}
+                onMoveToWarehouse={(newWarehouseId) =>
+                  handleMoveToWarehouse(
+                    item.receiptItemId,
+                    item.productId,
+                    item.quantity,
+                    newWarehouseId,
+                  )
+                }
+              />
+            );
+          })
         )}
       </Box>
 

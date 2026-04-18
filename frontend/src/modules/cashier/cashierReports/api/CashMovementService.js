@@ -15,12 +15,11 @@ export class CashMovementService {
    * Înregistrează o mișcare manuală de numerar.
    * Endpoint: POST /api/cash/movements
    */
-  static async createMovement({ warehouseId, typeCode, amount, userId, note }) {
+  static async createMovement({ warehouseId, typeCode, amount, note }) {
     const queryParams = new URLSearchParams({
       warehouseId,
       typeCode,
       amount,
-      userId
     });
 
     if (note) {

@@ -42,6 +42,10 @@ const ERROR_MESSAGES = {
   "ERROR.RECEIPT.INCOMPLETE_PAYMENT": "Bonul nu este achitat integral.",
   "ERROR.RECEIPT.HAS_PAYMENTS_PLEASE_REFUND_FIRST":
     "Nu poți anula bonul! Sterge plățile efectuate înainte.",
+  "ERROR.RECEIPT.ITEM_LOCKED_BY_PAYMENT":
+    "Nu poți modifica această linie cât timp există plăți care o acoperă pe gestiunea ei. Șterge întâi plățile de pe acea gestiune.",
+  "ERROR.RECEIPT.WAREHOUSE_PAYMENT_MISMATCH":
+    "Plățile nu se potrivesc cu produsele pe gestiuni. Reajustează plățile per gestiune înainte de închidere.",
 
   // --- STOCKS & PRODUCTS ---  
   "ERROR.ITEM.NOT_FOUND": "Produsul nu a fost găsit pe acest bon.",

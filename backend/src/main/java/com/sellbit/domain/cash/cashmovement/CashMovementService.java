@@ -35,6 +35,13 @@ public class CashMovementService {
     }
 
     @Transactional
+    public void createMovement(Integer warehouseId, String typeCode, BigDecimal amount, String username, String note) {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("ERROR.USER.NOT_FOUND"));
+        createMovement(warehouseId, typeCode, amount, user.getId(), note, null);
+    }
+
+    @Transactional
     public void createMovement(Integer warehouseId, String typeCode, BigDecimal amount, Integer userId, String note, Integer receiptId) {
         // 1. Validăm existența datelor
         Warehouse warehouse = warehouseRepository.findById(warehouseId)

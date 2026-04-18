@@ -74,7 +74,6 @@ export const useCashDrawer = (warehouseId) => {
                 warehouseId,
                 typeCode,
                 amount: amountVal,
-                userId: user?.id,
                 note
             });
 

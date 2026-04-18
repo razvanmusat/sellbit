@@ -198,6 +198,8 @@ public class ReceiptService {
                         throw new RuntimeException("ERROR.RECEIPT.INCOMPLETE_PAYMENT");
                 }
 
+                validateWarehousePaymentBalance(receipt);
+
                 for (ReceiptItem item : receipt.getItems()) {
                         if (item.getQuantity().compareTo(BigDecimal.ZERO) != 0) {
                                 Warehouse itemWarehouse = productService.resolveWarehouse(
@@ -620,6 +622,47 @@ public class ReceiptService {
                                         userId,
                                         movementNote,
                                         receipt.getId());
+                }
+        }
+
+        /**
+         * Plasă de siguranță la close: pe fiecare gestiune afectată,
+         * suma items-urilor trebuie să fie egală cu suma plăților.
+         *
+         * Invariantul e deja prevenit în ReceiptItemService (nu lași operațiuni care îl sparg),
+         * dar validarea aici protejează împotriva oricărei căi viitoare care l-ar ocoli.
+         *
+         * Dacă există plăți fără gestiune (voucher-fallback), sărim verificarea — totalul
+         * global a fost deja validat mai sus și nu avem cum distribui precis per gestiune.
+         */
+        private void validateWarehousePaymentBalance(Receipt receipt) {
+                boolean hasUnassignedPayment = receipt.getPayments().stream()
+                                .anyMatch(p -> p.getWarehouse() == null);
+                if (hasUnassignedPayment) return;
+
+                Map<Integer, BigDecimal> itemsByWh = new LinkedHashMap<>();
+                for (ReceiptItem item : receipt.getItems()) {
+                        if (item.getWarehouse() == null) continue;
+                        BigDecimal line = item.getLineTotal() != null ? item.getLineTotal() : BigDecimal.ZERO;
+                        itemsByWh.merge(item.getWarehouse().getId(), line, BigDecimal::add);
+                }
+
+                Map<Integer, BigDecimal> paymentsByWh = new LinkedHashMap<>();
+                for (ReceiptPayment payment : receipt.getPayments()) {
+                        paymentsByWh.merge(payment.getWarehouse().getId(), payment.getAmount(), BigDecimal::add);
+                }
+
+                java.util.Set<Integer> allWhs = new java.util.HashSet<>();
+                allWhs.addAll(itemsByWh.keySet());
+                allWhs.addAll(paymentsByWh.keySet());
+
+                BigDecimal tolerance = new BigDecimal("0.01");
+                for (Integer whId : allWhs) {
+                        BigDecimal items = itemsByWh.getOrDefault(whId, BigDecimal.ZERO);
+                        BigDecimal payments = paymentsByWh.getOrDefault(whId, BigDecimal.ZERO);
+                        if (items.subtract(payments).abs().compareTo(tolerance) > 0) {
+                                throw new RuntimeException("ERROR.RECEIPT.WAREHOUSE_PAYMENT_MISMATCH");
+                        }
                 }
         }
 

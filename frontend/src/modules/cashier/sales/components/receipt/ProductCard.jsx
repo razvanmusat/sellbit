@@ -7,6 +7,7 @@ import {
   Select,
   MenuItem,
   FormControl,
+  Tooltip,
 } from "@mui/material";
 import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
 import RemoveCircleOutlineIcon from "@mui/icons-material/RemoveCircleOutline";
@@ -15,6 +16,9 @@ import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 const ProductCard = ({
   item,
   warehouses,
+  canChangeWarehouse = true,
+  canDecrement = true,
+  canRemove = true,
   onQuantityChange,
   onRemove,
   onMoveToWarehouse,
@@ -26,6 +30,11 @@ const ProductCard = ({
     lineTotal = 0,
     warehouseId,
   } = item;
+
+  const isRemoveStep = quantity === 1;
+  const decrementAllowed = isRemoveStep ? canRemove : canDecrement;
+  const lockReason =
+    "Blocat cât timp există plăți pe această gestiune. Șterge plățile mai întâi.";
 
   const handleIncrement = () => {
     onQuantityChange(productId, quantity + 1, warehouseId);
@@ -69,23 +78,31 @@ const ProductCard = ({
       </Box>
 
       {/* 2. DROPDOWN GESTIUNE */}
-      <FormControl size="small" sx={{ minWidth: 110, flexShrink: 0 }}>
-        <Select
-          value={warehouseId || ""}
-          onChange={handleWarehouseChange}
-          displayEmpty
-          sx={{
-            fontSize: "0.75rem",
-            "& .MuiSelect-select": { py: 0.5, px: 1 },
-          }}
-        >
-          {warehouses.map((w) => (
-            <MenuItem key={w.id} value={w.id} sx={{ fontSize: "0.8rem" }}>
-              {w.name}
-            </MenuItem>
-          ))}
-        </Select>
-      </FormControl>
+      <Tooltip title={canChangeWarehouse ? "" : lockReason} arrow disableInteractive>
+        <span>
+          <FormControl
+            size="small"
+            sx={{ minWidth: 110, flexShrink: 0 }}
+            disabled={!canChangeWarehouse}
+          >
+            <Select
+              value={warehouseId || ""}
+              onChange={handleWarehouseChange}
+              displayEmpty
+              sx={{
+                fontSize: "0.75rem",
+                "& .MuiSelect-select": { py: 0.5, px: 1 },
+              }}
+            >
+              {warehouses.map((w) => (
+                <MenuItem key={w.id} value={w.id} sx={{ fontSize: "0.8rem" }}>
+                  {w.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </span>
+      </Tooltip>
 
       {/* 3. BUTOANE CANTITATE */}
       <Box
@@ -96,13 +113,18 @@ const ProductCard = ({
           flexShrink: 0,
         }}
       >
-        <IconButton
-          onClick={handleDecrement}
-          color={quantity === 1 ? "error" : "primary"}
-          sx={{ p: 0.5 }}
-        >
-          {quantity === 1 ? <DeleteOutlineIcon /> : <RemoveCircleOutlineIcon />}
-        </IconButton>
+        <Tooltip title={decrementAllowed ? "" : lockReason} arrow disableInteractive>
+          <span>
+            <IconButton
+              onClick={handleDecrement}
+              color={quantity === 1 ? "error" : "primary"}
+              sx={{ p: 0.5 }}
+              disabled={!decrementAllowed}
+            >
+              {quantity === 1 ? <DeleteOutlineIcon /> : <RemoveCircleOutlineIcon />}
+            </IconButton>
+          </span>
+        </Tooltip>
         <Typography
           variant="body1"
           sx={{ minWidth: "24px", textAlign: "center", fontWeight: "bold" }}
@@ -135,6 +157,9 @@ const ProductCard = ({
 ProductCard.propTypes = {
   item: PropTypes.object.isRequired,
   warehouses: PropTypes.array.isRequired,
+  canChangeWarehouse: PropTypes.bool,
+  canDecrement: PropTypes.bool,
+  canRemove: PropTypes.bool,
   onQuantityChange: PropTypes.func.isRequired,
   onRemove: PropTypes.func.isRequired,
   onMoveToWarehouse: PropTypes.func.isRequired,

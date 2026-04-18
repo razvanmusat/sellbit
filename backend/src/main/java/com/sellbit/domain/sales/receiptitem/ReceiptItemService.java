@@ -26,6 +26,7 @@ import com.sellbit.domain.sales.receipt.ReceiptDTOs;
 import com.sellbit.domain.sales.receipt.ReceiptRepository;
 import com.sellbit.domain.sales.receipt.ReceiptService;
 import com.sellbit.domain.sales.receiptitem.ReceiptItemDTO.ReceiptItemResponse;
+import com.sellbit.domain.sales.receiptpayment.ReceiptPayment;
 
 import lombok.RequiredArgsConstructor;
 
@@ -75,6 +76,13 @@ public class ReceiptItemService {
 
         BigDecimal oldQty = (item != null) ? item.getQuantity() : BigDecimal.ZERO;
         BigDecimal delta = quantity.subtract(oldQty);
+
+        if (delta.compareTo(BigDecimal.ZERO) < 0 && item != null) {
+            BigDecimal oldLineTotal = item.getLineTotal() != null ? item.getLineTotal() : BigDecimal.ZERO;
+            BigDecimal newLineTotal = item.getUnitPrice().multiply(quantity);
+            validateWarehousePaymentHeadroom(
+                    receipt, resolvedWarehouse.getId(), newLineTotal.subtract(oldLineTotal));
+        }
 
         if (delta.compareTo(BigDecimal.ZERO) > 0) {
             validateStockAvailability(resolvedWarehouse.getId(), product, delta);
@@ -128,6 +136,12 @@ public class ReceiptItemService {
 
         Warehouse itemWarehouse = productService.resolveWarehouse(
                 item.getProduct(), item.getWarehouse());
+
+        BigDecimal removedLineTotal = item.getLineTotal() != null ? item.getLineTotal() : BigDecimal.ZERO;
+        Integer itemStoredWarehouseId = item.getWarehouse() != null ? item.getWarehouse().getId() : null;
+        if (itemStoredWarehouseId != null) {
+            validateWarehousePaymentHeadroom(receipt, itemStoredWarehouseId, removedLineTotal.negate());
+        }
 
         receipt.getItems().remove(item);
 
@@ -224,6 +238,37 @@ public class ReceiptItemService {
     public List<ReceiptItemDTO.ProductTimelineResponse> getProductTimeline(LocalDateTime start,
             LocalDateTime end, Integer productId, Integer warehouseId) {
         return itemRepository.getProductTimeline(start, end, productId, warehouseId);
+    }
+
+    /**
+     * Invariant: pe fiecare gestiune, suma items-urilor trebuie să rămână >= suma plăților
+     * deja asociate acelei gestiuni. Altfel, modificarea ar dezalinia soldul per gestiune
+     * și ar permite închiderea bonului cu plăți orfane (bug-ul pe care îl prevenim aici).
+     */
+    private void validateWarehousePaymentHeadroom(Receipt receipt, Integer warehouseId,
+            BigDecimal deltaLineTotal) {
+        if (deltaLineTotal.compareTo(BigDecimal.ZERO) >= 0) return;
+
+        BigDecimal paymentsW = receipt.getPayments() == null ? BigDecimal.ZERO
+                : receipt.getPayments().stream()
+                        .filter(p -> p.getWarehouse() != null
+                                && p.getWarehouse().getId().equals(warehouseId))
+                        .map(ReceiptPayment::getAmount)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        if (paymentsW.compareTo(BigDecimal.ZERO) == 0) return;
+
+        BigDecimal itemsW = receipt.getItems().stream()
+                .filter(i -> i.getWarehouse() != null
+                        && i.getWarehouse().getId().equals(warehouseId))
+                .map(i -> i.getLineTotal() != null ? i.getLineTotal() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal itemsAfter = itemsW.add(deltaLineTotal);
+
+        if (itemsAfter.compareTo(paymentsW) < 0) {
+            throw new RuntimeException("ERROR.RECEIPT.ITEM_LOCKED_BY_PAYMENT");
+        }
     }
 
     private void validateStockAvailability(Integer warehouseId, Product product, BigDecimal requiredQty) {
