@@ -32,7 +32,8 @@ public class ReceiptDTOs {
                         BigDecimal price,
                         BigDecimal lineTotal,
                         Integer warehouseId,
-                        String warehouseName) {
+                        String warehouseName,
+                        boolean trackStock) {
         }
 
         public record PaymentSummary(
@@ -62,6 +63,7 @@ public class ReceiptDTOs {
                         String note,
                         String cancelReason,
                         Integer originalReceiptId,
+                        boolean internalCorrection,
                         List<ItemResponse> items,
                         List<PaymentSummary> payments) {
         }
@@ -102,6 +104,22 @@ public class ReceiptDTOs {
         public record RefundItemRequest(
                         @NotNull(message = "ERROR.ITEM.REQUIRED") Integer receiptItemId,
                         @NotNull(message = "ERROR.QUANTITY.REQUIRED") BigDecimal quantityToRefund) {
+        }
+
+        public record EditReceiptRequest(
+                        @NotEmpty(message = "ERROR.ITEMS.REQUIRED") List<EditItemRequest> items,
+                        @NotEmpty(message = "ERROR.PAYMENTS.REQUIRED") List<EditPaymentRequest> payments) {
+        }
+
+        public record EditItemRequest(
+                        @NotNull(message = "ERROR.ITEM.REQUIRED") Integer receiptItemId,
+                        @NotNull(message = "ERROR.WAREHOUSE.REQUIRED") Integer newWarehouseId) {
+        }
+
+        public record EditPaymentRequest(
+                        @NotBlank(message = "ERROR.PAYMENT_METHOD.REQUIRED") String methodCode,
+                        @NotNull(message = "ERROR.AMOUNT.REQUIRED") BigDecimal amount,
+                        Integer warehouseId) {
         }
 
         // DTO pentru încasarea rapidă a unui avans.

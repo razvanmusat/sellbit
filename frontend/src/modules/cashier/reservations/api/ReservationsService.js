@@ -68,4 +68,10 @@ export class ReservationsService {
       method: 'PATCH'
     });
   }
+
+  static async confirmTheme(id) {
+    return await client(`playground/reservations/${id}/confirm-theme`, {
+      method: 'PATCH'
+    });
+  }
 }

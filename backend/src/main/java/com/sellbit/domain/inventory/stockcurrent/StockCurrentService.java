@@ -123,7 +123,7 @@ public class StockCurrentService {
         BigDecimal newQuantity = stock.getQuantity().add(deltaQuantity);
 
         if (newQuantity.compareTo(BigDecimal.ZERO) < 0) {
-            throw new RuntimeException("ERROR.STOCK.INSUFFICIENT_QUANTITY");
+            throw new RuntimeException("ERROR.STOCK.INSUFFICIENT_QUANTITY|product=" + product.getName());
         }
 
         stock.setQuantity(newQuantity);

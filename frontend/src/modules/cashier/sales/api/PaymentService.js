@@ -42,6 +42,20 @@ export class PaymentService {
   }
 
   static async getPaymentsByReceipt(receiptId) {
+    if (PaymentService._editModePayments !== null) {
+      return PaymentService._editModePayments;
+    }
     return await client(`sales/receipt-payments/receipt/${receiptId}`);
+  }
+
+  // Edit mode override — set by EditReceiptPage to intercept payment fetches
+  static _editModePayments = null;
+
+  static setEditModePayments(payments) {
+    PaymentService._editModePayments = payments;
+  }
+
+  static clearEditModePayments() {
+    PaymentService._editModePayments = null;
   }
 }

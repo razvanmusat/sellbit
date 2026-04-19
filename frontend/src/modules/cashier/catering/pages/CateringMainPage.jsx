@@ -29,9 +29,10 @@ const CateringMainPage = () => {
     handleCloseDelete, 
     handleConfirmDelete,
 
-    handleDateChange, handlePrevDay, handleNextDay, handleGoToToday, handleRefresh, // Am extras handleGoToToday
-    handleOpenAdd, handleEditGroup, handleCloseModal, 
-    handleSubmit, setToast
+    handleDateChange, handlePrevDay, handleNextDay, handleGoToToday, handleRefresh,
+    handleOpenAdd, handleEditGroup, handleCloseModal,
+    handleSubmit, setToast,
+    isAdmin, isPast,
   } = useCateringMainPage();
 
   return (
@@ -132,11 +133,12 @@ const CateringMainPage = () => {
           ) : (
              <Stack spacing={2} sx={{ pb: 4 }}>
                  {groupedOrders.map((group) => (
-                     <CateringOrderCard 
-                        key={group.id} 
-                        group={group} 
-                        onEdit={handleEditGroup} 
-                        onDelete={handleOpenDelete} 
+                     <CateringOrderCard
+                        key={group.id}
+                        group={group}
+                        onEdit={handleEditGroup}
+                        onDelete={handleOpenDelete}
+                        canModify={isAdmin || !isPast}
                       />
                  ))}
              </Stack>

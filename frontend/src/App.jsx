@@ -44,6 +44,7 @@ import InventoryMainPage from './modules/admin/inventory/pages/InventoryMainPage
 import WarehousesMainPage from './modules/admin/settings/warehouses/pages/WarehousesMainPage';
 
 import SalesMainPage from './modules/admin/sales/pages/SalesMainPage';
+import EditReceiptPage from './modules/admin/sales/pages/EditReceiptPage';
 import UsersMainPage from './modules/admin/settings/users/pages/UsersMainPage';
 import SystemSettingsPage from './modules/admin/settings/pages/SystemSettingsPage';
 import CompanySettingsPage from './modules/admin/settings/company/pages/CompanySettingsPage';
@@ -205,6 +206,7 @@ function App() {
         <Route path="inventory" element={<InventoryMainPage />} />
 
         <Route path="sales" element={<SalesMainPage />} />
+        <Route path="sales/edit/:receiptId" element={<EditReceiptPage />} />
         {/* 5. Setări sistem */}
         <Route path="settings" element={<SystemSettingsPage />}>
           <Route index element={<Navigate to="warehouses" replace />} />

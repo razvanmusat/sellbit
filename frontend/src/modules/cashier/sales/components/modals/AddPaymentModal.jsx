@@ -16,7 +16,7 @@ import StoreIcon from '@mui/icons-material/Store';
 import { usePaymentModal } from '../../hooks/usePaymentModal';
 
 const AddPaymentModal = (props) => {
-  const { open, onClose, receipt, paymentMethods, loading } = props;
+  const { open, onClose, receipt, paymentMethods, loading, closeLabel = 'ÎNCHIDE BONUL' } = props;
 
   const {
     amount, setAmount,
@@ -256,7 +256,7 @@ const AddPaymentModal = (props) => {
             sx={{ minWidth: 200, fontWeight: 'bold', fontSize: '1rem', py: 1 }}
             startIcon={isFullyPaid ? <CheckCircleIcon /> : (isVoucher ? <ConfirmationNumberIcon /> : <AttachMoneyIcon />)}
           >
-            {loading ? 'Procesare...' : (isFullyPaid ? 'ÎNCHIDE BONUL' : (isVoucher ? 'APLICĂ VOUCHER' : 'ADAUGĂ PLATĂ'))}
+            {loading ? 'Procesare...' : (isFullyPaid ? closeLabel : (isVoucher ? 'APLICĂ VOUCHER' : 'ADAUGĂ PLATĂ'))}
           </Button>
         </DialogActions>
 

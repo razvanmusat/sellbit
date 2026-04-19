@@ -897,5 +897,222 @@ class ReceiptServiceTest {
         assertThrows(RuntimeException.class,
                 () -> receiptService.registerAdvancePayment(null, BigDecimal.TEN, "CASH", 1, "Test"));
     }
-   
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // --- editReceipt ---
+    // ─────────────────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("editReceipt - Eroare: Bon nu este CLOSED")
+    void editReceipt_Fail_NotClosed() {
+        receipt.setStatus(openStatus);
+        when(receiptRepository.findById(100)).thenReturn(Optional.of(receipt));
+
+        var req = new ReceiptDTOs.EditReceiptRequest(
+                List.of(new ReceiptDTOs.EditItemRequest(1, 2)),
+                List.of(new ReceiptDTOs.EditPaymentRequest("CASH", new BigDecimal("10.00"), 2)));
+
+        RuntimeException ex = assertThrows(RuntimeException.class,
+                () -> receiptService.editReceipt(100, req, "admin"));
+        assertEquals("ERROR.RECEIPT.CANNOT_EDIT_NOT_CLOSED", ex.getMessage());
+    }
+
+    @Test
+    @DisplayName("editReceipt - Eroare: Bon de corecție internă nu poate fi editat")
+    void editReceipt_Fail_IsInternalCorrection() {
+        receipt.setStatus(closedStatus);
+        receipt.setInternalCorrection(true);
+        when(receiptRepository.findById(100)).thenReturn(Optional.of(receipt));
+
+        var req = new ReceiptDTOs.EditReceiptRequest(
+                List.of(new ReceiptDTOs.EditItemRequest(1, 2)),
+                List.of(new ReceiptDTOs.EditPaymentRequest("CASH", new BigDecimal("10.00"), 2)));
+
+        RuntimeException ex = assertThrows(RuntimeException.class,
+                () -> receiptService.editReceipt(100, req, "admin"));
+        assertEquals("ERROR.RECEIPT.CANNOT_EDIT_CORRECTION", ex.getMessage());
+    }
+
+    @Test
+    @DisplayName("editReceipt - Eroare: VOUCHER trimis explicit în request")
+    void editReceipt_Fail_VoucherInRequest() {
+        receipt.setStatus(closedStatus);
+        when(receiptRepository.findById(100)).thenReturn(Optional.of(receipt));
+        when(userRepository.findByUsername("admin")).thenReturn(Optional.of(new User()));
+
+        var req = new ReceiptDTOs.EditReceiptRequest(
+                List.of(new ReceiptDTOs.EditItemRequest(1, 2)),
+                List.of(new ReceiptDTOs.EditPaymentRequest("VOUCHER", new BigDecimal("10.00"), null)));
+
+        RuntimeException ex = assertThrows(RuntimeException.class,
+                () -> receiptService.editReceipt(100, req, "admin"));
+        assertEquals("ERROR.RECEIPT.VOUCHER_AUTO_CARRIED", ex.getMessage());
+    }
+
+    @Test
+    @DisplayName("editReceipt - Eroare: Suma plăților nu acoperă totalul bonului")
+    void editReceipt_Fail_IncompletePayment() {
+        receipt.setStatus(closedStatus);
+        receipt.setTotalAmount(new BigDecimal("100.00"));
+        when(receiptRepository.findById(100)).thenReturn(Optional.of(receipt));
+        when(userRepository.findByUsername("admin")).thenReturn(Optional.of(new User()));
+
+        var req = new ReceiptDTOs.EditReceiptRequest(
+                List.of(new ReceiptDTOs.EditItemRequest(1, 2)),
+                List.of(new ReceiptDTOs.EditPaymentRequest("CASH", new BigDecimal("50.00"), 2)));
+
+        RuntimeException ex = assertThrows(RuntimeException.class,
+                () -> receiptService.editReceipt(100, req, "admin"));
+        assertEquals("ERROR.RECEIPT.INCOMPLETE_PAYMENT", ex.getMessage());
+    }
+
+    @Test
+    @DisplayName("editReceipt - Succes: Schimbare gestiune, FIFO rollback apelat, originalul marcat intern")
+    void editReceipt_Success_WarehouseChange() {
+        Warehouse newWarehouse = new Warehouse();
+        newWarehouse.setId(2);
+        newWarehouse.setName("Noua");
+
+        Product product = new Product();
+        product.setId(10);
+        product.setName("Produs Test");
+        product.setTrackStock(false);
+
+        ReceiptItem originalItem = ReceiptItem.builder()
+                .id(1)
+                .product(product)
+                .warehouse(warehouse)
+                .quantity(new BigDecimal("2.00"))
+                .unitPrice(new BigDecimal("50.00"))
+                .lineTotal(new BigDecimal("100.00"))
+                .netTotal(new BigDecimal("84.03"))
+                .vatTotal(new BigDecimal("15.97"))
+                .build();
+
+        PaymentMethod cashMethod = PaymentMethod.builder().code("CASH").label("Numerar").build();
+        ReceiptPayment originalPayment = ReceiptPayment.builder()
+                .id(1)
+                .paymentMethod(cashMethod)
+                .amount(new BigDecimal("100.00"))
+                .warehouse(warehouse)
+                .build();
+
+        Receipt original = Receipt.builder()
+                .id(100)
+                .status(closedStatus)
+                .tableName("Masa: Masa 5")
+                .totalAmount(new BigDecimal("100.00"))
+                .totalNet(new BigDecimal("84.03"))
+                .totalVat(new BigDecimal("15.97"))
+                .items(new ArrayList<>(List.of(originalItem)))
+                .payments(new ArrayList<>(List.of(originalPayment)))
+                .build();
+        User admin = new User();
+        admin.setId(1);
+        original.setUser(admin);
+        original.setCreatedAt(LocalDateTime.now());
+
+        when(receiptRepository.findById(100)).thenReturn(Optional.of(original));
+        when(userRepository.findByUsername("admin")).thenReturn(Optional.of(admin));
+        when(statusRepository.findByCode("CLOSED")).thenReturn(Optional.of(closedStatus));
+        when(warehouseRepository.findById(2)).thenReturn(Optional.of(newWarehouse));
+        when(paymentMethodRepository.findByCode("CASH")).thenReturn(Optional.of(cashMethod));
+        when(receiptRepository.save(any(Receipt.class))).thenAnswer(i -> {
+            Receipt r = i.getArgument(0);
+            if (r.getId() == null) r.setId(999);
+            return r;
+        });
+        when(purchaseService.consumeForReceiptItemAndRecord(anyInt(), any(Receipt.class), any(ReceiptItem.class)))
+                .thenReturn(new BigDecimal("30.00"));
+        when(customerVoucherRepository.findByUsedReceiptId(100)).thenReturn(Optional.empty());
+
+        var request = new ReceiptDTOs.EditReceiptRequest(
+                List.of(new ReceiptDTOs.EditItemRequest(1, 2)),
+                List.of(new ReceiptDTOs.EditPaymentRequest("CASH", new BigDecimal("100.00"), 2)));
+
+        var result = receiptService.editReceipt(100, request, "admin");
+
+        assertNotNull(result);
+        verify(purchaseService).rollbackFifoForReceipt(100);
+        assertTrue(original.isInternalCorrection());
+    }
+
+    @Test
+    @DisplayName("editReceipt - Succes: Voucher din original auto-transferat, validare sumă corectă")
+    void editReceipt_Success_VoucherAutoCarried() {
+        Warehouse newWarehouse = new Warehouse();
+        newWarehouse.setId(2);
+        newWarehouse.setName("Noua");
+
+        Product product = new Product();
+        product.setId(10);
+        product.setName("Produs Test");
+        product.setTrackStock(false);
+
+        ReceiptItem originalItem = ReceiptItem.builder()
+                .id(1)
+                .product(product)
+                .warehouse(warehouse)
+                .quantity(BigDecimal.ONE)
+                .unitPrice(new BigDecimal("100.00"))
+                .lineTotal(new BigDecimal("100.00"))
+                .netTotal(new BigDecimal("84.03"))
+                .vatTotal(new BigDecimal("15.97"))
+                .build();
+
+        PaymentMethod cashMethod = PaymentMethod.builder().code("CASH").label("Numerar").build();
+        PaymentMethod voucherMethod = PaymentMethod.builder().code("VOUCHER").label("Voucher").build();
+
+        // Total: 100 = 30 cash + 70 voucher
+        ReceiptPayment cashPayment = ReceiptPayment.builder()
+                .id(1).paymentMethod(cashMethod).amount(new BigDecimal("30.00")).warehouse(warehouse).build();
+        ReceiptPayment voucherPayment = ReceiptPayment.builder()
+                .id(2).paymentMethod(voucherMethod).amount(new BigDecimal("70.00")).warehouse(warehouse).build();
+
+        Receipt original = Receipt.builder()
+                .id(100)
+                .status(closedStatus)
+                .tableName("Masa: Masa 5")
+                .totalAmount(new BigDecimal("100.00"))
+                .totalNet(new BigDecimal("84.03"))
+                .totalVat(new BigDecimal("15.97"))
+                .items(new ArrayList<>(List.of(originalItem)))
+                .payments(new ArrayList<>(List.of(cashPayment, voucherPayment)))
+                .build();
+        User admin = new User();
+        admin.setId(1);
+        original.setUser(admin);
+        original.setCreatedAt(LocalDateTime.now());
+
+        when(receiptRepository.findById(100)).thenReturn(Optional.of(original));
+        when(userRepository.findByUsername("admin")).thenReturn(Optional.of(admin));
+        when(statusRepository.findByCode("CLOSED")).thenReturn(Optional.of(closedStatus));
+        when(warehouseRepository.findById(2)).thenReturn(Optional.of(newWarehouse));
+        when(paymentMethodRepository.findByCode("CASH")).thenReturn(Optional.of(cashMethod));
+        when(receiptRepository.save(any(Receipt.class))).thenAnswer(i -> {
+            Receipt r = i.getArgument(0);
+            if (r.getId() == null) r.setId(999);
+            return r;
+        });
+        when(purchaseService.consumeForReceiptItemAndRecord(anyInt(), any(Receipt.class), any(ReceiptItem.class)))
+                .thenReturn(new BigDecimal("20.00"));
+        when(customerVoucherRepository.findByUsedReceiptId(100)).thenReturn(Optional.empty());
+
+        // Userul trimite doar 30 CASH — voucherul de 70 se auto-transferă
+        var request = new ReceiptDTOs.EditReceiptRequest(
+                List.of(new ReceiptDTOs.EditItemRequest(1, 2)),
+                List.of(new ReceiptDTOs.EditPaymentRequest("CASH", new BigDecimal("30.00"), 2)));
+
+        var result = receiptService.editReceipt(100, request, "admin");
+
+        assertNotNull(result);
+        verify(purchaseService).rollbackFifoForReceipt(100);
+        assertTrue(original.isInternalCorrection());
+        // Voucherul de 70 trebuie salvat pe noul bon (warehouse=null per design)
+        verify(paymentRepository).save(
+                argThat(p -> "VOUCHER".equals(p.getPaymentMethod().getCode())
+                        && p.getWarehouse() == null
+                        && p.getAmount().compareTo(new BigDecimal("70.00")) == 0));
+    }
+
 }

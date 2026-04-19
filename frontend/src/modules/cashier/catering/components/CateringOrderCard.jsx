@@ -10,7 +10,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import EventIcon from '@mui/icons-material/Event';
 import AccessTimeIcon from '@mui/icons-material/AccessTime'; 
 
-const CateringOrderCard = ({ group, onEdit, onDelete }) => {
+const CateringOrderCard = ({ group, onEdit, onDelete, canModify }) => {
   const navigate = useNavigate();
   
   const { reservationName, reservationNote, items, sortTime } = group;
@@ -87,18 +87,22 @@ const CateringOrderCard = ({ group, onEdit, onDelete }) => {
             )}
 
             {/* 2. BUTON EDITARE */}
-            <Tooltip title="Editează Comanda">
-                <IconButton size="small" onClick={() => onEdit(group)} color="primary">
-                    <EditIcon fontSize="small" />
-                </IconButton>
-            </Tooltip>
+            {canModify && (
+              <Tooltip title="Editează Comanda">
+                  <IconButton size="small" onClick={() => onEdit(group)} color="primary">
+                      <EditIcon fontSize="small" />
+                  </IconButton>
+              </Tooltip>
+            )}
 
             {/* 3. BUTON ȘTERGERE */}
-            <Tooltip title="Șterge Comanda">
-                <IconButton size="small" onClick={() => onDelete(group)} color="error">
-                    <DeleteIcon fontSize="small" />
-                </IconButton>
-            </Tooltip>
+            {canModify && (
+              <Tooltip title="Șterge Comanda">
+                  <IconButton size="small" onClick={() => onDelete(group)} color="error">
+                      <DeleteIcon fontSize="small" />
+                  </IconButton>
+              </Tooltip>
+            )}
 
         </Box>
       </Box>
@@ -143,7 +147,8 @@ const CateringOrderCard = ({ group, onEdit, onDelete }) => {
 CateringOrderCard.propTypes = {
   group: PropTypes.object.isRequired,
   onEdit: PropTypes.func.isRequired,
-  onDelete: PropTypes.func.isRequired
+  onDelete: PropTypes.func.isRequired,
+  canModify: PropTypes.bool,
 };
 
 export default CateringOrderCard;

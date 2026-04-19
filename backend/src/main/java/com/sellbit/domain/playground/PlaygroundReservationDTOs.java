@@ -35,6 +35,7 @@ public class PlaygroundReservationDTOs {
         LocalDateTime advancePaidAt,
         Boolean digitalInvitation,
         String theme,
+        Boolean themeConfirmed,
         String note,
         LocalDateTime createdAt
     ) {}

@@ -41,6 +41,10 @@ public class PlaygroundReservation {
     @Column(length = 100)
     private String theme;
 
+    @Builder.Default
+    @Column(name = "theme_confirmed", nullable = false)
+    private Boolean themeConfirmed = false;
+
     @Column(columnDefinition = "TEXT")
     private String note;
 

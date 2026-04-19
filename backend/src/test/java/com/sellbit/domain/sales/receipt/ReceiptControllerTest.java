@@ -47,11 +47,12 @@ class ReceiptControllerTest {
         var req = new ReceiptDTOs.CreateRequest("Masa 5", 1, "Nota test");
         
         var res = new ReceiptDTOs.Response(
-                1, "Deschis", "Masa: Masa 5", 
-                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, 
-                "Central", 
-                1, 
+                1, "Deschis", "Masa: Masa 5",
+                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
+                "Central",
+                1,
                 "Admin", LocalDateTime.now(), null, "Nota test", null, null,
+                false,
                 List.of(), // items
                 List.of()  // payments
         );
@@ -125,11 +126,12 @@ class ReceiptControllerTest {
         var refundReq = new ReceiptDTOs.RefundRequest(1, List.of(itemReq), 1, null);
         
         var response = new ReceiptDTOs.Response(
-                101, "Inchis", "Stornare la Bon #100", 
-                new BigDecimal("-50.00"), new BigDecimal("-42.00"), new BigDecimal("-8.00"), 
-                "Central", 
-                1, 
+                101, "Inchis", "Stornare la Bon #100",
+                new BigDecimal("-50.00"), new BigDecimal("-42.00"), new BigDecimal("-8.00"),
+                "Central",
+                1,
                 "Admin", LocalDateTime.now(), LocalDateTime.now(), null, null, 100,
+                false,
                 List.of(), // items
                 List.of()  // payments
         );
@@ -176,11 +178,12 @@ class ReceiptControllerTest {
     @DisplayName("GET /api/sales/receipts/active - Succes: Returnează lista de mese active")
     void getActive_Success() throws Exception {
         var response = new ReceiptDTOs.Response(
-                1, "Deschis", "Masa: Masa 10", 
-                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, 
-                "Central", 
-                1, 
+                1, "Deschis", "Masa: Masa 10",
+                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
+                "Central",
+                1,
                 "Admin", LocalDateTime.now(), null, null, null, null,
+                false,
                 List.of(), // items
                 List.of()  // payments
         );
@@ -205,11 +208,12 @@ class ReceiptControllerTest {
     @DisplayName("GET /api/sales/receipts/report - Succes: Returnează istoricul filtrat")
     void getReport_Success() throws Exception {
         var response = new ReceiptDTOs.Response(
-                100, "Inchis", "Masa: Masa 5", 
-                new BigDecimal("150.00"), new BigDecimal("126.00"), new BigDecimal("24.00"), 
-                "Central", 
-                1, 
+                100, "Inchis", "Masa: Masa 5",
+                new BigDecimal("150.00"), new BigDecimal("126.00"), new BigDecimal("24.00"),
+                "Central",
+                1,
                 "Admin", LocalDateTime.now().minusDays(1), LocalDateTime.now(), null, null, null,
+                false,
                 List.of(), // items
                 List.of()  // payments
         );

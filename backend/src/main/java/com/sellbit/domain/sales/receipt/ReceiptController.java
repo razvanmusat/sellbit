@@ -18,6 +18,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 @RestController
 @RequestMapping("/api/sales/receipts")
@@ -118,5 +120,14 @@ public class ReceiptController {
                 request.userId(),
                 request.note());
         return ResponseEntity.ok().build();
-    }   
+    }
+
+    @PreAuthorize("hasAuthority('100')")
+    @PostMapping("/{id}/edit")
+    public ResponseEntity<ReceiptDTOs.Response> editReceipt(
+            @PathVariable Integer id,
+            @RequestBody @Valid ReceiptDTOs.EditReceiptRequest request) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return ResponseEntity.ok(receiptService.editReceipt(id, request, auth.getName()));
+    }
 }

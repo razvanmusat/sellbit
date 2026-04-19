@@ -18,6 +18,15 @@ import {
   List,
   ListItemButton,
   CircularProgress,
+  Snackbar,
+  Alert,
+  Table,
+  TableHead,
+  TableBody,
+  TableRow,
+  TableCell,
+  Select,
+  MenuItem,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import SearchIcon from "@mui/icons-material/Search";
@@ -40,11 +49,15 @@ const OpenedReceiptCard = ({
   onUpdateItem,
   onRemoveItem,
   onCancelReceipt,
+  editMode = false,
+  stockMap = {},
 }) => {
   const [currentTab, setCurrentTab] = useState(0);
   const theme = useTheme();
   const navigate = useNavigate();
   const isSmallScreen = useMediaQuery(theme.breakpoints.down("sm"));
+
+  const [stockSnackbar, setStockSnackbar] = useState(false);
 
   // Picker gestiune
   const [pendingProduct, setPendingProduct] = useState(null);
@@ -214,132 +227,183 @@ const OpenedReceiptCard = ({
             )}
           </Typography>
         </Box>
-        <IconButton
-          onClick={onCancelReceipt}
-          color="error"
-          size={isSmallScreen ? "small" : "medium"}
-          sx={{ border: "1px solid rgba(211, 47, 47, 0.3)", ml: 1 }}
-        >
-          <DeleteForeverIcon fontSize="small" />
-        </IconButton>
+        {!editMode && (
+          <IconButton
+            onClick={onCancelReceipt}
+            color="error"
+            size={isSmallScreen ? "small" : "medium"}
+            sx={{ border: "1px solid rgba(211, 47, 47, 0.3)", ml: 1 }}
+          >
+            <DeleteForeverIcon fontSize="small" />
+          </IconButton>
+        )}
       </Box>
 
       {/* --- TABS --- */}
-      <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
-        <Tabs
-          value={currentTab}
-          onChange={handleTabChange}
-          variant="fullWidth"
-          textColor="primary"
-          indicatorColor="primary"
-        >
-          <Tab
-            icon={<SearchIcon />}
-            label={isSmallScreen ? "Caută" : "Căutare"}
-            iconPosition="start"
-            sx={{ minHeight: 48 }}
-          />
-          <Tab
-            icon={<QrCodeScannerIcon />}
-            label={isSmallScreen ? "Scan" : "Scanare"}
-            iconPosition="start"
-            sx={{ minHeight: 48 }}
-          />
-          <Tab
-            icon={<CategoryIcon />}
-            label={isSmallScreen ? "Categ" : "Categorii"}
-            iconPosition="start"
-            sx={{ minHeight: 48 }}
-          />
-        </Tabs>
-      </Box>
+      {!editMode && (
+        <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
+          <Tabs
+            value={currentTab}
+            onChange={handleTabChange}
+            variant="fullWidth"
+            textColor="primary"
+            indicatorColor="primary"
+          >
+            <Tab
+              icon={<SearchIcon />}
+              label={isSmallScreen ? "Caută" : "Căutare"}
+              iconPosition="start"
+              sx={{ minHeight: 48 }}
+            />
+            <Tab
+              icon={<QrCodeScannerIcon />}
+              label={isSmallScreen ? "Scan" : "Scanare"}
+              iconPosition="start"
+              sx={{ minHeight: 48 }}
+            />
+            <Tab
+              icon={<CategoryIcon />}
+              label={isSmallScreen ? "Categ" : "Categorii"}
+              iconPosition="start"
+              sx={{ minHeight: 48 }}
+            />
+          </Tabs>
+        </Box>
+      )}
 
       {/* --- ZONA ACTIVĂ --- */}
-      <Box sx={{ my: 2, position: "relative", zIndex: 10 }}>
-        {currentTab === 0 && (
-          <ProductSearch
-            onProductSelect={handleProductSelect}
-            warehouses={warehouses}
-          />
-        )}
-        {currentTab === 1 && (
-          <ProductScanner onProductSelect={handleProductSelect} />
-        )}
-        {currentTab === 2 && (
-          <Typography
-            sx={{ p: 2, textAlign: "center", color: "text.secondary" }}
-          >
-            Se încarcă catalogul...
-          </Typography>
-        )}
-      </Box>
-
-      {/* --- LISTA DE PRODUSE --- */}
-      <Box
-        sx={{
-          flex: 1,
-          overflowY: "auto",
-          scrollbarGutter: "stable",
-          my: 1,
-          pr: 0.5,
-          bgcolor: items.length === 0 ? "rgba(0,0,0,0.02)" : "transparent",
-          borderRadius: 1,
-        }}
-      >
-        {items.length === 0 ? (
-          <Box
-            display="flex"
-            flexDirection="column"
-            alignItems="center"
-            justifyContent="center"
-            height="100%"
-            color="text.secondary"
-          >
-            <Typography variant="body1">Bonul este gol.</Typography>
-            <Typography variant="caption">
-              Caută sau scanează un produs.
+      {!editMode && (
+        <Box sx={{ my: 2, position: "relative", zIndex: 10 }}>
+          {currentTab === 0 && (
+            <ProductSearch
+              onProductSelect={handleProductSelect}
+              warehouses={warehouses}
+            />
+          )}
+          {currentTab === 1 && (
+            <ProductScanner onProductSelect={handleProductSelect} />
+          )}
+          {currentTab === 2 && (
+            <Typography
+              sx={{ p: 2, textAlign: "center", color: "text.secondary" }}
+            >
+              Se încarcă catalogul...
             </Typography>
-          </Box>
-        ) : (
-          items.map((item) => {
-            const wh = headroomPerWarehouse[item.warehouseId];
-            const headroom = wh ? wh.headroom : Infinity;
-            const paidOnWh = wh ? wh.payments : 0;
-            const lineTotal = item.lineTotal || 0;
-            const unitPrice =
-              item.quantity > 0 ? lineTotal / item.quantity : 0;
-            const EPS = 0.001;
-            const canChangeWarehouse =
-              paidOnWh === 0 || lineTotal <= headroom + EPS;
-            const canDecrement =
-              paidOnWh === 0 || unitPrice <= headroom + EPS;
-            const canRemove =
-              paidOnWh === 0 || lineTotal <= headroom + EPS;
-            return (
-              <ProductCard
-                key={`${item.receiptItemId}-${item.productId}`}
-                item={item}
-                warehouses={warehouses}
-                canChangeWarehouse={canChangeWarehouse}
-                canDecrement={canDecrement}
-                canRemove={canRemove}
-                onQuantityChange={(productId, newQuantity, warehouseId) =>
-                  onUpdateItem(receipt.id, productId, newQuantity, warehouseId)
-                }
-                onRemove={() => onRemoveItem(item.receiptItemId)}
-                onMoveToWarehouse={(newWarehouseId) =>
-                  handleMoveToWarehouse(
-                    item.receiptItemId,
-                    item.productId,
-                    item.quantity,
-                    newWarehouseId,
-                  )
-                }
-              />
-            );
-          })
-        )}
-      </Box>
+          )}
+        </Box>
+      )}
+
+      {/* --- LISTA PRODUSE --- */}
+      {editMode ? (
+        <Box sx={{ flex: 1, overflowY: "auto", my: 1 }}>
+          <Table size="small" stickyHeader>
+            <TableHead>
+              <TableRow sx={{ bgcolor: "grey.100" }}>
+                <TableCell sx={{ fontWeight: "bold", fontSize: "0.75rem" }}>PRODUS</TableCell>
+                <TableCell sx={{ fontWeight: "bold", fontSize: "0.75rem", width: 140 }}>GESTIUNE</TableCell>
+                <TableCell align="center" sx={{ fontWeight: "bold", fontSize: "0.75rem", width: 60 }}>CANT.</TableCell>
+                <TableCell align="right" sx={{ fontWeight: "bold", fontSize: "0.75rem", width: 90 }}>PREȚ</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {items.map((item) => (
+                <TableRow key={`${item.receiptItemId}-${item.productId}`} hover>
+                  <TableCell sx={{ fontWeight: 500 }}>{item.name || "Produs invalid"}</TableCell>
+                  <TableCell>
+                    <Select
+                      size="small"
+                      fullWidth
+                      value={item.warehouseId || ""}
+                      onChange={(e) => handleMoveToWarehouse(item.receiptItemId, item.productId, item.quantity, e.target.value)}
+                      sx={{ fontSize: "0.8rem" }}
+                    >
+                      {warehouses.map((w) => {
+                        const stock = stockMap[`${item.productId}_${w.id}`];
+                        const isCurrent = w.id === item.warehouseId;
+                        const outOfStock = item.trackStock && !isCurrent && (stock == null || stock <= 0);
+                        const stockLabel = !item.trackStock
+                          ? "∞"
+                          : stock == null
+                            ? "—"
+                            : Number(stock).toLocaleString("ro-RO", { maximumFractionDigits: 2 });
+                        return (
+                          <MenuItem
+                            key={w.id}
+                            value={w.id}
+                            disabled={outOfStock}
+                            sx={{ fontSize: "0.8rem", display: "flex", justifyContent: "space-between", gap: 1 }}
+                          >
+                            <span>{w.name}</span>
+                            <span style={{
+                              fontSize: "0.7rem",
+                              fontWeight: "bold",
+                              color: outOfStock ? "#d32f2f" : item.trackStock ? "#2e7d32" : "#888",
+                            }}>
+                              {stockLabel}
+                            </span>
+                          </MenuItem>
+                        );
+                      })}
+                    </Select>
+                  </TableCell>
+                  <TableCell align="center" sx={{ fontWeight: "bold" }}>{item.quantity}</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: "bold", whiteSpace: "nowrap" }}>
+                    {(item.lineTotal || 0).toFixed(2)} RON
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Box>
+      ) : (
+        <Box
+          sx={{
+            flex: 1,
+            overflowY: "auto",
+            scrollbarGutter: "stable",
+            my: 1,
+            pr: 0.5,
+            bgcolor: items.length === 0 ? "rgba(0,0,0,0.02)" : "transparent",
+            borderRadius: 1,
+          }}
+        >
+          {items.length === 0 ? (
+            <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" height="100%" color="text.secondary">
+              <Typography variant="body1">Bonul este gol.</Typography>
+              <Typography variant="caption">Caută sau scanează un produs.</Typography>
+            </Box>
+          ) : (
+            items.map((item) => {
+              const wh = headroomPerWarehouse[item.warehouseId];
+              const headroom = wh ? wh.headroom : Infinity;
+              const paidOnWh = wh ? wh.payments : 0;
+              const lineTotal = item.lineTotal || 0;
+              const unitPrice = item.quantity > 0 ? lineTotal / item.quantity : 0;
+              const EPS = 0.001;
+              const canChangeWarehouse = paidOnWh === 0 || lineTotal <= headroom + EPS;
+              const canDecrement = paidOnWh === 0 || unitPrice <= headroom + EPS;
+              const canRemove = paidOnWh === 0 || lineTotal <= headroom + EPS;
+              return (
+                <ProductCard
+                  key={`${item.receiptItemId}-${item.productId}`}
+                  item={item}
+                  warehouses={warehouses}
+                  canChangeWarehouse={canChangeWarehouse}
+                  canDecrement={canDecrement}
+                  canRemove={canRemove}
+                  onQuantityChange={(productId, newQuantity, warehouseId) =>
+                    onUpdateItem(receipt.id, productId, newQuantity, warehouseId)
+                  }
+                  onRemove={() => onRemoveItem(item.receiptItemId)}
+                  onMoveToWarehouse={(newWarehouseId) =>
+                    handleMoveToWarehouse(item.receiptItemId, item.productId, item.quantity, newWarehouseId)
+                  }
+                />
+              );
+            })
+          )}
+        </Box>
+      )}
 
       {/* --- FOOTER --- */}
       <Box sx={{ borderTop: 1, borderColor: "divider", pt: 2, mt: "auto" }}>
@@ -433,8 +497,10 @@ const OpenedReceiptCard = ({
               return (
                 <ListItemButton
                   key={w.id}
-                  onClick={() => handleWarehousePick(w.id)}
-                  disabled={isOutOfStock}
+                  onClick={() => {
+                    if (isOutOfStock) { setStockSnackbar(true); return; }
+                    handleWarehousePick(w.id);
+                  }}
                   sx={{
                     display: "flex",
                     justifyContent: "space-between",
@@ -484,6 +550,17 @@ const OpenedReceiptCard = ({
           </Button>
         </DialogActions>
       </Dialog>
+
+      <Snackbar
+        open={stockSnackbar}
+        autoHideDuration={3000}
+        onClose={() => setStockSnackbar(false)}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+      >
+        <Alert severity="error" variant="filled" sx={{ fontWeight: 'bold' }}>
+          Stoc insuficient pe gestiunea selectată.
+        </Alert>
+      </Snackbar>
     </Paper>
   );
 };
@@ -494,9 +571,11 @@ OpenedReceiptCard.propTypes = {
   onBack: PropTypes.func.isRequired,
   onAddPayment: PropTypes.func.isRequired,
   onAddProduct: PropTypes.func.isRequired,
-  onUpdateItem: PropTypes.func.isRequired,
+  onUpdateItem: PropTypes.func,
   onRemoveItem: PropTypes.func.isRequired,
   onCancelReceipt: PropTypes.func.isRequired,
+  editMode: PropTypes.bool,
+  stockMap: PropTypes.object,
 };
 
 export default OpenedReceiptCard;

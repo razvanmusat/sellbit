@@ -57,7 +57,7 @@ class PlaygroundReservationControllerTest {
     @DisplayName("POST /: Succes la crearea rezervării")
     void create_Success() throws Exception {
         var req = new PlaygroundReservationDTOs.CreateReservationRequest(start, end, "Popescu", "0722111222", new BigDecimal("100"), true, "Disney", "Nota");
-        var res = new PlaygroundReservationDTOs.ReservationResponse(1, start, end, "Popescu", "0722111222", new BigDecimal("100"), LocalDateTime.now(), true, "Disney", "Nota", LocalDateTime.now());
+        var res = new PlaygroundReservationDTOs.ReservationResponse(1, start, end, "Popescu", "0722111222", new BigDecimal("100"), LocalDateTime.now(), true, "Disney", false, "Nota", LocalDateTime.now());
 
         when(reservationService.createReservation(any())).thenReturn(res);
 
@@ -86,7 +86,7 @@ class PlaygroundReservationControllerTest {
     @DisplayName("PUT /{id}: Succes la actualizarea rezervării")
     void update_Success() throws Exception {
         var req = new PlaygroundReservationDTOs.CreateReservationRequest(start, end, "Update", "0722111222", null, false, null, null);
-        var res = new PlaygroundReservationDTOs.ReservationResponse(1, start, end, "Update", "0722111222", null, null, false, null, null, LocalDateTime.now());
+        var res = new PlaygroundReservationDTOs.ReservationResponse(1, start, end, "Update", "0722111222", null, null, false, null, false, null, LocalDateTime.now());
 
         when(reservationService.updateReservation(eq(1), any())).thenReturn(res);
 
@@ -165,6 +165,7 @@ class PlaygroundReservationControllerTest {
             null,
             true,
             null,
+            false,
             null,
             LocalDateTime.now());
 
@@ -184,5 +185,28 @@ class PlaygroundReservationControllerTest {
 
         mockMvc.perform(patch("/api/playground/reservations/99/confirm-digital-invitation"))
             .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        @DisplayName("PATCH /{id}/confirm-theme: Succes")
+        void confirmTheme_Success() throws Exception {
+            var res = new PlaygroundReservationDTOs.ReservationResponse(
+                1, start, end, "Popescu", "0722111222", null, null, null, "Frozen", true, null, LocalDateTime.now());
+
+            when(reservationService.confirmTheme(1)).thenReturn(res);
+
+            mockMvc.perform(patch("/api/playground/reservations/1/confirm-theme"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.themeConfirmed").value(true));
+        }
+
+        @Test
+        @DisplayName("PATCH /{id}/confirm-theme: Eroare 400 dacă rezervarea nu există")
+        void confirmTheme_NotFound_ReturnsBadRequest() throws Exception {
+            when(reservationService.confirmTheme(99))
+                .thenThrow(new RuntimeException("ERROR.RESERVATION.NOT_FOUND"));
+
+            mockMvc.perform(patch("/api/playground/reservations/99/confirm-theme"))
+                .andExpect(status().isBadRequest());
         }
 }

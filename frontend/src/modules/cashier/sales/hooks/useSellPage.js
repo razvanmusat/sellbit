@@ -39,9 +39,16 @@ export const useSellPage = () => {
     cancelReasonsLoading,
   } = useSelector((state) => state.sellPage);
 
+  const isAdmin = user?.authorityLevel === 100;
+
   const filteredWarehouses = useMemo(
     () => warehouses.filter((w) => w.code !== "GP"),
     [warehouses],
+  );
+
+  const visibleReceipts = useMemo(
+    () => isAdmin ? receipts : receipts.filter((r) => r.userName === user?.fullName),
+    [receipts, isAdmin, user?.fullName],
   );
 
   const [modals, setModals] = useState({
@@ -244,7 +251,7 @@ export const useSellPage = () => {
   return {
     receiptId,
     warehouses: filteredWarehouses,
-    receipts,
+    receipts: visibleReceipts,
     editingReceipt,
     paymentMethods,
     cancelReasons,

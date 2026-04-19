@@ -71,6 +71,10 @@ public class Receipt {
     @Column(name = "closed_at")
     private LocalDateTime closedAt;
 
+    @Column(name = "is_internal_correction", nullable = false)
+    @Builder.Default
+    private boolean internalCorrection = false;
+
     // Relații bidirecționale cu gestionare în cascadă
     @OneToMany(mappedBy = "receipt", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @BatchSize(size = 50)

@@ -1,12 +1,16 @@
 import React from 'react';
-import { 
-    Dialog, DialogTitle, DialogContent, DialogActions, 
-    Button, Table, TableBody, TableCell, TableContainer, 
-    TableHead, TableRow, Paper, Typography, Box, Divider
+import { useNavigate } from 'react-router-dom';
+import {
+    Dialog, DialogTitle, DialogContent, DialogActions,
+    Button, Table, TableBody, TableCell, TableContainer,
+    TableHead, TableRow, Paper, Typography, Box, Divider,
+    IconButton, Tooltip
 } from '@mui/material';
+import EditIcon from '@mui/icons-material/Edit';
 import dayjs from 'dayjs';
 
 const ReceiptDetailModal = ({ open, onClose, receipt }) => {
+    const navigate = useNavigate();
     if (!receipt) return null;
 
     const isRefund = receipt.originalReceiptId !== null;
@@ -46,10 +50,23 @@ const ReceiptDetailModal = ({ open, onClose, receipt }) => {
                     <Typography sx={{ fontSize: '0.85rem', color: 'text.secondary', whiteSpace: 'nowrap', textAlign: 'center' }}>
                         {dayjs(receipt.closedAt || receipt.createdAt).format('DD.MM.YYYY HH:mm')}
                     </Typography>
-                    <Typography variant="h6" color={isRefund ? "error.main" : "primary.main"} 
-                        sx={{ fontWeight: 'bold', textAlign: 'right' }}>
-                        {receipt.totalAmount?.toLocaleString('ro-RO', { minimumFractionDigits: 2 })} RON
-                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 1 }}>
+                        <Typography variant="h6" color={isRefund ? "error.main" : "primary.main"}
+                            sx={{ fontWeight: 'bold' }}>
+                            {receipt.totalAmount?.toLocaleString('ro-RO', { minimumFractionDigits: 2 })} RON
+                        </Typography>
+                        {!isRefund && !isCancelled && (
+                            <Tooltip title="Editează bon" arrow>
+                                <IconButton
+                                    size="small"
+                                    onClick={() => { onClose(); navigate(`/admin/sales/edit/${receipt.id}`); }}
+                                    sx={{ color: 'warning.main' }}
+                                >
+                                    <EditIcon fontSize="small" />
+                                </IconButton>
+                            </Tooltip>
+                        )}
+                    </Box>
                 </Box>
             </DialogTitle>
             

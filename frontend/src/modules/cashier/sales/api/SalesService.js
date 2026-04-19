@@ -65,4 +65,8 @@ export class SalesService {
       `sales/receipts/reports/profit?warehouseId=${warehouseId}&start=${start}&end=${end}`
     );
   }
+
+  static async editReceipt(id, request) {
+    return await client(`sales/receipts/${id}/edit`, { body: request });
+  }
 }

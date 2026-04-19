@@ -255,7 +255,8 @@ public class ReceiptService {
                                                 item.getUnitPrice(),
                                                 item.getLineTotal(),
                                                 item.getWarehouse() != null ? item.getWarehouse().getId() : null,
-                                                item.getWarehouse() != null ? item.getWarehouse().getName() : null))
+                                                item.getWarehouse() != null ? item.getWarehouse().getName() : null,
+                                                Boolean.TRUE.equals(item.getProduct().getTrackStock())))
                                 .collect(Collectors.toList());
 
                 List<ReceiptDTOs.PaymentSummary> paymentDTOs = new ArrayList<>();
@@ -322,6 +323,7 @@ public class ReceiptService {
                                 receipt.getNote(),
                                 reasonLabel,
                                 receipt.getOriginalReceipt() != null ? receipt.getOriginalReceipt().getId() : null,
+                                receipt.isInternalCorrection(),
                                 itemDTOs,
                                 paymentDTOs);
         }
@@ -623,6 +625,316 @@ public class ReceiptService {
                                         movementNote,
                                         receipt.getId());
                 }
+        }
+
+        /**
+         * Editare bon închis (doar admin).
+         * 1. Stornează originalul în oglindă (per plată, per gestiune) — invizibil pentru user.
+         * 2. Creează bon nou CLOSED cu aceleași produse/cantități dar gestiuni și plăți noi.
+         * 3. Re-linkează voucherul (dacă exista) la bonul nou.
+         * 4. Actualizează notele pe toate bonurile implicate.
+         */
+        @Transactional
+        public ReceiptDTOs.Response editReceipt(Integer originalReceiptId,
+                        ReceiptDTOs.EditReceiptRequest request, String adminUsername) {
+
+                Receipt original = receiptRepository.findById(originalReceiptId)
+                                .orElseThrow(() -> new RuntimeException("ERROR.RECEIPT.NOT_FOUND"));
+
+                if (!"CLOSED".equals(original.getStatus().getCode())) {
+                        throw new RuntimeException("ERROR.RECEIPT.CANNOT_EDIT_NOT_CLOSED");
+                }
+
+                if (original.isInternalCorrection() || original.getOriginalReceipt() != null) {
+                        throw new RuntimeException("ERROR.RECEIPT.CANNOT_EDIT_CORRECTION");
+                }
+
+                User admin = userRepository.findByUsername(adminUsername)
+                                .orElseThrow(() -> new RuntimeException("ERROR.USER.NOT_FOUND"));
+
+                // Vouchers de pe bonul original se auto-transferă pe bonul nou — user-ul NU
+                // le poate re-aplica (sunt deja marcate used) și NU le poate respinge.
+                boolean voucherInRequest = request.payments().stream()
+                                .anyMatch(p -> "VOUCHER".equalsIgnoreCase(p.methodCode()));
+                if (voucherInRequest) {
+                        throw new RuntimeException("ERROR.RECEIPT.VOUCHER_AUTO_CARRIED");
+                }
+
+                List<ReceiptPayment> originalVoucherPayments = original.getPayments().stream()
+                                .filter(p -> "VOUCHER".equals(p.getPaymentMethod().getCode()))
+                                .collect(Collectors.toList());
+                BigDecimal voucherTotal = originalVoucherPayments.stream()
+                                .map(ReceiptPayment::getAmount)
+                                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+                // Pre-validare: suma plăților noi + voucher auto-transferat = totalul bonului original
+                BigDecimal newPaymentsTotal = request.payments().stream()
+                                .map(ReceiptDTOs.EditPaymentRequest::amount)
+                                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+                if (newPaymentsTotal.add(voucherTotal).compareTo(original.getTotalAmount()) != 0) {
+                        throw new RuntimeException("ERROR.RECEIPT.INCOMPLETE_PAYMENT");
+                }
+
+                // Rollback FIFO pe bonul original: restaurează cantitățile pe batch-urile reale
+                // și șterge alocările. Asta permite bonului nou să consume FIFO la costurile reale.
+                purchaseService.rollbackFifoForReceipt(originalReceiptId);
+
+                ReceiptStatus closedStatus = statusRepository.findByCode("CLOSED")
+                                .orElseThrow(() -> new RuntimeException("ERROR.STATUS.NOT_FOUND"));
+
+                // ── 1. BON STORNO ÎN OGLINDĂ ──────────────────────────────────────────────────
+                Receipt stornoReceipt = Receipt.builder()
+                                .warehouse(null)
+                                .status(closedStatus)
+                                .user(admin)
+                                .tableName("Editare Bon #" + original.getId())
+                                .originalReceipt(original)
+                                .note("Editare bon #" + original.getId())
+                                .internalCorrection(true)
+                                .totalAmount(BigDecimal.ZERO)
+                                .totalNet(BigDecimal.ZERO)
+                                .totalVat(BigDecimal.ZERO)
+                                .closedAt(LocalDateTime.now())
+                                .build();
+
+                stornoReceipt = receiptRepository.save(stornoReceipt);
+
+                BigDecimal stornoAmount = BigDecimal.ZERO;
+                BigDecimal stornoNet = BigDecimal.ZERO;
+                BigDecimal stornoVat = BigDecimal.ZERO;
+
+                for (ReceiptItem originalItem : original.getItems()) {
+                        BigDecimal lineTotal = originalItem.getLineTotal() != null
+                                        ? originalItem.getLineTotal().negate()
+                                        : BigDecimal.ZERO;
+                        BigDecimal netTotal = originalItem.getNetTotal() != null
+                                        ? originalItem.getNetTotal().negate()
+                                        : BigDecimal.ZERO;
+                        BigDecimal vatTotal = originalItem.getVatTotal() != null
+                                        ? originalItem.getVatTotal().negate()
+                                        : BigDecimal.ZERO;
+
+                        ReceiptItem stornoItem = ReceiptItem.builder()
+                                        .product(originalItem.getProduct())
+                                        .warehouse(originalItem.getWarehouse())
+                                        .quantity(originalItem.getQuantity().negate())
+                                        .unitPrice(originalItem.getUnitPrice())
+                                        .purchaseUnitPrice(originalItem.getPurchaseUnitPrice())
+                                        .vatRate(originalItem.getVatRate())
+                                        .lineTotal(lineTotal)
+                                        .netTotal(netTotal)
+                                        .vatTotal(vatTotal)
+                                        .isServiceTime(originalItem.isServiceTime())
+                                        .serviceEndAt(originalItem.getServiceEndAt())
+                                        .build();
+
+                        stornoReceipt.addItem(stornoItem);
+
+                        // Returnează stocul pe gestiunea originală.
+                        // FIFO-ul a fost deja restaurat via rollbackFifoForReceipt (la începutul metodei),
+                        // deci batch-urile reale sunt intacte — nu mai creăm virtualReturnBatch.
+                        Warehouse origWarehouse = productService.resolveWarehouse(
+                                        originalItem.getProduct(), originalItem.getWarehouse());
+                        stockCurrentService.syncStockFromReceiptChange(
+                                        origWarehouse.getId(),
+                                        originalItem.getProduct().getId(),
+                                        BigDecimal.ZERO,
+                                        originalItem.getQuantity().negate());
+
+                        stornoAmount = stornoAmount.add(lineTotal);
+                        stornoNet = stornoNet.add(netTotal);
+                        stornoVat = stornoVat.add(vatTotal);
+                }
+
+                stornoReceipt.setTotalAmount(stornoAmount);
+                stornoReceipt.setTotalNet(stornoNet);
+                stornoReceipt.setTotalVat(stornoVat);
+
+                // Mișcări cash în oglindă — una per plată originală
+                for (ReceiptPayment originalPayment : original.getPayments()) {
+                        String methodCode = originalPayment.getPaymentMethod().getCode();
+                        Integer whId = originalPayment.getWarehouse() != null
+                                        ? originalPayment.getWarehouse().getId()
+                                        : null;
+
+                        String movementTypeCode = null;
+                        if (("CASH".equals(methodCode) || "ADVANCE".equals(methodCode)) && whId != null) {
+                                movementTypeCode = "REFUND";
+                        } else if ("CARD".equals(methodCode) && whId != null) {
+                                movementTypeCode = "REFUND_CARD";
+                        }
+
+                        if (movementTypeCode != null) {
+                                cashMovementService.createMovement(
+                                                whId,
+                                                movementTypeCode,
+                                                originalPayment.getAmount(),
+                                                admin.getId(),
+                                                "Storno editare Bon #" + original.getId(),
+                                                original.getId());
+                        }
+
+                        ReceiptPayment stornoPayment = ReceiptPayment.builder()
+                                        .receipt(stornoReceipt)
+                                        .paymentMethod(originalPayment.getPaymentMethod())
+                                        .amount(originalPayment.getAmount().negate())
+                                        .warehouse(originalPayment.getWarehouse())
+                                        .paidAt(LocalDateTime.now())
+                                        .build();
+                        stornoReceipt.addPayment(stornoPayment);
+                        paymentRepository.save(stornoPayment);
+                }
+
+                receiptRepository.save(stornoReceipt);
+
+                // ── 2. BON NOU CU DATELE CORECTATE ────────────────────────────────────────────
+                Receipt newReceipt = Receipt.builder()
+                                .warehouse(null)
+                                .status(closedStatus)
+                                .user(admin)
+                                .tableName(original.getTableName())
+                                .note(original.getNote())
+                                .totalAmount(BigDecimal.ZERO)
+                                .totalNet(BigDecimal.ZERO)
+                                .totalVat(BigDecimal.ZERO)
+                                .closedAt(LocalDateTime.now())
+                                .build();
+
+                newReceipt = receiptRepository.save(newReceipt);
+
+                // Map receiptItemId -> newWarehouseId
+                Map<Integer, Integer> itemWarehouseMap = new java.util.HashMap<>();
+                for (ReceiptDTOs.EditItemRequest editItem : request.items()) {
+                        itemWarehouseMap.put(editItem.receiptItemId(), editItem.newWarehouseId());
+                }
+
+                BigDecimal newTotal = BigDecimal.ZERO;
+                BigDecimal newNet = BigDecimal.ZERO;
+                BigDecimal newVat = BigDecimal.ZERO;
+
+                for (ReceiptItem originalItem : original.getItems()) {
+                        Integer newWhId = itemWarehouseMap.get(originalItem.getId());
+                        if (newWhId == null) {
+                                throw new RuntimeException("ERROR.ITEM.WAREHOUSE_NOT_PROVIDED");
+                        }
+
+                        Warehouse newWarehouse = warehouseRepository.findById(newWhId)
+                                        .orElseThrow(() -> new RuntimeException("ERROR.WAREHOUSE.NOT_FOUND"));
+
+                        ReceiptItem newItem = ReceiptItem.builder()
+                                        .product(originalItem.getProduct())
+                                        .warehouse(newWarehouse)
+                                        .quantity(originalItem.getQuantity())
+                                        .unitPrice(originalItem.getUnitPrice())
+                                        .vatRate(originalItem.getVatRate())
+                                        .lineTotal(originalItem.getLineTotal())
+                                        .netTotal(originalItem.getNetTotal())
+                                        .vatTotal(originalItem.getVatTotal())
+                                        .isServiceTime(originalItem.isServiceTime())
+                                        .serviceEndAt(originalItem.getServiceEndAt())
+                                        .build();
+
+                        newReceipt.addItem(newItem);
+
+                        // Scade stocul pe noua gestiune (simulează adăugarea pe bon deschis)
+                        Warehouse resolvedNewWarehouse = productService.resolveWarehouse(
+                                        originalItem.getProduct(), newWarehouse);
+                        stockCurrentService.syncStockFromReceiptChange(
+                                        resolvedNewWarehouse.getId(),
+                                        originalItem.getProduct().getId(),
+                                        BigDecimal.ZERO,
+                                        originalItem.getQuantity());
+
+                        // Consumă FIFO și înregistrează prețul de achiziție
+                        BigDecimal purchasePrice = purchaseService.consumeForReceiptItemAndRecord(
+                                        resolvedNewWarehouse.getId(), newReceipt, newItem);
+                        newItem.setPurchaseUnitPrice(purchasePrice);
+                        itemRepository.save(newItem);
+
+                        newTotal = newTotal.add(originalItem.getLineTotal() != null
+                                        ? originalItem.getLineTotal()
+                                        : BigDecimal.ZERO);
+                        newNet = newNet.add(originalItem.getNetTotal() != null
+                                        ? originalItem.getNetTotal()
+                                        : BigDecimal.ZERO);
+                        newVat = newVat.add(originalItem.getVatTotal() != null
+                                        ? originalItem.getVatTotal()
+                                        : BigDecimal.ZERO);
+                }
+
+                newReceipt.setTotalAmount(newTotal);
+                newReceipt.setTotalNet(newNet);
+                newReceipt.setTotalVat(newVat);
+
+                // Plăți noi
+                for (ReceiptDTOs.EditPaymentRequest editPayment : request.payments()) {
+                        PaymentMethod method = paymentMethodRepository.findByCode(editPayment.methodCode())
+                                        .orElseThrow(() -> new RuntimeException(
+                                                        "ERROR.PAYMENT_METHOD.NOT_FOUND"));
+
+                        Warehouse paymentWarehouse = editPayment.warehouseId() != null
+                                        ? warehouseRepository.findById(editPayment.warehouseId())
+                                                        .orElseThrow(() -> new RuntimeException(
+                                                                        "ERROR.WAREHOUSE.NOT_FOUND"))
+                                        : null;
+
+                        ReceiptPayment newPayment = ReceiptPayment.builder()
+                                        .receipt(newReceipt)
+                                        .paymentMethod(method)
+                                        .amount(editPayment.amount())
+                                        .warehouse(paymentWarehouse)
+                                        .paidAt(LocalDateTime.now())
+                                        .build();
+                        newReceipt.addPayment(newPayment);
+                        paymentRepository.save(newPayment);
+
+                        if ("CASH".equals(editPayment.methodCode()) && paymentWarehouse != null) {
+                                cashMovementService.createMovement(
+                                                paymentWarehouse.getId(),
+                                                "SALE",
+                                                editPayment.amount(),
+                                                admin.getId(),
+                                                "Încasare bon corectat #" + newReceipt.getId()
+                                                                + " (edit Bon #" + original.getId() + ")",
+                                                newReceipt.getId());
+                        }
+                }
+
+                // Auto-transfer voucher: copiem plățile VOUCHER de pe bonul original pe cel nou.
+                // Warehouse-ul original nu mai are relevanță (item-urile pot fi pe alte gestiuni),
+                // deci setăm warehouse=null — declanșează fallback-ul din validateWarehousePaymentBalance.
+                // §3 mai jos re-linkează CustomerVoucher.usedReceipt la bonul nou.
+                for (ReceiptPayment originalVoucher : originalVoucherPayments) {
+                        ReceiptPayment voucherPayment = ReceiptPayment.builder()
+                                        .receipt(newReceipt)
+                                        .paymentMethod(originalVoucher.getPaymentMethod())
+                                        .amount(originalVoucher.getAmount())
+                                        .warehouse(null)
+                                        .paidAt(LocalDateTime.now())
+                                        .build();
+                        newReceipt.addPayment(voucherPayment);
+                        paymentRepository.save(voucherPayment);
+                }
+
+                receiptRepository.save(newReceipt);
+
+                // ── 3. RE-LINK VOUCHER ─────────────────────────────────────────────────────────
+                Receipt finalNewReceipt = newReceipt;
+                customerVoucherRepository.findByUsedReceiptId(originalReceiptId).ifPresent(voucher -> {
+                        voucher.setUsedReceipt(finalNewReceipt);
+                        voucher.setUsedAt(LocalDateTime.now());
+                        customerVoucherRepository.save(voucher);
+                });
+
+                // ── 4. VALIDARE PER GESTIUNE (safety net) ─────────────────────────────────────
+                validateWarehousePaymentBalance(newReceipt);
+
+                // ── 5. MARCHEAZĂ ORIGINALUL CA CORECTAT (exclus din rapoarte) ─────────────────
+                original.setInternalCorrection(true);
+                receiptRepository.save(original);
+
+                return mapToResponse(newReceipt);
         }
 
         /**

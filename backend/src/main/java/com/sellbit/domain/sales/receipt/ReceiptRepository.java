@@ -19,6 +19,7 @@ public interface ReceiptRepository extends JpaRepository<Receipt, Integer> {
                 WHERE (:warehouseId IS NULL OR i.warehouse.id = :warehouseId)
                 AND r.status.code = :statusCode
                 AND r.closedAt BETWEEN :start AND :end
+                AND r.internalCorrection = false
                 ORDER BY r.closedAt ASC
                 """)
         List<Receipt> findByItemWarehouseAndStatusAndClosedAt(
@@ -44,6 +45,7 @@ public interface ReceiptRepository extends JpaRepository<Receipt, Integer> {
                 ))
                 AND s.code = :statusCode
                 AND r.closedAt BETWEEN :start AND :end
+                AND r.internalCorrection = false
                 ORDER BY r.closedAt ASC
                 """)
         List<ReceiptDTOs.SummaryResponse> findSummaryByWarehouseIdAndStatusCodeAndClosedAtBetween(
@@ -57,6 +59,7 @@ public interface ReceiptRepository extends JpaRepository<Receipt, Integer> {
                 JOIN r.items i
                 WHERE (:warehouseId IS NULL OR i.warehouse.id = :warehouseId)
                 AND r.closedAt BETWEEN :start AND :end
+                AND r.internalCorrection = false
                 """)
         List<Receipt> findByItemWarehouseAndClosedAtBetween(
                         @Param("warehouseId") Integer warehouseId,

@@ -66,5 +66,10 @@ export const SalesService = {
     //5. CĂUTARE BON DUPĂ ID
     getReceiptById: async (id) => {
         return await client(`sales/receipts/${id}`);
-    }   
+    },
+
+    //6. EDITARE BON ÎNCHIS (admin only)
+    editReceipt: async (id, request) => {
+        return await client(`sales/receipts/${id}/edit`, { body: request });
+    }
 };

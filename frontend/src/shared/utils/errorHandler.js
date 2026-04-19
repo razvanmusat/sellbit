@@ -61,9 +61,19 @@ const ERROR_MESSAGES = {
   "ERROR.RECEIPT.CANNOT_REFUND_NOT_CLOSED":
     "Bonul trebuie să fie închis pentru a putea face retur.",
   "ERROR.REFUND.QUANTITY_EXCEEDED":
-    "Cantitatea de retur depășește cantitatea originală.",  
+    "Cantitatea de retur depășește cantitatea originală.",
   "ERROR.STOCK.BATCHES_INSUFFICIENT":
     "Stoc FIFO insuficient pentru a procesa această operațiune.",
+
+  // --- EDITARE BON ---
+  "ERROR.RECEIPT.CANNOT_EDIT_NOT_CLOSED":
+    "Bonul poate fi editat doar dacă este închis.",
+  "ERROR.RECEIPT.CANNOT_EDIT_CORRECTION":
+    "Acest bon este o corecție internă (storno de editare) și nu poate fi editat.",
+  "ERROR.RECEIPT.VOUCHER_AUTO_CARRIED":
+    "Voucherul se transferă automat pe bonul corectat — nu-l poți adăuga manual.",
+  "ERROR.ITEM.WAREHOUSE_NOT_PROVIDED":
+    "Eroare internă: gestiunea lipsește pentru unul dintre produse.",
 
   // --- STOCKS & ADJUSTMENTS (STRICT LOGIC) ---
   "ERROR.ADJUSTMENT.INVALID_QUANTITY":
@@ -305,9 +315,15 @@ export const getFriendlyErrorMessage = (error) => {
   // Traducere cod
   let friendlyMessage = codeString;
 
+  const productNameMatch = codeString.match(/\|product=([^|]+)/);
+
   for (const [key, message] of Object.entries(ERROR_MESSAGES)) {
-    if (codeString.includes(key)) {
-      friendlyMessage = message;
+    if (codeString === key || codeString.startsWith(key + '|')) {
+      if (productNameMatch && (key === "ERROR.STOCK.INSUFFICIENT_QUANTITY" || key === "ERROR.STOCK.BATCHES_INSUFFICIENT")) {
+        friendlyMessage = `Stoc insuficient pentru produsul: ${productNameMatch[1]}`;
+      } else {
+        friendlyMessage = message;
+      }
       break;
     }
   }

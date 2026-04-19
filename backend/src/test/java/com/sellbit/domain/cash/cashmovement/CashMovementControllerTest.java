@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -23,6 +24,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+@WithMockUser(username = "cashier")
 @WebMvcTest(controllers = CashMovementController.class, excludeAutoConfiguration = {
     org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration.class,
     org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration.class
@@ -54,7 +56,6 @@ class CashMovementControllerTest {
                 .param("warehouseId", "1")
                 .param("typeCode", "CASH_OUT")
                 .param("amount", "20.00")
-                .param("userId", "1")
                 .param("note", "Cafea"))
                 .andExpect(status().isOk());
     }
@@ -63,13 +64,12 @@ class CashMovementControllerTest {
     @DisplayName("POST /api/cash/movements - Fail: Tip mișcare inexistent (400 conform Handler)")
     void createMovement_Fail() throws Exception {
         doThrow(new RuntimeException("ERROR.MOVEMENT_TYPE.NOT_FOUND"))
-                .when(cashMovementService).createMovement(anyInt(), anyString(), any(BigDecimal.class), anyInt(), any());
+                .when(cashMovementService).createMovement(anyInt(), anyString(), any(BigDecimal.class), anyString(), any());
 
         mockMvc.perform(post("/api/cash/movements")
                 .param("warehouseId", "1")
                 .param("typeCode", "INVALID")
-                .param("amount", "10.00")
-                .param("userId", "1"))
+                .param("amount", "10.00"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("ERROR.MOVEMENT_TYPE.NOT_FOUND"));
     }

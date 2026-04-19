@@ -4,6 +4,8 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,7 +38,7 @@ public class CateringOrderService {
                     ? req.orderDate()
                     : LocalDate.now();
 
-            if (finalOrderDate.isBefore(LocalDate.now())) {
+            if (finalOrderDate.isBefore(LocalDate.now()) && !isCurrentUserAdmin()) {
                 throw new RuntimeException("ERROR.CATERING_ORDER.CREATE_FORBIDDEN_PAST_DATE");
             }
 
@@ -87,7 +89,7 @@ public class CateringOrderService {
         CateringOrder order = orderRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("ERROR.CATERING_ORDER.NOT_FOUND"));
 
-        if (order.getOrderDate().isBefore(LocalDate.now())) {
+        if (order.getOrderDate().isBefore(LocalDate.now()) && !isCurrentUserAdmin()) {
             throw new RuntimeException("ERROR.CATERING_ORDER.EDIT_FORBIDDEN_PAST_DATE");
         }
 
@@ -144,11 +146,17 @@ public class CateringOrderService {
         CateringOrder order = orderRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("ERROR.CATERING_ORDER.NOT_FOUND"));
 
-        if (order.getOrderDate().isBefore(LocalDate.now())) {
+        if (order.getOrderDate().isBefore(LocalDate.now()) && !isCurrentUserAdmin()) {
             throw new RuntimeException("ERROR.CATERING_ORDER.DELETE_FORBIDDEN_PAST_DATE");
         }
 
         orderRepository.delete(order);
+    }
+
+    private boolean isCurrentUserAdmin() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null && auth.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("100"));
     }
 
     private CateringOrderDTOs.OrderResponse mapToResponse(CateringOrder o) {

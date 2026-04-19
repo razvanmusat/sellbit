@@ -26,6 +26,7 @@ public interface ReceiptItemRepository extends JpaRepository<ReceiptItem, Intege
                         "JOIN ri.receipt r " +
                         "WHERE r.closedAt BETWEEN :start AND :end " +
                         "AND r.status.code = 'CLOSED' " +
+                        "AND r.internalCorrection = false " +
                         "AND ri.product.productType.code != 'ADVANCE' " +
                         "AND (:warehouseId IS NULL OR ri.warehouse.id = :warehouseId)")
         BigDecimal calculateTotalProfit(
@@ -40,6 +41,7 @@ public interface ReceiptItemRepository extends JpaRepository<ReceiptItem, Intege
                         "ri.product.name, SUM(ri.quantity), SUM(ri.lineTotal)) " +
                         "FROM ReceiptItem ri " +
                         "WHERE ri.receipt.status.code = 'CLOSED' " +
+                        "AND ri.receipt.internalCorrection = false " +
                         "AND ri.receipt.closedAt BETWEEN :start AND :end " +
                         "AND (:warehouseId IS NULL OR ri.warehouse.id = :warehouseId) " +
                         "AND (" +
@@ -64,6 +66,7 @@ public interface ReceiptItemRepository extends JpaRepository<ReceiptItem, Intege
                         "JOIN ri.receipt r " +
                         "LEFT JOIN r.user u " +
                         "WHERE r.status.code = 'CLOSED' " +
+                        "AND r.internalCorrection = false " +
                         "AND ri.product.id = :productId " +
                         "AND r.closedAt BETWEEN :start AND :end " +
                         "AND (:warehouseId IS NULL OR ri.warehouse.id = :warehouseId) " +

@@ -49,6 +49,7 @@ export const useReservationsMainPage = () => {
   const [rangeEnd, setRangeEnd] = useState(dayjs().endOf('month'));
   const [activeRange, setActiveRange] = useState(null);
   const [confirmInvitationReservation, setConfirmInvitationReservation] = useState(null);
+  const [confirmThemeReservation, setConfirmThemeReservation] = useState(null);
 
   const isAdmin = user?.authorityLevel === 100;
 
@@ -233,6 +234,36 @@ export const useReservationsMainPage = () => {
     }
   };
 
+  const handleOpenConfirmTheme = (reservation) => {
+    if (!isAdmin) return;
+    if (!reservation?.theme || reservation?.themeConfirmed === true) return;
+    setConfirmThemeReservation(reservation);
+  };
+
+  const handleCloseConfirmTheme = () => {
+    setConfirmThemeReservation(null);
+  };
+
+  const handleConfirmTheme = async () => {
+    if (!confirmThemeReservation?.id) return;
+    setSubmitting(true);
+    try {
+      await ReservationsService.confirmTheme(confirmThemeReservation.id);
+      setToast({ open: true, message: 'Tematica a fost confirmată.', severity: 'success' });
+      setConfirmThemeReservation(null);
+      if (viewMode === 'day') {
+        dispatch(fetchReservations(selectedDateStrRef.current));
+      } else if (activeRange) {
+        await loadIntervalData(activeRange.start, activeRange.end, viewMode);
+      }
+    } catch (err) {
+      const msg = getFriendlyErrorMessage(err.response?.data?.message || err.message);
+      setToast({ open: true, message: msg, severity: 'error' });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleOpenCatering = async (reservation) => {
     try {
       const dateStr = dayjs(reservation.startAt).format('YYYY-MM-DD');
@@ -373,6 +404,10 @@ export const useReservationsMainPage = () => {
     handleOpenConfirmInvitation,
     handleCloseConfirmInvitation,
     handleConfirmInvitation,
+    confirmThemeReservation,
+    handleOpenConfirmTheme,
+    handleCloseConfirmTheme,
+    handleConfirmTheme,
     handleOpenAdd, handleOpenEdit, handleCloseModal, handleOpenDelete, handleCloseDelete,
     handleSubmit, handleConfirmDelete, handleOpenCatering, handleCloseCatering, handleSubmitCatering
   };

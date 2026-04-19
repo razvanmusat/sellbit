@@ -53,9 +53,13 @@ const ReservationsMainPage = () => {
     handleOpenConfirmInvitation,
     handleCloseConfirmInvitation,
     handleConfirmInvitation,
+    confirmThemeReservation,
+    handleOpenConfirmTheme,
+    handleCloseConfirmTheme,
+    handleConfirmTheme,
 
-    handleChangeDate, handlePrevDay, handleNextDay, handleGoToToday, handleRefresh, 
-    handleOpenAdd, handleOpenEdit, handleCloseModal, 
+    handleChangeDate, handlePrevDay, handleNextDay, handleGoToToday, handleRefresh,
+    handleOpenAdd, handleOpenEdit, handleCloseModal,
     handleOpenDelete, handleCloseDelete, handleSubmit, handleConfirmDelete
   } = useReservationsMainPage();
 
@@ -228,14 +232,15 @@ const ReservationsMainPage = () => {
           ) : viewMode === 'day' ? (
             <Stack spacing={1}>
                 {reservations.map((res) => (
-                    <ReservationCard 
-                        key={res.id} 
+                    <ReservationCard
+                        key={res.id}
                         reservation={res}
-                        onEdit={handleOpenEdit} 
-                        onDelete={handleOpenDelete} 
+                        onEdit={handleOpenEdit}
+                        onDelete={handleOpenDelete}
                         onAddCatering={handleOpenCatering}
-                      onConfirmDigitalInvitation={handleOpenConfirmInvitation}
-                      isAdmin={isAdmin}
+                        onConfirmDigitalInvitation={handleOpenConfirmInvitation}
+                        onConfirmTheme={handleOpenConfirmTheme}
+                        isAdmin={isAdmin}
                     />
                 ))}
             </Stack>
@@ -248,13 +253,14 @@ const ReservationsMainPage = () => {
                   </Typography>
                   <Stack spacing={1}>
                     {dayGroup.reservations.map((res) => (
-                      <ReservationCard 
-                        key={res.id} 
+                      <ReservationCard
+                        key={res.id}
                         reservation={res}
-                        onEdit={handleOpenEdit} 
-                        onDelete={handleOpenDelete} 
+                        onEdit={handleOpenEdit}
+                        onDelete={handleOpenDelete}
                         onAddCatering={handleOpenCatering}
                         onConfirmDigitalInvitation={handleOpenConfirmInvitation}
+                        onConfirmTheme={handleOpenConfirmTheme}
                         isAdmin={isAdmin}
                       />
                     ))}
@@ -323,6 +329,19 @@ const ReservationsMainPage = () => {
             <DialogActions>
               <Button onClick={handleCloseConfirmInvitation} color="inherit">Nu</Button>
               <Button onClick={handleConfirmInvitation} variant="contained" color="success">Da</Button>
+            </DialogActions>
+          </Dialog>
+
+          <Dialog open={!!confirmThemeReservation} onClose={handleCloseConfirmTheme} maxWidth="xs" fullWidth>
+            <DialogTitle>Confirmare tematică</DialogTitle>
+            <DialogContent>
+              <DialogContentText>
+                Ai creat tematica?
+              </DialogContentText>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={handleCloseConfirmTheme} color="inherit">Nu</Button>
+              <Button onClick={handleConfirmTheme} variant="contained" color="success">Da</Button>
             </DialogActions>
           </Dialog>
 

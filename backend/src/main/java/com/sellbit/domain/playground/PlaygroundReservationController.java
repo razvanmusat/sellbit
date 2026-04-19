@@ -48,6 +48,12 @@ public class PlaygroundReservationController {
         return ResponseEntity.ok(reservationService.confirmDigitalInvitation(id));
     }
 
+    @PreAuthorize("hasAuthority('100')")
+    @PatchMapping("/{id}/confirm-theme")
+    public ResponseEntity<PlaygroundReservationDTOs.ReservationResponse> confirmTheme(@PathVariable Integer id) {
+        return ResponseEntity.ok(reservationService.confirmTheme(id));
+    }
+
     @PreAuthorize("hasAnyAuthority('50', '100')")
     @GetMapping // VIEW: Calendarul zilnic.
     public ResponseEntity<List<PlaygroundReservationDTOs.ReservationResponse>> getByDay(

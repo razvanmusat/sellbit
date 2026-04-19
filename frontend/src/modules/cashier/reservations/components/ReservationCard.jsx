@@ -11,8 +11,9 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import MailOutlineIcon from '@mui/icons-material/MailOutline';
 import DoNotDisturbIcon from '@mui/icons-material/DoNotDisturb';
+import ColorLensIcon from '@mui/icons-material/ColorLens';
 
-const ReservationCard = React.memo(({ reservation, onEdit, onDelete, onAddCatering, onConfirmDigitalInvitation, isAdmin }) => {
+const ReservationCard = React.memo(({ reservation, onEdit, onDelete, onAddCatering, onConfirmDigitalInvitation, onConfirmTheme, isAdmin }) => {
   const start = dayjs(reservation.startAt);
   const end = dayjs(reservation.endAt);
   const now = dayjs();
@@ -77,8 +78,21 @@ const ReservationCard = React.memo(({ reservation, onEdit, onDelete, onAddCateri
             ) : (
               <Chip label="Fără avans" size="small" color="warning" variant="outlined" />
             )}
-            {reservation.theme && (
-              <Chip label={`Tematică: ${reservation.theme}`} size="small" sx={{ bgcolor: '#ede7f6', color: '#4527a0' }} />
+            {reservation.theme && reservation.themeConfirmed === true && (
+              <Chip icon={<CheckCircleIcon />} label={`Tematică: ${reservation.theme}`} size="small" color="success" />
+            )}
+            {reservation.theme && !reservation.themeConfirmed && (
+              <Chip
+                icon={<ColorLensIcon />}
+                label={`Tematică: ${reservation.theme}`}
+                size="small"
+                onClick={isAdmin ? () => onConfirmTheme(reservation) : undefined}
+                sx={{
+                  bgcolor: '#fff3e0', color: '#e65100',
+                  cursor: isAdmin ? 'pointer' : 'default',
+                  '&:hover': isAdmin ? { bgcolor: '#ffe0b2' } : {},
+                }}
+              />
             )}
             {reservation.digitalInvitation === true && (
               <Chip icon={<CheckCircleIcon />} label="Invitație creată" size="small" color="success" />
@@ -208,8 +222,21 @@ const ReservationCard = React.memo(({ reservation, onEdit, onDelete, onAddCateri
             ) : (
               <Chip label="Fără avans" size="small" color="warning" variant="outlined" />
             )}
-            {reservation.theme && (
-              <Chip label={`Tematică: ${reservation.theme}`} size="small" sx={{ bgcolor: '#ede7f6', color: '#4527a0' }} />
+            {reservation.theme && reservation.themeConfirmed === true && (
+              <Chip icon={<CheckCircleIcon />} label={`Tematică: ${reservation.theme}`} size="small" color="success" />
+            )}
+            {reservation.theme && !reservation.themeConfirmed && (
+              <Chip
+                icon={<ColorLensIcon />}
+                label={`Tematică: ${reservation.theme}`}
+                size="small"
+                onClick={isAdmin ? () => onConfirmTheme(reservation) : undefined}
+                sx={{
+                  bgcolor: '#fff3e0', color: '#e65100',
+                  cursor: isAdmin ? 'pointer' : 'default',
+                  '&:hover': isAdmin ? { bgcolor: '#ffe0b2' } : {},
+                }}
+              />
             )}
             {reservation.digitalInvitation === true && (
               <Chip icon={<CheckCircleIcon />} label="Invitație creată" size="small" color="success" />
@@ -258,6 +285,7 @@ ReservationCard.propTypes = {
   onDelete: PropTypes.func,
   onAddCatering: PropTypes.func,
   onConfirmDigitalInvitation: PropTypes.func,
+  onConfirmTheme: PropTypes.func,
   isAdmin: PropTypes.bool,
 };
 

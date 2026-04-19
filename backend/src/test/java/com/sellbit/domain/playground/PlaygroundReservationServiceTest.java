@@ -235,4 +235,33 @@ class PlaygroundReservationServiceTest {
         var ex = assertThrows(RuntimeException.class, () -> reservationService.confirmDigitalInvitation(404));
         assertEquals("ERROR.RESERVATION.NOT_FOUND", ex.getMessage());
     }
+
+    @Test
+    @DisplayName("confirmTheme: Succes - setează themeConfirmed true")
+    void confirmTheme_Success() {
+        var reservation = PlaygroundReservation.builder()
+                .id(6)
+                .startAt(start)
+                .endAt(end)
+                .parentName("Popescu")
+                .parentPhone("0722111222")
+                .theme("Frozen")
+                .build();
+
+        when(reservationRepository.findById(6)).thenReturn(Optional.of(reservation));
+        when(reservationRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        var result = reservationService.confirmTheme(6);
+
+        assertEquals(Boolean.TRUE, result.themeConfirmed());
+    }
+
+    @Test
+    @DisplayName("confirmTheme: Eroare - rezervare inexistentă")
+    void confirmTheme_NotFound() {
+        when(reservationRepository.findById(404)).thenReturn(Optional.empty());
+
+        var ex = assertThrows(RuntimeException.class, () -> reservationService.confirmTheme(404));
+        assertEquals("ERROR.RESERVATION.NOT_FOUND", ex.getMessage());
+    }
 }

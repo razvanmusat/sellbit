@@ -23,6 +23,7 @@ public interface ReceiptPaymentRepository extends JpaRepository<ReceiptPayment, 
                         "FROM ReceiptPayment rp " +
                         "WHERE rp.paymentMethod.code = 'VOUCHER' " +
                         "AND rp.receipt.status.code = 'CLOSED' " +
+                        "AND rp.receipt.internalCorrection = false " +
                         "AND rp.receipt.closedAt BETWEEN :start AND :end " +
                         "AND (:warehouseId IS NULL OR rp.warehouse.id = :warehouseId)")
         BigDecimal getTotalVoucherDiscounts(
@@ -38,6 +39,7 @@ public interface ReceiptPaymentRepository extends JpaRepository<ReceiptPayment, 
         @Query("SELECT COALESCE(SUM(rp.amount), 0) " +
                         "FROM ReceiptPayment rp " +
                         "WHERE rp.receipt.status.code = 'CLOSED' " +
+                        "AND rp.receipt.internalCorrection = false " +
                         "AND rp.receipt.closedAt BETWEEN :start AND :end " +
                         "AND (:warehouseId IS NULL OR rp.warehouse.id = :warehouseId) " +
                         "AND (:methodCode IS NULL OR rp.paymentMethod.code = :methodCode) " +

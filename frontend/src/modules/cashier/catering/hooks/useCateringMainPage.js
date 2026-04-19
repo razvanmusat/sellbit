@@ -4,18 +4,23 @@ import { useDispatch, useSelector } from 'react-redux';
 import dayjs from 'dayjs';
 import { CateringService } from '../api/CateringService';
 import { getFriendlyErrorMessage } from '../../../../shared/utils/errorHandler';
-import { 
-    selectSelectedDate, 
-    setSelectedDate, 
-    selectDailyOrders, 
-    selectOrdersDate, 
-    setDailyOrders 
+import {
+    selectSelectedDate,
+    setSelectedDate,
+    selectDailyOrders,
+    selectOrdersDate,
+    setDailyOrders
 } from '../store/calendarSlice';
+
+
 
 export const useCateringMainPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const dispatch = useDispatch();
-  
+
+  const user = useSelector((state) => state.auth?.user);
+  const isAdmin = user?.authorityLevel === 100;
+
   // 1. DATA CURENTĂ (din Redux)
   const dateString = useSelector(selectSelectedDate);
   const selectedDate = useMemo(() => dayjs(dateString), [dateString]);
@@ -147,12 +152,34 @@ export const useCateringMainPage = () => {
     });
   }, [orders]);
 
+  const isPast = selectedDate.isBefore(dayjs().startOf('day'));
+
   // --- MODALS HANDLERS ---
-  const handleOpenAdd = () => { setEditingGroup(null); setOpenModal(true); };
-  const handleEditGroup = (group) => { setEditingGroup(group); setOpenModal(true); };
+  const handleOpenAdd = () => {
+    if (isPast && !isAdmin) {
+      setToast({ open: true, message: 'Nu poți adăuga comenzi în trecut!', severity: 'warning' });
+      return;
+    }
+    setEditingGroup(null);
+    setOpenModal(true);
+  };
+  const handleEditGroup = (group) => {
+    if (isPast && !isAdmin) {
+      setToast({ open: true, message: 'Nu poți modifica comenzi din trecut!', severity: 'warning' });
+      return;
+    }
+    setEditingGroup(group);
+    setOpenModal(true);
+  };
   const handleCloseModal = () => { setOpenModal(false); setEditingGroup(null); };
 
-  const handleOpenDelete = (group) => setDeleteGroup(group);
+  const handleOpenDelete = (group) => {
+    if (isPast && !isAdmin) {
+      setToast({ open: true, message: 'Nu poți șterge comenzi din trecut!', severity: 'warning' });
+      return;
+    }
+    setDeleteGroup(group);
+  };
   const handleCloseDelete = () => setDeleteGroup(null);
 
   const handleConfirmDelete = async () => {
@@ -219,11 +246,12 @@ export const useCateringMainPage = () => {
 
   return {
     selectedDate, groupedOrders, loading, error, submitting,
-    openModal, editingGroup, toast, 
-    deleteGroup, 
+    openModal, editingGroup, toast,
+    deleteGroup,
     handleOpenDelete, handleCloseDelete, handleConfirmDelete,
-    handleDateChange, handlePrevDay, handleNextDay, handleGoToToday, handleRefresh, // Am adăugat handleGoToToday
+    handleDateChange, handlePrevDay, handleNextDay, handleGoToToday, handleRefresh,
     handleOpenAdd, handleEditGroup, handleCloseModal,
-    handleSubmit, setToast 
+    handleSubmit, setToast,
+    isAdmin, isPast,
   };
 };

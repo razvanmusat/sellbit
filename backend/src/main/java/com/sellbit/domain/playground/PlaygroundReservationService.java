@@ -121,6 +121,16 @@ public class PlaygroundReservationService {
         return mapToResponse(reservationRepository.save(reservation));
     }
 
+    @Transactional
+    public PlaygroundReservationDTOs.ReservationResponse confirmTheme(Integer id) {
+        PlaygroundReservation reservation = reservationRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("ERROR.RESERVATION.NOT_FOUND"));
+
+        reservation.setThemeConfirmed(Boolean.TRUE);
+
+        return mapToResponse(reservationRepository.save(reservation));
+    }
+
     @Transactional(readOnly = true)
     public List<PlaygroundReservationDTOs.ReservationResponse> getReservationsForDay(LocalDateTime startOfDay,
             LocalDateTime endOfDay) {
@@ -139,7 +149,7 @@ public class PlaygroundReservationService {
                 .collect(Collectors.toList());
     }
 
-    // 1. Validare logică orară
+    // 1. Validare logică orară (create - include verificare dată în trecut)
     private void validateReservationTimes(LocalDateTime start, LocalDateTime end) {
         if (start == null || end == null) {
             throw new RuntimeException("ERROR.RESERVATION.DATES_REQUIRED");
@@ -155,6 +165,7 @@ public class PlaygroundReservationService {
             throw new RuntimeException("ERROR.RESERVATION.DATE_IN_PAST");
         }
     }
+
 
     // 2. Validare suprapuneri (Unifică logica de Create și Update)
     private void checkOverlap(LocalDateTime start, LocalDateTime end, Integer excludeId) {
@@ -199,6 +210,7 @@ public class PlaygroundReservationService {
                 r.getAdvancePaidAt(),
                 r.getDigitalInvitation(),
                 r.getTheme(),
+                r.getThemeConfirmed(),
                 r.getNote(),
                 r.getCreatedAt());
     }
