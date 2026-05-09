@@ -222,6 +222,34 @@ public class PurchaseService {
         purchaseRepository.save(virtual);
     }
 
+    @Transactional
+    public void deletePurchaseGroup(List<Integer> purchaseIds) {
+        // Validăm toate loturile înainte să ștergem orice
+        List<Purchase> purchases = purchaseIds.stream()
+                .map(id -> {
+                    Purchase p = purchaseRepository.findById(id)
+                            .orElseThrow(() -> new RuntimeException("ERROR.PURCHASE.NOT_FOUND"));
+                    if (fifoAllocationRepository.existsByPurchaseId(id)) {
+                        throw new RuntimeException("ERROR.PURCHASE.ALREADY_CONSUMED");
+                    }
+                    return p;
+                })
+                .toList();
+
+        // Toate valide — inversăm stocul și ștergem
+        for (Purchase purchase : purchases) {
+            if (Boolean.TRUE.equals(purchase.getProduct().getTrackStock())) {
+                var stockId = new com.sellbit.domain.inventory.stockcurrent.StockCurrentId(
+                        purchase.getWarehouse().getId(), purchase.getProduct().getId());
+                stockCurrentRepository.findById(stockId).ifPresent(stock -> {
+                    stock.setQuantity(stock.getQuantity().subtract(purchase.getQuantity()));
+                    stockCurrentRepository.save(stock);
+                });
+            }
+            purchaseRepository.delete(purchase);
+        }
+    }
+
     @Transactional(readOnly = true)
     public boolean hasFifoAllocationsForReceipt(Integer receiptId) {
         return fifoAllocationRepository.existsByReceiptId(receiptId);

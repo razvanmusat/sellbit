@@ -37,6 +37,14 @@ export const PurchaseService = {
     },
 
     /**
+     * Sterge o receptie intreaga (grup de purchase-uri). Esuaza daca orice lot a intrat in vanzari.
+     * @param {number[]} ids - Lista de ID-uri purchase din grupul de sters
+     */
+    deleteGroup: async (ids) => {
+        return await client(`${ENDPOINT}/group`, { method: 'DELETE', body: ids });
+    },
+
+    /**
      * ALERTĂ: Produse care expiră curând.
      * @param {number} days - Numărul de zile (default 15)
      */

@@ -1,19 +1,21 @@
-import React from 'react';
-import { 
-    Box, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, 
-    Typography, Stack, CircularProgress, Alert, Accordion, AccordionSummary, AccordionDetails, Button, Divider
+import React, { useState } from 'react';
+import {
+    Box, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
+    Typography, Stack, CircularProgress, Alert, Accordion, AccordionSummary, AccordionDetails,
+    Button, Divider, IconButton, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import HistoryIcon from '@mui/icons-material/History';
 import SearchIcon from '@mui/icons-material/Search';
-import CalendarTodayIcon from '@mui/icons-material/CalendarToday'; // ICOANA PT ZI
+import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { DatePicker, LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import dayjs from 'dayjs';
 import 'dayjs/locale/ro';
 
-// Importăm hook-ul custom
 import { usePurchaseReport } from '../hooks/usePurchaseReport';
+import { PurchaseService } from '../api/PurchaseService';
 
 const PurchaseReport = ({ warehouseId }) => {
     
@@ -24,11 +26,35 @@ const PurchaseReport = ({ warehouseId }) => {
         rawData,
         loading,
         error,
-        dailyGroups, // FOLOSIM NOUA VARIABILĂ
+        dailyGroups,
         fetchReport
     } = usePurchaseReport(warehouseId);
 
+    const [deleteTarget, setDeleteTarget] = useState(null);
+    const [deleteLoading, setDeleteLoading] = useState(false);
+    const [deleteError, setDeleteError] = useState(null);
+
+    const handleDeleteConfirm = async () => {
+        setDeleteLoading(true);
+        setDeleteError(null);
+        try {
+            await PurchaseService.deleteGroup(deleteTarget.items.map(i => i.id));
+            setDeleteTarget(null);
+            fetchReport();
+        } catch (err) {
+            const code = err.message;
+            setDeleteError(
+                code === 'ERROR.PURCHASE.ALREADY_CONSUMED'
+                    ? 'Această achiziție nu poate fi ștearsă — produsele au intrat deja în vânzări. Anulează mai întâi vânzările care au consumat din acest lot.'
+                    : 'Eroare la ștergere. Încearcă din nou.'
+            );
+        } finally {
+            setDeleteLoading(false);
+        }
+    };
+
     return (
+        <>
         <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="ro">
             <Box sx={{ p: isMobile ? 1 : 2, bgcolor: '#f8f9fa', minHeight: '100%' }}>
                 
@@ -123,6 +149,14 @@ const PurchaseReport = ({ warehouseId }) => {
                                                     <Typography variant="subtitle1" sx={{ fontWeight: 900, color: 'primary.dark', minWidth: 110, textAlign: 'right' }}>
                                                         {group.totalValue.toLocaleString('ro-RO', { minimumFractionDigits: 2 })} RON
                                                     </Typography>
+                                                    <IconButton
+                                                        size="small"
+                                                        color="error"
+                                                        onClick={(e) => { e.stopPropagation(); setDeleteTarget(group); setDeleteError(null); }}
+                                                        title="Șterge această achiziție"
+                                                    >
+                                                        <DeleteOutlineIcon fontSize="small" />
+                                                    </IconButton>
                                                 </Stack>
                                             </Stack>
                                         </AccordionSummary>
@@ -161,6 +195,25 @@ const PurchaseReport = ({ warehouseId }) => {
                 )}
             </Box>
         </LocalizationProvider>
+
+        <Dialog open={!!deleteTarget} onClose={() => !deleteLoading && setDeleteTarget(null)} maxWidth="xs" fullWidth>
+            <DialogTitle>Șterge achiziție</DialogTitle>
+            <DialogContent>
+                <DialogContentText>
+                    Ești sigur că vrei să ștergi această achiziție? Stocul va fi redus corespunzător. Acțiunea este ireversibilă.
+                </DialogContentText>
+                {deleteError && (
+                    <Alert severity="error" sx={{ mt: 2 }}>{deleteError}</Alert>
+                )}
+            </DialogContent>
+            <DialogActions>
+                <Button onClick={() => setDeleteTarget(null)} disabled={deleteLoading}>Anulează</Button>
+                <Button onClick={handleDeleteConfirm} color="error" variant="contained" disabled={deleteLoading}>
+                    {deleteLoading ? 'Se șterge...' : 'Șterge'}
+                </Button>
+            </DialogActions>
+        </Dialog>
+        </>
     );
 };
 

@@ -13,4 +13,6 @@ public interface ReceiptItemFifoAllocationRepository extends JpaRepository<Recei
     boolean existsByReceiptId(Integer receiptId);
 
     void deleteByReceiptId(Integer receiptId);
+
+    boolean existsByPurchaseId(Integer purchaseId);
 }

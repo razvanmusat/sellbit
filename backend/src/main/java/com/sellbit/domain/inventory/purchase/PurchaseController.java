@@ -6,6 +6,7 @@ import java.util.List;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -29,6 +30,14 @@ public class PurchaseController {
     @PostMapping("/bulk")
     public ResponseEntity<Void> addPurchases(@Valid @RequestBody PurchaseDTOs.BulkCreate request) {
         purchaseService.processBulkPurchase(request);
+        return ResponseEntity.ok().build();
+    }
+
+    // Stergere grup de achizitii (o recepție întreagă). Blocată dacă orice lot a intrat în vânzări.
+    @PreAuthorize("hasAnyAuthority('100')")
+    @DeleteMapping("/group")
+    public ResponseEntity<Void> deletePurchaseGroup(@RequestBody List<Integer> purchaseIds) {
+        purchaseService.deletePurchaseGroup(purchaseIds);
         return ResponseEntity.ok().build();
     }    
 
