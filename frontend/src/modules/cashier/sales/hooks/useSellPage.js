@@ -7,6 +7,7 @@ import {
   createNewReceipt,
   fetchActivePaymentMethods,
   registerAdvancePayment,
+  registerGiftCard,
   addOrUpdateReceiptItem,
   removeReceiptItem,
   clearError,
@@ -54,9 +55,14 @@ export const useSellPage = () => {
   const [modals, setModals] = useState({
     addReceipt: false,
     advance: false,
+    giftCard: false,
     addPayment: false,
     cancel: false,
   });
+
+  // State pentru dialogul post-close (print vouchere / loyalty)
+  const [voucherIssuance, setVoucherIssuance] = useState(null); // { vouchers, loyaltyCampaign, receiptId }
+  const [giftCardStatus, setGiftCardStatus] = useState({ active: false, campaignId: null });
 
   const [feedback, setFeedback] = useState({
     message: null,
@@ -84,6 +90,12 @@ export const useSellPage = () => {
     if (warehouses.length === 0) dispatch(fetchActiveWarehouses());
     dispatch(fetchActivePaymentMethods());
     dispatch(fetchCancelReasons());
+    // Verifică starea campaniei gift card
+    import('../../../admin/vouchers/api/VoucherCampaignService').then(({ VoucherCampaignService }) => {
+      VoucherCampaignService.getGiftCardStatus()
+        .then(status => setGiftCardStatus(status))
+        .catch(() => {});
+    });
   }, [dispatch, warehouses.length]);
 
   useEffect(() => {
@@ -129,6 +141,27 @@ export const useSellPage = () => {
           showFeedback("Avans înregistrat cu succes!", "success");
           toggleModal("advance", false);
         }
+      }
+    },
+
+    createGiftCard: async ({ warehouseId, amount, paymentMethodCode, note }) => {
+      if (user?.id) {
+        const result = await dispatch(
+          registerGiftCard({
+            warehouseId,
+            amount,
+            paymentMethodCode,
+            userId: user.id,
+            note,
+          }),
+        );
+        if (registerGiftCard.fulfilled.match(result)) {
+          dispatch(invalidateCache());
+          toggleModal("giftCard", false);
+          // result.payload = IssuedVoucherInfo (codul voucherului)
+          return result.payload;
+        }
+        return null;
       }
     },
 
@@ -226,10 +259,28 @@ export const useSellPage = () => {
         if (closeReceipt.fulfilled.match(result)) {
           dispatch(invalidateCache());
           toggleModal("addPayment", false);
-          showFeedback("Bon închis cu succes!", "success");
-          actions.backToDashboard();
+          const { issuanceResult, receiptId: closedReceiptId } = result.payload;
+          const hasVouchers = issuanceResult?.vouchers?.length > 0;
+          const hasLoyalty = !!issuanceResult?.loyaltyCampaign;
+          if (hasVouchers || hasLoyalty) {
+            // Arată dialogul de vouchere înainte de a merge la dashboard
+            setVoucherIssuance({
+              vouchers: issuanceResult.vouchers || [],
+              loyaltyCampaign: issuanceResult.loyaltyCampaign || null,
+              receiptId: closedReceiptId,
+            });
+          } else {
+            showFeedback("Bon închis cu succes!", "success");
+            actions.backToDashboard();
+          }
         }
       }
+    },
+
+    dismissVoucherIssuance: () => {
+      setVoucherIssuance(null);
+      showFeedback("Bon închis cu succes!", "success");
+      actions.backToDashboard();
     },
 
     cancelReceipt: async (reasonId) => {
@@ -268,6 +319,8 @@ export const useSellPage = () => {
     error,
     getFriendlyErrorMessage,
     actions,
+    voucherIssuance,
+    giftCardStatus,
   };
 };
 

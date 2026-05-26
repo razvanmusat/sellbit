@@ -189,7 +189,7 @@ class CustomerVoucherServiceTest {
         verify(voucherRepository).save(any(CustomerVoucher.class));
     }
     @Test void issueVouchers_NotEligible_ProductMissing() {
-        VoucherCampaign cp = VoucherCampaign.builder().requiredProductId(99).build();
+        VoucherCampaign cp = VoucherCampaign.builder().requiredProductIds(List.of(99)).build();
         when(campaignRepository.findAllActive(any())).thenReturn(List.of(cp));
         
         Receipt r = Receipt.builder().items(List.of()).totalAmount(new BigDecimal("100")).build();

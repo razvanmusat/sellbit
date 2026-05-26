@@ -5,9 +5,13 @@ import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Entity
 @Table(name = "voucher_campaigns")
@@ -51,8 +55,9 @@ public class VoucherCampaign {
     @Column(name = "min_amount", precision = 10, scale = 2)
     private BigDecimal minAmount;
 
-    @Column(name = "required_product_id") //produs necesar pe bon pt validare
-    private Integer requiredProductId;
+    @JdbcTypeCode(SqlTypes.ARRAY)
+    @Column(name = "required_product_ids", columnDefinition = "integer[]")
+    private List<Integer> requiredProductIds;
     
     @Column(name = "applicable_product_id") //ex: free hour
     private Integer applicableProductId;
@@ -76,6 +81,20 @@ public class VoucherCampaign {
 
     @Column(name = "receipt_template", columnDefinition = "TEXT")
     private String receiptTemplate;
+
+    // --- TIP CAMPANIE ---
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "campaign_type_id", nullable = false)
+    private CampaignType campaignType;
+
+    // --- EMITERE MULTIPLA (REGULAR) ---
+    @Builder.Default
+    @Column(name = "vouchers_per_receipt", nullable = false)
+    private Integer vouchersPerReceipt = 1;
+
+    // --- STAMPILE (LOYALTY) ---
+    @Column(name = "stamps_required")
+    private Integer stampsRequired;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false, nullable = false)

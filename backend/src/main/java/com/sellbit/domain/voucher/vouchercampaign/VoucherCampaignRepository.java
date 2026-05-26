@@ -30,4 +30,10 @@ public interface VoucherCampaignRepository extends JpaRepository<VoucherCampaign
     boolean existsByPrefixAndActiveTrue(String prefix);
 
     boolean existsByPrefixAndActiveTrueAndIdNot(String prefix, Integer id);
+
+    @Query("SELECT v FROM VoucherCampaign v WHERE v.active = true AND :today BETWEEN v.validFromDate AND v.validUntilDate AND v.campaignType.code = :typeCode")
+    List<VoucherCampaign> findAllActiveByTypeCode(@Param("typeCode") String typeCode, @Param("today") java.time.LocalDate today);
+
+    @Query("SELECT v FROM VoucherCampaign v WHERE v.active = true AND v.campaignType.code = 'GIFT_CARD'")
+    java.util.Optional<VoucherCampaign> findActiveGiftCardCampaign();
 }

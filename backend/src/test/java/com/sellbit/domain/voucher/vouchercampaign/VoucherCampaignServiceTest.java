@@ -22,49 +22,88 @@ import static org.mockito.Mockito.*;
 class VoucherCampaignServiceTest {
 
     @Mock private VoucherCampaignRepository repository;
-    @Mock private ProductRepository productRepository; // <--- DEPENDENȚĂ NOUĂ
+    @Mock private ProductRepository productRepository;
+    @Mock private CampaignTypeRepository campaignTypeRepository;
 
     @InjectMocks private VoucherCampaignService service;
 
+    // --- HELPERS ---
+
+    private CampaignType regularType() {
+        return CampaignType.builder().id(1).code("REGULAR").label("Regular").build();
+    }
+
+    private CampaignType giftCardType() {
+        return CampaignType.builder().id(2).code("GIFT_CARD").label("Card Cadou").build();
+    }
+
+    private CampaignType loyaltyType() {
+        return CampaignType.builder().id(3).code("LOYALTY").label("Fidelitate").build();
+    }
+
+    /** Request valid cu REGULAR, PERCENT 10%, minAmount 50 lei, requiredProductId=1 */
     private VoucherCampaignDTOs.Request createValidRequest() {
         return new VoucherCampaignDTOs.Request(
                 "Campanie Vara", LocalDate.now(), LocalDate.now().plusMonths(1),
-                "PERCENT", new BigDecimal("10.00"), new BigDecimal("50.00"), // discountValue, maxDiscountAmount
-                new BigDecimal("50.00"), // minAmount
-                1, // minHoursPlayed
-                1, // requiredProductId (Există în request-ul valid)
-                null, // applicableProductId
-                30, "12345", "V-", 4, "Template"
+                "PERCENT", new BigDecimal("10.00"), new BigDecimal("50.00"),
+                new BigDecimal("50.00"),
+                1,
+                List.of(1),
+                null,
+                30, "12345", "V-", 4, "Template",
+                "REGULAR", 1, null
         );
     }
 
-    // --- 1. create (TESTE DE SUCCES & VALIDĂRI) ---
+    // --- 1. create — SUCCES ---
 
     @Test
-    @DisplayName("create: Succes cu date valide")
+    @DisplayName("create: Succes cu date valide (REGULAR)")
     void create_Success() {
         VoucherCampaignDTOs.Request req = createValidRequest();
-        
-        // Simulăm că produsul cu ID 1 (din request) există, altfel pică validarea
+
         when(productRepository.existsById(1)).thenReturn(true);
-        // Simulăm că prefixul nu e duplicat
+        when(campaignTypeRepository.findByCode("REGULAR")).thenReturn(Optional.of(regularType()));
         when(repository.existsByPrefixAndActiveTrue("V-")).thenReturn(false);
-        
         when(repository.save(any(VoucherCampaign.class))).thenAnswer(i -> i.getArguments()[0]);
 
         var response = service.create(req);
 
         assertThat(response.name()).isEqualTo("Campanie Vara");
+        assertThat(response.campaignType()).isEqualTo("REGULAR");
         verify(repository).save(any());
     }
 
     @Test
-    @DisplayName("create: Eroare la interval de date invalid")
+    @DisplayName("create: FIXED discount fără maxDiscountAmount (permis)")
+    void create_FixedDiscount_WithoutMaxDiscountAmount_Success() {
+        VoucherCampaignDTOs.Request req = new VoucherCampaignDTOs.Request(
+                "Campanie FIXED", LocalDate.now(), LocalDate.now().plusMonths(1),
+                "FIXED", new BigDecimal("50.00"), null,
+                new BigDecimal("50.00"), 1, List.of(1), null, 30, "12345", "F-", 4, "Template",
+                "REGULAR", 1, null
+        );
+
+        when(productRepository.existsById(1)).thenReturn(true);
+        when(campaignTypeRepository.findByCode("REGULAR")).thenReturn(Optional.of(regularType()));
+        when(repository.existsByPrefixAndActiveTrue("F-")).thenReturn(false);
+        when(repository.save(any(VoucherCampaign.class))).thenAnswer(i -> i.getArguments()[0]);
+
+        var response = service.create(req);
+        assertThat(response.name()).isEqualTo("Campanie FIXED");
+        verify(repository).save(any());
+    }
+
+    // --- 2. create — VALIDĂRI ---
+
+    @Test
+    @DisplayName("create: Eroare la interval de date invalid (end < start)")
     void create_InvalidDates_ThrowsException() {
         VoucherCampaignDTOs.Request req = new VoucherCampaignDTOs.Request(
-                "Nume", LocalDate.now().plusDays(10), LocalDate.now(), // End < Start
-                "FIXED", BigDecimal.TEN, BigDecimal.valueOf(5), // discountValue, maxDiscountAmount
-                BigDecimal.ZERO, 0, null, null, 30, "1", "P", 4, ""
+                "Nume", LocalDate.now().plusDays(10), LocalDate.now(),
+                "FIXED", BigDecimal.TEN, BigDecimal.valueOf(5),
+                BigDecimal.ZERO, 0, null, null, 30, "1", "P", 4, "",
+                "REGULAR", 1, null
         );
 
         assertThatThrownBy(() -> service.create(req))
@@ -76,24 +115,23 @@ class VoucherCampaignServiceTest {
     @DisplayName("create: Eroare produs necesar inexistent")
     void create_RequiredProductNotFound_ThrowsException() {
         VoucherCampaignDTOs.Request req = createValidRequest();
-        // Setăm repository să zică FALSE la check-ul de produs
-        when(productRepository.existsById(req.requiredProductId())).thenReturn(false);
+        when(productRepository.existsById(req.requiredProductIds().get(0))).thenReturn(false);
 
         assertThatThrownBy(() -> service.create(req))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessage("ERROR.VOUCHER_CAMPAIGN.REQUIRED_PRODUCT_NOT_FOUND");
     }
-    
+
     @Test
     @DisplayName("create: Eroare produs aplicabil inexistent")
     void create_ApplicableProductNotFound_ThrowsException() {
-        // Creăm un request care are applicableProductId = 99
         VoucherCampaignDTOs.Request req = new VoucherCampaignDTOs.Request(
                 "Nume", LocalDate.now(), LocalDate.now().plusDays(1),
-                "FIXED", BigDecimal.TEN, BigDecimal.valueOf(5), // discountValue, maxDiscountAmount
-                BigDecimal.ZERO, 0, 
-                null, 99, // ID Inexistent
-                30, "1", "P", 4, ""
+                "FIXED", BigDecimal.TEN, BigDecimal.valueOf(5),
+                BigDecimal.ZERO, 0,
+                null, 99,
+                30, "1", "P", 4, "",
+                "REGULAR", 1, null
         );
 
         when(productRepository.existsById(99)).thenReturn(false);
@@ -108,8 +146,9 @@ class VoucherCampaignServiceTest {
     void create_NegativeDiscount_ThrowsException() {
         VoucherCampaignDTOs.Request req = new VoucherCampaignDTOs.Request(
                 "Nume", LocalDate.now(), LocalDate.now().plusDays(1),
-                "FIXED", new BigDecimal("-5.00"), BigDecimal.valueOf(5), // discountValue (negativ), maxDiscountAmount
-                BigDecimal.ZERO, 0, null, null, 30, "1", "P", 4, ""
+                "FIXED", new BigDecimal("-5.00"), BigDecimal.valueOf(5),
+                BigDecimal.ZERO, 0, null, null, 30, "1", "P", 4, "",
+                "REGULAR", 1, null
         );
 
         assertThatThrownBy(() -> service.create(req))
@@ -122,8 +161,9 @@ class VoucherCampaignServiceTest {
     void create_PercentOver100_ThrowsException() {
         VoucherCampaignDTOs.Request req = new VoucherCampaignDTOs.Request(
                 "Nume", LocalDate.now(), LocalDate.now().plusDays(1),
-                "PERCENT", new BigDecimal("105.00"), BigDecimal.valueOf(5), // discountValue (>100), maxDiscountAmount
-                BigDecimal.ZERO, 0, null, null, 30, "1", "P", 4, ""
+                "PERCENT", new BigDecimal("105.00"), BigDecimal.valueOf(5),
+                BigDecimal.ZERO, 0, null, null, 30, "1", "P", 4, "",
+                "REGULAR", 1, null
         );
 
         assertThatThrownBy(() -> service.create(req))
@@ -132,13 +172,29 @@ class VoucherCampaignServiceTest {
     }
 
     @Test
-    @DisplayName("create: Eroare prefix deja existent")
-    void create_DuplicatePrefix_ThrowsException() {
-        VoucherCampaignDTOs.Request req = createValidRequest(); // are prefix "V-"
-        
-        // Simulăm că produsul există (ca să treacă de validarea produsului)
+    @DisplayName("create: Eroare PERCENT discount fără maxDiscountAmount")
+    void create_PercentDiscount_WithoutMaxDiscountAmount_ThrowsException() {
+        VoucherCampaignDTOs.Request req = new VoucherCampaignDTOs.Request(
+                "Campanie PERCENT", LocalDate.now(), LocalDate.now().plusMonths(1),
+                "PERCENT", new BigDecimal("10.00"), null,
+                new BigDecimal("50.00"), 1, List.of(1), null, 30, "12345", "P-", 4, "Template",
+                "REGULAR", 1, null
+        );
+
         when(productRepository.existsById(1)).thenReturn(true);
-        // Simulăm că prefixul EXISTĂ deja activ
+
+        assertThatThrownBy(() -> service.create(req))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("ERROR.VOUCHER_CAMPAIGN.MAX_DISCOUNT_REQUIRED");
+    }
+
+    @Test
+    @DisplayName("create: Eroare prefix deja activ")
+    void create_DuplicatePrefix_ThrowsException() {
+        VoucherCampaignDTOs.Request req = createValidRequest();
+
+        when(productRepository.existsById(1)).thenReturn(true);
+        when(campaignTypeRepository.findByCode("REGULAR")).thenReturn(Optional.of(regularType()));
         when(repository.existsByPrefixAndActiveTrue("V-")).thenReturn(true);
 
         assertThatThrownBy(() -> service.create(req))
@@ -147,79 +203,158 @@ class VoucherCampaignServiceTest {
     }
 
     @Test
-    @DisplayName("create: Succes FIXED discount fără maxDiscountAmount")
-    void create_FixedDiscount_WithoutMaxDiscountAmount_Success() {
-        // Crează request cu FIXED discount și maxDiscountAmount = null
+    @DisplayName("create: Tip campanie invalid aruncă eroare")
+    void create_InvalidCampaignType_ThrowsException() {
         VoucherCampaignDTOs.Request req = new VoucherCampaignDTOs.Request(
-                "Campanie FIXED", LocalDate.now(), LocalDate.now().plusMonths(1),
-                "FIXED", new BigDecimal("50.00"), null, // discountValue=50, maxDiscountAmount=null
-                new BigDecimal("50.00"), 1, 1, null, 30, "12345", "F-", 4, "Template"
+                "Test", LocalDate.now(), LocalDate.now().plusMonths(1),
+                "FIXED", new BigDecimal("10.00"), null,
+                new BigDecimal("50.00"), null, null, null,
+                30, null, "TST", 4, null,
+                "UNKNOWN_TYPE", 1, null
         );
 
-        when(productRepository.existsById(1)).thenReturn(true);
-        when(repository.existsByPrefixAndActiveTrue("F-")).thenReturn(false);
+        when(campaignTypeRepository.findByCode("UNKNOWN_TYPE")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.create(req))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("ERROR.VOUCHER_CAMPAIGN.INVALID_TYPE");
+    }
+
+    // --- 3. create — TIPURI NOI ---
+
+    @Test
+    @DisplayName("create: GIFT_CARD — sare peste validarea discountului, acceptă null pe discount/minAmount")
+    void create_GiftCardType_SkipsDiscountValidation_Success() {
+        VoucherCampaignDTOs.Request req = new VoucherCampaignDTOs.Request(
+                "Card Cadou", LocalDate.now(), LocalDate.now().plusYears(1),
+                null, null, null,
+                null, null, null, null,
+                365, null, "GC", 6, null,
+                "GIFT_CARD", 1, null
+        );
+
+        when(campaignTypeRepository.findByCode("GIFT_CARD")).thenReturn(Optional.of(giftCardType()));
+        when(repository.existsByPrefixAndActiveTrue("GC")).thenReturn(false);
         when(repository.save(any(VoucherCampaign.class))).thenAnswer(i -> i.getArguments()[0]);
 
-        // Ar trebui să treacă fără eroare (maxDiscountAmount nu e necesar pentru FIXED)
         var response = service.create(req);
-        assertThat(response.name()).isEqualTo("Campanie FIXED");
+
+        assertThat(response.name()).isEqualTo("Card Cadou");
+        assertThat(response.campaignType()).isEqualTo("GIFT_CARD");
         verify(repository).save(any());
     }
 
     @Test
-    @DisplayName("create: Eroare PERCENT discount fără maxDiscountAmount")
-    void create_PercentDiscount_WithoutMaxDiscountAmount_ThrowsException() {
-        // Crează request cu PERCENT discount și maxDiscountAmount = null
+    @DisplayName("create: LOYALTY — stampsRequired salvat corect")
+    void create_LoyaltyType_WithStampsRequired_Success() {
         VoucherCampaignDTOs.Request req = new VoucherCampaignDTOs.Request(
-                "Campanie PERCENT", LocalDate.now(), LocalDate.now().plusMonths(1),
-                "PERCENT", new BigDecimal("10.00"), null, // discountValue=10%, maxDiscountAmount=null
-                new BigDecimal("50.00"), 1, 1, null, 30, "12345", "P-", 4, "Template"
+                "Fidelitate 5 Vizite", LocalDate.now(), LocalDate.now().plusYears(1),
+                "FIXED", new BigDecimal("50.00"), null,
+                new BigDecimal("200.00"), null, null, null,
+                180, null, "LYL", 6, null,
+                "LOYALTY", 1, 5
         );
 
-        when(productRepository.existsById(1)).thenReturn(true);
+        when(campaignTypeRepository.findByCode("LOYALTY")).thenReturn(Optional.of(loyaltyType()));
+        when(repository.existsByPrefixAndActiveTrue("LYL")).thenReturn(false);
+        when(repository.save(any(VoucherCampaign.class))).thenAnswer(i -> i.getArguments()[0]);
 
-        // Ar trebui să arunce eroare (maxDiscountAmount e obligatoriu pentru PERCENT)
-        assertThatThrownBy(() -> service.create(req))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessage("ERROR.VOUCHER_CAMPAIGN.MAX_DISCOUNT_REQUIRED");
+        var response = service.create(req);
+
+        assertThat(response.campaignType()).isEqualTo("LOYALTY");
+        assertThat(response.stampsRequired()).isEqualTo(5);
+        verify(repository).save(any());
     }
 
-    // --- 2. getAll ---
-    @Test void getAll_ReturnsList() {
+    @Test
+    @DisplayName("create: REGULAR — vouchersPerReceipt=3 salvat corect")
+    void create_RegularType_MultipleVouchersPerReceipt_Success() {
+        VoucherCampaignDTOs.Request req = new VoucherCampaignDTOs.Request(
+                "Petrecere Premium", LocalDate.now(), LocalDate.now().plusMonths(6),
+                "FIXED", new BigDecimal("20.00"), null,
+                new BigDecimal("1000.00"), null, null, null,
+                30, null, "PP", 4, null,
+                "REGULAR", 3, null
+        );
+
+        when(campaignTypeRepository.findByCode("REGULAR")).thenReturn(Optional.of(regularType()));
+        when(repository.existsByPrefixAndActiveTrue("PP")).thenReturn(false);
+        when(repository.save(any(VoucherCampaign.class))).thenAnswer(i -> i.getArguments()[0]);
+
+        var response = service.create(req);
+
+        assertThat(response.vouchersPerReceipt()).isEqualTo(3);
+        verify(repository).save(any());
+    }
+
+    @Test
+    @DisplayName("create: REGULAR — vouchersPerReceipt null → default 1")
+    void create_RegularType_NullVouchersPerReceipt_DefaultsToOne() {
+        VoucherCampaignDTOs.Request req = new VoucherCampaignDTOs.Request(
+                "Campanie Default", LocalDate.now(), LocalDate.now().plusMonths(1),
+                "FIXED", new BigDecimal("10.00"), null,
+                new BigDecimal("100.00"), null, null, null,
+                30, null, "DEF", 4, null,
+                "REGULAR", null, null
+        );
+
+        when(campaignTypeRepository.findByCode("REGULAR")).thenReturn(Optional.of(regularType()));
+        when(repository.existsByPrefixAndActiveTrue("DEF")).thenReturn(false);
+        when(repository.save(any(VoucherCampaign.class))).thenAnswer(i -> i.getArguments()[0]);
+
+        var response = service.create(req);
+
+        assertThat(response.vouchersPerReceipt()).isEqualTo(1);
+        verify(repository).save(any());
+    }
+
+    // --- 4. getAll ---
+
+    @Test
+    void getAll_ReturnsList() {
         when(repository.findAll()).thenReturn(List.of(new VoucherCampaign(), new VoucherCampaign()));
         assertThat(service.getAll()).hasSize(2);
     }
 
-    @Test void getAll_ReturnsEmpty() {
+    @Test
+    void getAll_ReturnsEmpty() {
         when(repository.findAll()).thenReturn(List.of());
         assertThat(service.getAll()).isEmpty();
     }
 
-    // --- 3. getActiveCampaigns ---
-    @Test void getActiveCampaigns_ReturnsOnlyActive() {
+    // --- 5. getActiveCampaigns ---
+
+    @Test
+    void getActiveCampaigns_ReturnsOnlyActive() {
         when(repository.findAllByActiveTrue()).thenReturn(List.of(new VoucherCampaign()));
         assertThat(service.getActiveCampaigns()).hasSize(1);
     }
 
-    @Test void getActiveCampaigns_Empty() {
+    @Test
+    void getActiveCampaigns_Empty() {
         when(repository.findAllByActiveTrue()).thenReturn(List.of());
         assertThat(service.getActiveCampaigns()).isEmpty();
     }
 
-    // --- 4. getInactiveCampaigns ---
-    @Test void getInactiveCampaigns_ReturnsOnlyInactive() {
+    // --- 6. getInactiveCampaigns ---
+
+    @Test
+    void getInactiveCampaigns_ReturnsOnlyInactive() {
         when(repository.findAllByActiveFalse()).thenReturn(List.of(new VoucherCampaign()));
         assertThat(service.getInactiveCampaigns()).hasSize(1);
     }
 
-    @Test void getInactiveCampaigns_Empty() {
+    @Test
+    void getInactiveCampaigns_Empty() {
         when(repository.findAllByActiveFalse()).thenReturn(List.of());
         assertThat(service.getInactiveCampaigns()).isEmpty();
     }
 
-    // --- 5. toggleStatus ---
-    @Test @DisplayName("toggleStatus: Schimbă din activ în inactiv")
-    void toggleStatus_Success() {
+    // --- 7. toggleStatus ---
+
+    @Test
+    @DisplayName("toggleStatus: Schimbă din activ în inactiv")
+    void toggleStatus_ActiveToInactive_Success() {
         VoucherCampaign campaign = VoucherCampaign.builder().id(1).active(true).build();
         when(repository.findById(1)).thenReturn(Optional.of(campaign));
         when(repository.save(any())).thenAnswer(i -> i.getArguments()[0]);
@@ -230,7 +365,21 @@ class VoucherCampaignServiceTest {
         verify(repository).save(campaign);
     }
 
-    @Test @DisplayName("toggleStatus: Eroare ID inexistent")
+    @Test
+    @DisplayName("toggleStatus: Schimbă din inactiv în activ")
+    void toggleStatus_InactiveToActive_Success() {
+        VoucherCampaign campaign = VoucherCampaign.builder().id(2).active(false).build();
+        when(repository.findById(2)).thenReturn(Optional.of(campaign));
+        when(repository.save(any())).thenAnswer(i -> i.getArguments()[0]);
+
+        var response = service.toggleStatus(2);
+
+        assertThat(response.active()).isTrue();
+        verify(repository).save(campaign);
+    }
+
+    @Test
+    @DisplayName("toggleStatus: Eroare ID inexistent")
     void toggleStatus_NotFound_ThrowsException() {
         when(repository.findById(99)).thenReturn(Optional.empty());
 

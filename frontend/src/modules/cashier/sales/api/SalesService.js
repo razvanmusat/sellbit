@@ -25,8 +25,9 @@ export class SalesService {
   }
 
   static async closeReceipt(id) {
-    await client(`sales/receipts/${id}/close`, { method: 'POST' });
+    const result = await client(`sales/receipts/${id}/close`, { method: 'POST' });
     emitSalesDataChanged({ type: 'receipt-closed' });
+    return result;
   }
 
   static async createPartialRefund(id, request) {
@@ -42,6 +43,12 @@ export class SalesService {
   static async registerAdvancePayment(request) {
     await client('sales/receipts/advance', { body: request });
     emitSalesDataChanged({ type: 'advance-registered', warehouseId: request?.warehouseId ?? null });
+  }
+
+  static async registerGiftCard(request) {
+    const result = await client('sales/receipts/gift-card', { body: request });
+    emitSalesDataChanged({ type: 'gift-card-sold', warehouseId: request?.warehouseId ?? null });
+    return result;
   }
 
   static async getReceiptsReport(warehouseId, status, start, end) {

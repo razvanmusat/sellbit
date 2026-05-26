@@ -12,6 +12,7 @@ import {
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import PaymentsIcon from '@mui/icons-material/Payments';
+import CardGiftcardIcon from '@mui/icons-material/CardGiftcard';
 import { Navigate, useNavigate } from 'react-router-dom';
 
 import { useSellPage } from '../hooks/useSellPage';
@@ -19,9 +20,11 @@ import { useSellPage } from '../hooks/useSellPage';
 import ReceiptCard from '../components/receipt/ReceiptCard';
 import AddReceiptModal from '../components/modals/AddReceiptModal';
 import CashAdvanceModal from '../components/modals/CashAdvanceModal';
+import GiftCardModal from '../components/modals/GiftCardModal';
 import OpenedReceiptCard from '../components/receipt/OpenedReceiptCard';
 import AddPaymentModal from '../components/modals/AddPaymentModal';
 import CancelReceiptModal from '../components/modals/CancelReceiptModal';
+import VoucherIssuanceDialog from '../components/modals/VoucherIssuanceDialog';
 
 const SellPage = () => {
   const navigate = useNavigate();
@@ -42,6 +45,9 @@ const SellPage = () => {
     error,
     getFriendlyErrorMessage,
     actions,
+    voucherIssuance,
+    giftCardStatus,
+    user,
   } = useSellPage();
 
   // Loading / Redirect pentru bonul deschis
@@ -96,6 +102,17 @@ const SellPage = () => {
             >
               Încasează Avans
             </Button>
+            {giftCardStatus?.active && (
+              <Button
+                variant="outlined"
+                color="secondary"
+                startIcon={<CardGiftcardIcon />}
+                onClick={() => toggleModal('giftCard', true)}
+                size={isSmallScreen ? 'small' : 'medium'}
+              >
+                Vinde Card Cadou
+              </Button>
+            )}
           </Box>
 
           <Box sx={{ p: 1 }}>
@@ -139,6 +156,23 @@ const SellPage = () => {
         warehouses={warehouses}
         loading={loading.paymentMethods === 'pending'}
       />
+
+      <GiftCardModal
+        open={modals.giftCard}
+        onClose={() => toggleModal('giftCard', false)}
+        onSubmit={actions.createGiftCard}
+        paymentMethods={paymentMethods}
+        warehouses={warehouses}
+        loading={loading.paymentMethods === 'pending'}
+      />
+
+      {voucherIssuance && (
+        <VoucherIssuanceDialog
+          issuance={voucherIssuance}
+          onDismiss={actions.dismissVoucherIssuance}
+          cashierId={user?.id}
+        />
+      )}
 
       {editingReceipt && (
         <AddPaymentModal

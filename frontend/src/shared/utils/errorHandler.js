@@ -157,6 +157,12 @@ const ERROR_MESSAGES = {
   "ERROR.VOUCHER_CAMPAIGN.CODE_TOO_SHORT": "Codul voucherului este prea scurt.",
   "ERROR.VOUCHER_CAMPAIGN.CODE_TOO_LONG": "Codul voucherului este prea lung.",
   "ERROR.VOUCHER_CAMPAIGN.NOT_FOUND": "Campania de vouchere nu a fost gasita.",
+  "ERROR.VOUCHER_CAMPAIGN.TYPE_REQUIRED": "Tipul campaniei este obligatoriu.",
+  "ERROR.VOUCHER_CAMPAIGN.INVALID_TYPE": "Tipul campaniei selectat este invalid.",
+  "ERROR.VOUCHER_CAMPAIGN.MAX_DISCOUNT_REQUIRED": "Suma maxima de discount este obligatorie pentru discount procentual.",
+  "ERROR.VOUCHER_CAMPAIGN.NOT_LOYALTY": "Campania selectata nu este de tip Fidelitate.",
+  "ERROR.GIFT_CARD_CAMPAIGN.NOT_ACTIVE": "Nu exista nicio campanie de Card Cadou activa.",
+  "ERROR.VOUCHER.CODE_SPACE_EXHAUSTED": "Nu mai exista coduri de voucher disponibile pentru aceasta campanie. Mareste lungimea codului.",
 
   // --- STORE / COMPANY ---
   "ERROR.STORE.NOT_CONFIGURED": "Datele companiei nu sunt configurate încă.",

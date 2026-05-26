@@ -1,20 +1,52 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Dialog, DialogTitle, DialogContent, DialogActions,
     Button, Table, TableBody, TableCell, TableContainer,
     TableHead, TableRow, Paper, Typography, Box, Divider,
-    IconButton, Tooltip
+    IconButton, Tooltip, CircularProgress,
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
+import PrintIcon from '@mui/icons-material/Print';
 import dayjs from 'dayjs';
+import { VoucherCampaignService } from '../../../admin/vouchers/api/VoucherCampaignService';
+import {
+    buildRegularVoucherBody,
+    buildLoyaltyCardBody,
+    buildGiftCardBody,
+    printVoucherPages,
+} from '../../../../shared/utils/printVoucher';
+
+const buildVoucherBody = (v) => {
+    if (v.campaignType === 'GIFT_CARD') {
+        return buildGiftCardBody({ code: v.code, discountValue: v.discountValue, expiresAt: v.expiresAt, receiptTemplate: v.receiptTemplate });
+    }
+    if (v.campaignType === 'LOYALTY') {
+        return buildLoyaltyCardBody({ code: v.code, stampsRequired: v.stampsRequired, discountType: v.discountType, discountValue: v.discountValue, expiresAt: v.expiresAt, receiptTemplate: v.receiptTemplate });
+    }
+    return buildRegularVoucherBody({ code: v.code, discountType: v.discountType, discountValue: v.discountValue, expiresAt: v.expiresAt, receiptTemplate: v.receiptTemplate });
+};
 
 const ReceiptDetailModal = ({ open, onClose, receipt }) => {
     const navigate = useNavigate();
+    const [reprintLoading, setReprintLoading] = useState(false);
     if (!receipt) return null;
 
     const isRefund = receipt.originalReceiptId !== null;
     const isCancelled = receipt.statusLabel === 'Anulat' || receipt.cancelReason != null;
+
+    const handleReprintVouchers = async () => {
+        setReprintLoading(true);
+        try {
+            const vouchers = await VoucherCampaignService.getIssuedByReceipt(receipt.id);
+            if (!vouchers?.length) return;
+            await printVoucherPages(vouchers.map(buildVoucherBody));
+        } catch {
+            // silent
+        } finally {
+            setReprintLoading(false);
+        }
+    };
 
     const cleanTableName = receipt.tableName?.replace(/^Masa:\s*/i, '') || 'Nespecificată';
 
@@ -167,7 +199,18 @@ const ReceiptDetailModal = ({ open, onClose, receipt }) => {
                 </TableContainer>
             </DialogContent>
 
-            <DialogActions sx={{ p: 2, borderTop: '1px solid #e0e0e0' }}>
+            <DialogActions sx={{ p: 2, borderTop: '1px solid #e0e0e0', gap: 1 }}>
+                {!isRefund && !isCancelled && (
+                    <Button
+                        variant="outlined"
+                        color="secondary"
+                        startIcon={reprintLoading ? <CircularProgress size={16} /> : <PrintIcon />}
+                        onClick={handleReprintVouchers}
+                        disabled={reprintLoading}
+                    >
+                        Reprint Voucher
+                    </Button>
+                )}
                 <Button onClick={onClose} variant="contained" color="primary" fullWidth>
                     Închide
                 </Button>

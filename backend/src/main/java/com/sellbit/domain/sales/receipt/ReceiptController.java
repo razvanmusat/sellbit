@@ -92,9 +92,8 @@ public class ReceiptController {
 
     @PreAuthorize("hasAnyAuthority('50', '100')")
     @PostMapping("/{id}/close")
-    public ResponseEntity<Void> close(@PathVariable Integer id) {
-        receiptService.closeReceipt(id);
-        return ResponseEntity.ok().build();
+    public ResponseEntity<com.sellbit.domain.voucher.customervoucher.CustomerVoucherDTOs.VoucherIssuanceResult> close(@PathVariable Integer id) {
+        return ResponseEntity.ok(receiptService.closeReceipt(id));
     }
 
     @PreAuthorize("hasAnyAuthority('50', '100')")
@@ -120,6 +119,18 @@ public class ReceiptController {
                 request.userId(),
                 request.note());
         return ResponseEntity.ok().build();
+    }
+
+    @PreAuthorize("hasAnyAuthority('50', '100')")
+    @PostMapping("/gift-card")
+    public ResponseEntity<com.sellbit.domain.voucher.customervoucher.CustomerVoucherDTOs.IssuedVoucherInfo> registerGiftCard(
+            @RequestBody @Valid ReceiptDTOs.GiftCardRequest request) {
+        return ResponseEntity.ok(receiptService.registerGiftCardPayment(
+                request.warehouseId(),
+                request.amount(),
+                request.paymentMethodCode(),
+                request.userId(),
+                request.note()));
     }
 
     @PreAuthorize("hasAuthority('100')")

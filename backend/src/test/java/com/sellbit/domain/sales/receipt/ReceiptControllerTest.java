@@ -54,7 +54,8 @@ class ReceiptControllerTest {
                 "Admin", LocalDateTime.now(), null, "Nota test", null, null,
                 false,
                 List.of(), // items
-                List.of()  // payments
+                List.of(), // payments
+                false
         );
 
         when(receiptService.createReceipt(any())).thenReturn(res);
@@ -133,7 +134,8 @@ class ReceiptControllerTest {
                 "Admin", LocalDateTime.now(), LocalDateTime.now(), null, null, 100,
                 false,
                 List.of(), // items
-                List.of()  // payments
+                List.of(), // payments
+                false
         );
 
         when(receiptService.createPartialRefund(eq(100), any())).thenReturn(response);
@@ -185,7 +187,8 @@ class ReceiptControllerTest {
                 "Admin", LocalDateTime.now(), null, null, null, null,
                 false,
                 List.of(), // items
-                List.of()  // payments
+                List.of(), // payments
+                false
         );
 
         when(receiptService.getActiveReceipts()).thenReturn(List.of(response));
@@ -215,7 +218,8 @@ class ReceiptControllerTest {
                 "Admin", LocalDateTime.now().minusDays(1), LocalDateTime.now(), null, null, null,
                 false,
                 List.of(), // items
-                List.of()  // payments
+                List.of(), // payments
+                false
         );
 
         when(receiptService.getReceiptsReport(eq(1), eq("CLOSED"), any(), any()))

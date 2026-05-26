@@ -65,7 +65,8 @@ public class ReceiptDTOs {
                         Integer originalReceiptId,
                         boolean internalCorrection,
                         List<ItemResponse> items,
-                        List<PaymentSummary> payments) {
+                        List<PaymentSummary> payments,
+                        boolean hasVouchers) {
         }
 
         public record SummaryResponse(
@@ -124,6 +125,15 @@ public class ReceiptDTOs {
 
         // DTO pentru încasarea rapidă a unui avans.
         public record AdvancePaymentRequest(
+                        @NotNull(message = "ERROR.WAREHOUSE.REQUIRED") Integer warehouseId,
+                        @NotNull(message = "ERROR.AMOUNT.REQUIRED") BigDecimal amount,
+                        @NotBlank(message = "ERROR.PAYMENT_METHOD.REQUIRED") String paymentMethodCode,
+                        @NotNull(message = "ERROR.USER.REQUIRED") Integer userId,
+                        String note) {
+        }
+
+        // DTO pentru vânzarea unui card cadou (emite bon + voucher cu suma specificată).
+        public record GiftCardRequest(
                         @NotNull(message = "ERROR.WAREHOUSE.REQUIRED") Integer warehouseId,
                         @NotNull(message = "ERROR.AMOUNT.REQUIRED") BigDecimal amount,
                         @NotBlank(message = "ERROR.PAYMENT_METHOD.REQUIRED") String paymentMethodCode,

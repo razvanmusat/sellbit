@@ -17,10 +17,20 @@ public interface CustomerVoucherRepository extends JpaRepository<CustomerVoucher
     boolean existsByCode(String code);
 
     Optional<CustomerVoucher> findByUsedReceiptId(Integer receiptId);
-    
+
+    boolean existsByIssuedReceiptId(Integer receiptId);
+
     Optional<CustomerVoucher> findByIssuedReceiptId(Integer receiptId);
 
-       List<CustomerVoucher> findAllByUsedTrueOrderByUsedAtDesc();
+    // Toate voucherele emise de un bon (REGULAR poate emite N)
+    List<CustomerVoucher> findAllByIssuedReceiptId(Integer receiptId);
+
+    // Count vouchere emise de o campanie (pentru loyalty stats)
+    long countByCampaignId(Integer campaignId);
+
+    long countByCampaignIdAndUsedTrue(Integer campaignId);
+
+    List<CustomerVoucher> findAllByUsedTrueOrderByUsedAtDesc();
 
     List<CustomerVoucher> findAllByUsedFalse();
 

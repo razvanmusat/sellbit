@@ -15,9 +15,27 @@ import dayjs from 'dayjs';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import AssignmentReturnIcon from '@mui/icons-material/AssignmentReturn';
 import PersonIcon from '@mui/icons-material/Person';
+import PrintIcon from '@mui/icons-material/Print';
 
 import RefundModal from '../components/RefundModal';
 import { useRefundPage } from '../hooks/useRefundPage';
+import { VoucherCampaignService } from '../../../admin/vouchers/api/VoucherCampaignService';
+import {
+  printVoucherPages,
+  buildGiftCardBody,
+  buildRegularVoucherBody,
+  buildLoyaltyCardBody
+} from '../../../../shared/utils/printVoucher';
+
+const buildVoucherBody = (v) => {
+  if (v.campaignType === 'GIFT_CARD') {
+    return buildGiftCardBody({ code: v.code, discountValue: v.discountValue, expiresAt: v.expiresAt, receiptTemplate: v.receiptTemplate });
+  }
+  if (v.campaignType === 'LOYALTY') {
+    return buildLoyaltyCardBody({ code: v.code, stampsRequired: v.stampsRequired, discountType: v.discountType, discountValue: v.discountValue, expiresAt: v.expiresAt, receiptTemplate: v.receiptTemplate });
+  }
+  return buildRegularVoucherBody({ code: v.code, discountType: v.discountType, discountValue: v.discountValue, expiresAt: v.expiresAt, receiptTemplate: v.receiptTemplate });
+};
 
 const RefundPage = () => {
   const { warehouses } = useOutletContext() || { warehouses: [] };
@@ -67,6 +85,22 @@ const RefundPage = () => {
     dispatch(resetCache());
     if (originalHandleRefundSuccess) originalHandleRefundSuccess();
   }, [dispatch, originalHandleRefundSuccess]);
+
+  const [reprintingId, setReprintingId] = useState(null);
+
+  const handleReprintVouchers = async (receiptId) => {
+    setReprintingId(receiptId);
+    try {
+      const vouchers = await VoucherCampaignService.getIssuedByReceipt(receiptId);
+      if (vouchers?.length) {
+        await printVoucherPages(vouchers.map(buildVoucherBody));
+      }
+    } catch {
+      // silent
+    } finally {
+      setReprintingId(null);
+    }
+  };
 
   const compactCellStyle = { padding: '4px 8px', width: '1%', whiteSpace: 'nowrap' };
   const fluidCellStyle = { padding: '4px 8px', width: 'auto' };
@@ -155,14 +189,25 @@ const RefundPage = () => {
                     </TableCell>
 
                     <TableCell align="center" sx={compactCellStyle}>
-                      <Button
-                        variant="outlined" size="small"
-                        startIcon={<VisibilityIcon />}
-                        onClick={() => handleOpenModal(row)}
-                        sx={{ textTransform: 'none', py: 0 }}
-                      >
-                        Vizualizează
-                      </Button>
+                      <Box display="flex" gap={1} justifyContent="center">
+                        <Button
+                          variant="outlined" size="small"
+                          startIcon={<VisibilityIcon />}
+                          onClick={() => handleOpenModal(row)}
+                          sx={{ textTransform: 'none', py: 0 }}
+                        >
+                          Vizualizează
+                        </Button>
+                        <Button
+                          variant="outlined" size="small" color="secondary"
+                          startIcon={reprintingId === row.id ? <CircularProgress size={14} /> : <PrintIcon />}
+                          onClick={() => handleReprintVouchers(row.id)}
+                          disabled={reprintingId === row.id}
+                          sx={{ textTransform: 'none', py: 0, visibility: row.hasVouchers ? 'visible' : 'hidden' }}
+                        >
+                          Voucher
+                        </Button>
+                      </Box>
                     </TableCell>
 
                     <TableCell align="left" sx={compactCellStyle}>

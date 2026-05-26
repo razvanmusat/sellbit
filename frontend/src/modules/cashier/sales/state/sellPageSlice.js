@@ -150,10 +150,22 @@ export const closeReceipt = createAsyncThunk(
   'sellPage/closeReceipt',
   async (receiptId, { rejectWithValue }) => {
     try {
-      await SalesService.closeReceipt(receiptId);
-      return Number(receiptId);
+      const issuanceResult = await SalesService.closeReceipt(receiptId);
+      // Returnăm atât receiptId cât și voucherele emise
+      return { receiptId: Number(receiptId), issuanceResult: issuanceResult || { vouchers: [], loyaltyCampaign: null } };
     } catch (error) {
       return rejectWithValue(error.message || 'Eroare la închiderea bonului.');
+    }
+  }
+);
+
+export const registerGiftCard = createAsyncThunk(
+  'sellPage/registerGiftCard',
+  async ({ warehouseId, amount, paymentMethodCode, userId, note }, { rejectWithValue }) => {
+    try {
+      return await SalesService.registerGiftCard({ warehouseId, amount, paymentMethodCode, userId, note });
+    } catch (error) {
+      return rejectWithValue(error.message || 'Nu s-a putut vinde cardul cadou.');
     }
   }
 );
@@ -218,19 +230,20 @@ const sellPageSlice = createSlice({
         state.error = null;
       })
 
+      .addCase(cancelReceipt.fulfilled, (state, action) => {
+        state.receipts = state.receipts.filter(r => r.id !== action.payload);
+        state.error = null;
+      })
+      .addCase(closeReceipt.fulfilled, (state, action) => {
+        state.receipts = state.receipts.filter(r => r.id !== action.payload.receiptId);
+        state.error = null;
+      })
+
       .addMatcher(
         isAnyOf(addOrUpdateReceiptItem.fulfilled, removeReceiptItem.fulfilled),
         (state, action) => {
           const index = state.receipts.findIndex(r => r.id === action.payload.id);
           if (index !== -1) state.receipts[index] = action.payload;
-          state.error = null;
-        }
-      )
-
-      .addMatcher(
-        isAnyOf(cancelReceipt.fulfilled, closeReceipt.fulfilled),
-        (state, action) => {
-          state.receipts = state.receipts.filter(r => r.id !== action.payload);
           state.error = null;
         }
       )

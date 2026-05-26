@@ -7,6 +7,7 @@ import { useVoucherSearch } from './useVoucherSearch';
 const INITIAL_CAMPAIGN_FORM = {
   id: null,
   name: '',
+  campaignType: 'REGULAR',
   validFromDate: '',
   validUntilDate: '',
   discountType: '',
@@ -14,10 +15,12 @@ const INITIAL_CAMPAIGN_FORM = {
   maxDiscountAmount: '',
   minAmount: '',
   minHoursPlayed: '',
-  requiredProductId: '',
-  requiredProductName: '',
+  requiredProductIds: [],
+  requiredProductNames: [],
   applicableProductId: '',
   applicableProductName: '',
+  vouchersPerReceipt: 1,
+  stampsRequired: '',
   validDays: '',
   applicableDays: '',
   prefix: '',
@@ -88,10 +91,11 @@ export const useVoucherMainPage = () => {
   const openEditCampaign = async (campaign) => {
     const today = new Date().toISOString().split('T')[0];
     const isExpired = campaign.validUntilDate && campaign.validUntilDate < today;
-    
+
     setCampaignForm({
       id: campaign.id,
       name: campaign.name || '',
+      campaignType: campaign.campaignType || 'REGULAR',
       validFromDate: campaign.validFromDate || '',
       validUntilDate: campaign.validUntilDate || '',
       discountType: campaign.discountType || '',
@@ -99,10 +103,12 @@ export const useVoucherMainPage = () => {
       maxDiscountAmount: campaign.maxDiscountAmount ?? '',
       minAmount: campaign.minAmount ?? '',
       minHoursPlayed: campaign.minHoursPlayed ?? '',
-      requiredProductId: campaign.requiredProductId ?? '',
-      requiredProductName: campaign.requiredProductName || '',
+      requiredProductIds: campaign.requiredProductIds ?? [],
+      requiredProductNames: campaign.requiredProductNames ?? [],
       applicableProductId: campaign.applicableProductId ?? '',
       applicableProductName: campaign.applicableProductName || '',
+      vouchersPerReceipt: campaign.vouchersPerReceipt ?? 1,
+      stampsRequired: campaign.stampsRequired ?? '',
       validDays: campaign.validDays ?? '',
       applicableDays: campaign.applicableDays || '',
       prefix: campaign.prefix || '',
@@ -136,7 +142,7 @@ export const useVoucherMainPage = () => {
       return;
     }
     if (campaignForm.isReactivating) {
-      if (campaignForm.validFromDate === campaignForm.oldValidFromDate && 
+      if (campaignForm.validFromDate === campaignForm.oldValidFromDate &&
           campaignForm.validUntilDate === campaignForm.oldValidUntilDate) {
         setSnackbar({
           open: true,
@@ -146,20 +152,28 @@ export const useVoucherMainPage = () => {
         return;
       }
     }
-    if (!campaignForm.discountType || campaignForm.discountValue === '') {
-      setSnackbar({ open: true, severity: 'warning', message: 'Completeaza tipul si valoarea discountului.' });
-      return;
-    }
-    if (campaignForm.discountType === 'PERCENT' && campaignForm.maxDiscountAmount === '') {
-      setSnackbar({ open: true, severity: 'warning', message: 'Completeaza suma maxima a discountului pentru discount procentual.' });
-      return;
-    }
-    if (campaignForm.minAmount === '') {
-      setSnackbar({ open: true, severity: 'warning', message: 'Completeaza suma minima a bonului.' });
-      return;
+    const isGiftCard = campaignForm.campaignType === 'GIFT_CARD';
+    const isLoyalty = campaignForm.campaignType === 'LOYALTY';
+    if (!isGiftCard) {
+      if (!campaignForm.discountType || campaignForm.discountValue === '') {
+        setSnackbar({ open: true, severity: 'warning', message: 'Completeaza tipul si valoarea discountului.' });
+        return;
+      }
+      if (campaignForm.discountType === 'PERCENT' && campaignForm.maxDiscountAmount === '') {
+        setSnackbar({ open: true, severity: 'warning', message: 'Completeaza suma maxima a discountului pentru discount procentual.' });
+        return;
+      }
+      if (campaignForm.minAmount === '') {
+        setSnackbar({ open: true, severity: 'warning', message: 'Completeaza suma minima a bonului.' });
+        return;
+      }
     }
     if (campaignForm.validDays === '') {
       setSnackbar({ open: true, severity: 'warning', message: 'Completeaza valabilitatea voucherului (zile).' });
+      return;
+    }
+    if (isLoyalty && (campaignForm.stampsRequired === '' || Number(campaignForm.stampsRequired) < 1)) {
+      setSnackbar({ open: true, severity: 'warning', message: 'Completeaza numarul de stampile necesare.' });
       return;
     }
     if (campaignForm.applicableDays?.trim()) {

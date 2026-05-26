@@ -3,12 +3,13 @@ package com.sellbit.domain.voucher.vouchercampaign;
 import jakarta.validation.constraints.*;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 public class VoucherCampaignDTOs {
 
     public record Request(
         @NotBlank(message = "ERROR.VOUCHER_CAMPAIGN.NAME_REQUIRED")
-        @Size(max = 100, message = "ERROR.VOUCHER_CAMPAIGN.NAME_TOO_LONG") 
+        @Size(max = 100, message = "ERROR.VOUCHER_CAMPAIGN.NAME_TOO_LONG")
         String name,
 
         @NotNull(message = "ERROR.VOUCHER_CAMPAIGN.START_DATE_REQUIRED")
@@ -17,19 +18,18 @@ public class VoucherCampaignDTOs {
         @NotNull(message = "ERROR.VOUCHER_CAMPAIGN.END_DATE_REQUIRED")
         LocalDate validUntilDate,
 
-        @NotBlank(message = "ERROR.VOUCHER_CAMPAIGN.DISCOUNT_TYPE_REQUIRED")
-        @Size(max = 50, message = "ERROR.VOUCHER_CAMPAIGN.TYPE_TOO_LONG") 
+        // Nullable pt GIFT_CARD (valoarea vine din bon)
+        @Size(max = 50, message = "ERROR.VOUCHER_CAMPAIGN.TYPE_TOO_LONG")
         String discountType,
 
-        @NotNull(message = "ERROR.VOUCHER_CAMPAIGN.DISCOUNT_VALUE_REQUIRED")
-        @DecimalMin(value = "0.0", inclusive = false, message = "ERROR.VOUCHER_CAMPAIGN.VALUE_MUST_BE_POSITIVE")
-        @Digits(integer = 8, fraction = 2, message = "ERROR.VOUCHER_CAMPAIGN.INVALID_FORMAT") // Previne overflow DB
+        // Nullable pt GIFT_CARD
+        @Digits(integer = 8, fraction = 2, message = "ERROR.VOUCHER_CAMPAIGN.INVALID_FORMAT")
         BigDecimal discountValue,
 
         @Digits(integer = 8, fraction = 2, message = "ERROR.VOUCHER_CAMPAIGN.INVALID_FORMAT")
-        BigDecimal maxDiscountAmount, // Obligatoriu doar pentru discount de tip PERCENT; validare se face in service
+        BigDecimal maxDiscountAmount,
 
-        @NotNull(message = "ERROR.VOUCHER_CAMPAIGN.MIN_AMOUNT_REQUIRED")
+        // Nullable pt GIFT_CARD (nu are suma minima — vanzarea e manuala)
         @DecimalMin(value = "0.0", message = "ERROR.VOUCHER_CAMPAIGN.MIN_AMOUNT_POSITIVE")
         @Digits(integer = 8, fraction = 2)
         BigDecimal minAmount,
@@ -37,7 +37,7 @@ public class VoucherCampaignDTOs {
         @Min(value = 0, message = "ERROR.VOUCHER_CAMPAIGN.HOURS_POSITIVE")
         Integer minHoursPlayed,
 
-        Integer requiredProductId,
+        List<Integer> requiredProductIds,
         Integer applicableProductId,
 
         @NotNull(message = "ERROR.VOUCHER_CAMPAIGN.DAYS_REQUIRED")
@@ -45,18 +45,25 @@ public class VoucherCampaignDTOs {
         Integer validDays,
 
         @Size(max = 50, message = "ERROR.VOUCHER_CAMPAIGN.DAYS_STRING_TOO_LONG")
-        @Pattern(regexp = "^[1-7](,[1-7])*$", message = "ERROR.VOUCHER_CAMPAIGN.INVALID_DAYS_FORMAT") 
+        @Pattern(regexp = "^[1-7](,[1-7])*$", message = "ERROR.VOUCHER_CAMPAIGN.INVALID_DAYS_FORMAT")
         String applicableDays,
 
         @Size(max = 20, message = "ERROR.VOUCHER_CAMPAIGN.PREFIX_TOO_LONG")
-        @Pattern(regexp = "^[A-Z0-9\\-]+$", message = "ERROR.VOUCHER_CAMPAIGN.PREFIX_INVALID_CHARS") // Opțional: Doar litere mari, cifre și cratimă
+        @Pattern(regexp = "^[A-Z0-9\\-]+$", message = "ERROR.VOUCHER_CAMPAIGN.PREFIX_INVALID_CHARS")
         String prefix,
 
         @Min(value = 3, message = "ERROR.VOUCHER_CAMPAIGN.CODE_TOO_SHORT")
         @Max(value = 20, message = "ERROR.VOUCHER_CAMPAIGN.CODE_TOO_LONG")
         Integer codeLength,
 
-        String receiptTemplate
+        String receiptTemplate,
+
+        // --- CÂMPURI NOI ---
+        @NotBlank(message = "ERROR.VOUCHER_CAMPAIGN.TYPE_REQUIRED")
+        String campaignType,         // REGULAR / GIFT_CARD / LOYALTY
+
+        @Min(value = 1) Integer vouchersPerReceipt,  // nullable → default 1
+        @Min(value = 1) Integer stampsRequired        // nullable, doar pt LOYALTY
     ) {}
 
     public record Response(
@@ -71,13 +78,23 @@ public class VoucherCampaignDTOs {
         BigDecimal minAmount,
         Integer minHoursPlayed,
         String applicableDays,
-        Integer requiredProductId,
+        List<Integer> requiredProductIds,
         Integer applicableProductId,
-        String requiredProductName,
+        List<String> requiredProductNames,
         String applicableProductName,
         Integer validDays,
         String prefix,
         Integer codeLength,
-        String receiptTemplate
+        String receiptTemplate,
+        // --- CÂMPURI NOI ---
+        String campaignType,
+        String campaignTypeLabel,
+        Integer vouchersPerReceipt,
+        Integer stampsRequired
+    ) {}
+
+    public record ActiveGiftCardResponse(
+        boolean active,
+        Integer campaignId
     ) {}
 }

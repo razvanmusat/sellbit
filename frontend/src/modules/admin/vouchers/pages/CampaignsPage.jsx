@@ -12,6 +12,7 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import EditIcon from '@mui/icons-material/Edit';
+import VisibilityIcon from '@mui/icons-material/Visibility';
 
 import dayjs from 'dayjs';
 
@@ -29,6 +30,12 @@ const getDiscountLabel = (type, value) => {
   return `${Number(value).toFixed(2)} lei`;
 };
 
+const CAMPAIGN_TYPE_LABELS = {
+  REGULAR: { label: 'Regular', color: 'primary' },
+  GIFT_CARD: { label: 'Card Cadou', color: 'secondary' },
+  LOYALTY: { label: 'Fidelitate', color: 'warning' },
+};
+
 const CampaignsPage = ({
   campaignsLoading,
   sortedCampaigns,
@@ -36,6 +43,7 @@ const CampaignsPage = ({
   onCreateCampaign,
   onEditCampaign,
   onToggleCampaign,
+  onPreviewCampaign,
 }) => {
   return (
     <>
@@ -73,19 +81,35 @@ const CampaignsPage = ({
                       color={campaign.active ? 'success' : 'default'}
                       label={campaign.active ? 'Activa' : 'Inactiva'}
                     />
+                    {campaign.campaignType && (
+                      <Chip
+                        size="small"
+                        color={CAMPAIGN_TYPE_LABELS[campaign.campaignType]?.color || 'default'}
+                        label={CAMPAIGN_TYPE_LABELS[campaign.campaignType]?.label || campaign.campaignType}
+                        variant="outlined"
+                      />
+                    )}
                   </Stack>
                   <Typography variant="body2" color="text.secondary">
                     {formatDate(campaign.validFromDate)} - {formatDate(campaign.validUntilDate)}
                   </Typography>
                   <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mt: 1 }}>
-                    <Chip size="small" label={getDiscountLabel(campaign.discountType, campaign.discountValue)} />
+                    {campaign.campaignType !== 'GIFT_CARD' && (
+                      <Chip size="small" label={getDiscountLabel(campaign.discountType, campaign.discountValue)} />
+                    )}
+                    {campaign.campaignType === 'REGULAR' && campaign.vouchersPerReceipt > 1 && (
+                      <Chip size="small" label={`${campaign.vouchersPerReceipt}x voucher/bon`} />
+                    )}
+                    {campaign.campaignType === 'LOYALTY' && campaign.stampsRequired && (
+                      <Chip size="small" label={`${campaign.stampsRequired} stampile`} />
+                    )}
                     {campaign.applicableDays && (
                       <Chip size="small" label={`Zile: ${campaign.applicableDays}`} />
                     )}
-                    {campaign.requiredProductId && (
+                    {campaign.requiredProductIds?.length > 0 && (
                       <Chip
                         size="small"
-                        label={`Produs necesar: ${campaign.requiredProductName || `#${campaign.requiredProductId}`}`}
+                        label={`Produse necesare: ${(campaign.requiredProductNames || campaign.requiredProductIds).join(', ')}`}
                       />
                     )}
                     {campaign.applicableProductId && (
@@ -98,6 +122,16 @@ const CampaignsPage = ({
                 </Box>
 
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    color="info"
+                    startIcon={<VisibilityIcon />}
+                    onClick={() => onPreviewCampaign(campaign)}
+                    disabled={saving}
+                  >
+                    Preview
+                  </Button>
                   <Button
                     size="small"
                     variant="outlined"

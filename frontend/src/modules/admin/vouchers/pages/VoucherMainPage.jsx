@@ -17,6 +17,43 @@ import { useVoucherMainPage } from '../hooks/useVoucherMainPage';
 import VoucherCampaignFormDialog from '../components/VoucherCampaignFormDialog';
 import CampaignsPage from './CampaignsPage';
 import EmitedVouchersPage from './EmitedVouchersPage';
+import LoyaltyStatsTab from '../components/LoyaltyStatsTab';
+import {
+  printVoucherHtml,
+  buildRegularVoucherHtml,
+  buildGiftCardHtml,
+  buildLoyaltyCardHtml,
+} from '../../../../shared/utils/printVoucher';
+
+const FAKE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+function generateFakeSuffix(length = 4) {
+  return Array.from({ length }, () => FAKE_CHARS[Math.floor(Math.random() * FAKE_CHARS.length)]).join('');
+}
+
+async function previewCampaign(campaign) {
+  const suffix = generateFakeSuffix(campaign.codeLength || 4);
+  const code = campaign.prefix ? `${campaign.prefix}-${suffix}` : suffix;
+  const isGiftCard = campaign.campaignType === 'GIFT_CARD';
+  let expiresAt = campaign.validUntilDate;
+  if (isGiftCard && campaign.validDays) {
+    const d = new Date();
+    d.setDate(d.getDate() + campaign.validDays);
+    expiresAt = d.toISOString().slice(0, 10);
+  }
+  const params = {
+    code,
+    discountType: campaign.discountType,
+    discountValue: isGiftCard ? 1200 : campaign.discountValue,
+    expiresAt,
+    receiptTemplate: campaign.receiptTemplate,
+    stampsRequired: campaign.stampsRequired,
+  };
+  let html;
+  if (isGiftCard) html = await buildGiftCardHtml(params);
+  else if (campaign.campaignType === 'LOYALTY') html = await buildLoyaltyCardHtml(params);
+  else html = await buildRegularVoucherHtml(params);
+  printVoucherHtml(html);
+}
 
 const VoucherMainPage = () => {
   const {
@@ -68,6 +105,7 @@ const VoucherMainPage = () => {
       >
         <Tab label="Campanii" value="campaigns" />
         <Tab label="Vouchere emise" value="vouchers" />
+        <Tab label="Fidelitate" value="loyalty" />
       </Tabs>
 
       {activeTab === 'campaigns' && (
@@ -78,7 +116,12 @@ const VoucherMainPage = () => {
           onCreateCampaign={openCreateCampaign}
           onEditCampaign={openEditCampaign}
           onToggleCampaign={requestToggleCampaign}
+          onPreviewCampaign={previewCampaign}
         />
+      )}
+
+      {activeTab === 'loyalty' && (
+        <LoyaltyStatsTab campaigns={sortedCampaigns} />
       )}
 
       {activeTab === 'vouchers' && (

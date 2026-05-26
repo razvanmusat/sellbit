@@ -31,17 +31,21 @@ export const useCampaignManagement = () => {
   }, []);
 
   const createCampaign = useCallback(async (campaignData) => {
+    const isGiftCard = campaignData.campaignType === 'GIFT_CARD';
     const payload = {
       name: campaignData.name.trim(),
+      campaignType: campaignData.campaignType,
       validFromDate: campaignData.validFromDate,
       validUntilDate: campaignData.validUntilDate,
-      discountType: campaignData.discountType,
-      discountValue: parseNumberOrNull(campaignData.discountValue),
+      discountType: isGiftCard ? null : (campaignData.discountType || null),
+      discountValue: isGiftCard ? null : parseNumberOrNull(campaignData.discountValue),
       maxDiscountAmount: parseNumberOrNull(campaignData.maxDiscountAmount),
-      minAmount: parseNumberOrNull(campaignData.minAmount),
+      minAmount: isGiftCard ? null : parseNumberOrNull(campaignData.minAmount),
       minHoursPlayed: parseIntOrNull(campaignData.minHoursPlayed),
-      requiredProductId: parseIntOrNull(campaignData.requiredProductId),
+      requiredProductIds: Array.isArray(campaignData.requiredProductIds) && campaignData.requiredProductIds.length ? campaignData.requiredProductIds : null,
       applicableProductId: parseIntOrNull(campaignData.applicableProductId),
+      vouchersPerReceipt: parseIntOrNull(campaignData.vouchersPerReceipt) ?? 1,
+      stampsRequired: parseIntOrNull(campaignData.stampsRequired),
       validDays: parseIntOrNull(campaignData.validDays),
       applicableDays: campaignData.applicableDays?.trim() || null,
       prefix: campaignData.prefix?.trim() ? campaignData.prefix.trim().toUpperCase() : null,
@@ -54,17 +58,21 @@ export const useCampaignManagement = () => {
   }, [loadCampaigns]);
 
   const updateCampaign = useCallback(async (campaignId, campaignData) => {
+    const isGiftCard = campaignData.campaignType === 'GIFT_CARD';
     const payload = {
       name: campaignData.name.trim(),
+      campaignType: campaignData.campaignType,
       validFromDate: campaignData.validFromDate,
       validUntilDate: campaignData.validUntilDate,
-      discountType: campaignData.discountType,
-      discountValue: parseNumberOrNull(campaignData.discountValue),
+      discountType: isGiftCard ? null : (campaignData.discountType || null),
+      discountValue: isGiftCard ? null : parseNumberOrNull(campaignData.discountValue),
       maxDiscountAmount: parseNumberOrNull(campaignData.maxDiscountAmount),
-      minAmount: parseNumberOrNull(campaignData.minAmount),
+      minAmount: isGiftCard ? null : parseNumberOrNull(campaignData.minAmount),
       minHoursPlayed: parseIntOrNull(campaignData.minHoursPlayed),
-      requiredProductId: parseIntOrNull(campaignData.requiredProductId),
+      requiredProductIds: Array.isArray(campaignData.requiredProductIds) && campaignData.requiredProductIds.length ? campaignData.requiredProductIds : null,
       applicableProductId: parseIntOrNull(campaignData.applicableProductId),
+      vouchersPerReceipt: parseIntOrNull(campaignData.vouchersPerReceipt) ?? 1,
+      stampsRequired: parseIntOrNull(campaignData.stampsRequired),
       validDays: parseIntOrNull(campaignData.validDays),
       applicableDays: campaignData.applicableDays?.trim() || null,
       prefix: campaignData.prefix?.trim() ? campaignData.prefix.trim().toUpperCase() : null,

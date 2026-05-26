@@ -20,52 +20,31 @@ public class VoucherCampaignService {
 
     private final VoucherCampaignRepository repository;
     private final ProductRepository productRepository;
+    private final CampaignTypeRepository campaignTypeRepository;
 
     @Transactional(readOnly = true)
     public List<String> getActivePrefixes(LocalDate today) {
         return repository.findActivePrefixes(today);
     }
 
+    @Transactional(readOnly = true)
+    public VoucherCampaignDTOs.ActiveGiftCardResponse getActiveGiftCardStatus() {
+        return repository.findActiveGiftCardCampaign()
+                .map(c -> new VoucherCampaignDTOs.ActiveGiftCardResponse(true, c.getId()))
+                .orElse(new VoucherCampaignDTOs.ActiveGiftCardResponse(false, null));
+    }
+
     @Transactional
     public VoucherCampaignDTOs.Response create(@Valid VoucherCampaignDTOs.Request request) {
-        if (request.validUntilDate().isBefore(request.validFromDate())) {
-            throw new RuntimeException("ERROR.VOUCHER_CAMPAIGN.INVALID_DATE_RANGE");
-        }
+        validateDates(request);
+        validateProducts(request);
+        validateDiscount(request);
 
-        if (request.requiredProductId() != null) {
-            boolean exists = productRepository.existsById(request.requiredProductId());
-            if (!exists) {
-                throw new RuntimeException("ERROR.VOUCHER_CAMPAIGN.REQUIRED_PRODUCT_NOT_FOUND");
-            }
-        }
-
-        if (request.applicableProductId() != null) {
-            boolean exists = productRepository.existsById(request.applicableProductId());
-            if (!exists) {
-                throw new RuntimeException("ERROR.VOUCHER_CAMPAIGN.APPLICABLE_PRODUCT_NOT_FOUND");
-            }
-        }
-
-        if (request.discountValue() != null && request.discountValue().compareTo(java.math.BigDecimal.ZERO) < 0) {
-            throw new RuntimeException("ERROR.VOUCHER_CAMPAIGN.NEGATIVE_DISCOUNT");
-        }
-
-        if ("PERCENT".equals(request.discountType()) && request.discountValue() != null) {
-            if (request.discountValue().compareTo(new java.math.BigDecimal("100")) > 0) {
-                throw new RuntimeException("ERROR.VOUCHER_CAMPAIGN.PERCENT_OVER_100");
-            }
-            // Pentru discount PERCENT, maxDiscountAmount este obligatoriu
-            if (request.maxDiscountAmount() == null) {
-                throw new RuntimeException("ERROR.VOUCHER_CAMPAIGN.MAX_DISCOUNT_REQUIRED");
-            }
-            if (request.maxDiscountAmount().compareTo(java.math.BigDecimal.ZERO) <= 0) {
-                throw new RuntimeException("ERROR.VOUCHER_CAMPAIGN.MAX_DISCOUNT_POSITIVE");
-            }
-        }
+        CampaignType campaignType = campaignTypeRepository.findByCode(
+                request.campaignType() != null ? request.campaignType() : "REGULAR")
+                .orElseThrow(() -> new RuntimeException("ERROR.VOUCHER_CAMPAIGN.INVALID_TYPE"));
 
         String finalPrefix = request.prefix() != null ? request.prefix() : "JOACA-";
-
-        // Verificăm dacă e deja folosit de o campanie activă
         if (repository.existsByPrefixAndActiveTrue(finalPrefix)) {
             throw new RuntimeException("ERROR.VOUCHER_CAMPAIGN.PREFIX_ALREADY_ACTIVE");
         }
@@ -79,62 +58,37 @@ public class VoucherCampaignService {
                 .maxDiscountAmount(request.maxDiscountAmount())
                 .minAmount(request.minAmount())
                 .minHoursPlayed(request.minHoursPlayed())
-                .requiredProductId(request.requiredProductId())
+                .requiredProductIds(request.requiredProductIds())
                 .applicableProductId(request.applicableProductId())
                 .validDays(request.validDays() != null ? request.validDays() : 30)
                 .applicableDays(request.applicableDays())
-                .prefix(request.prefix() != null ? request.prefix() : "JOACA-")
+                .prefix(finalPrefix)
                 .codeLength(request.codeLength() != null ? request.codeLength() : 4)
                 .receiptTemplate(request.receiptTemplate())
+                .campaignType(campaignType)
+                .vouchersPerReceipt(request.vouchersPerReceipt() != null ? request.vouchersPerReceipt() : 1)
+                .stampsRequired(request.stampsRequired())
                 .active(true)
                 .build();
 
-        VoucherCampaign saved = repository.save(campaign);
-        return mapToResponse(saved);
+        return mapToResponse(repository.save(campaign));
     }
 
     @Transactional
     public VoucherCampaignDTOs.Response update(Integer id, @Valid VoucherCampaignDTOs.Request request) {
-        if (request.validUntilDate().isBefore(request.validFromDate())) {
-            throw new RuntimeException("ERROR.VOUCHER_CAMPAIGN.INVALID_DATE_RANGE");
-        }
+        validateDates(request);
 
         VoucherCampaign campaign = repository.findById(id)
                 .orElseThrow(() -> new RuntimeException("ERROR.VOUCHER_CAMPAIGN.NOT_FOUND"));
 
-        if (request.requiredProductId() != null) {
-            boolean exists = productRepository.existsById(request.requiredProductId());
-            if (!exists) {
-                throw new RuntimeException("ERROR.VOUCHER_CAMPAIGN.REQUIRED_PRODUCT_NOT_FOUND");
-            }
-        }
+        validateProducts(request);
+        validateDiscount(request);
 
-        if (request.applicableProductId() != null) {
-            boolean exists = productRepository.existsById(request.applicableProductId());
-            if (!exists) {
-                throw new RuntimeException("ERROR.VOUCHER_CAMPAIGN.APPLICABLE_PRODUCT_NOT_FOUND");
-            }
-        }
-
-        if (request.discountValue() != null && request.discountValue().compareTo(java.math.BigDecimal.ZERO) < 0) {
-            throw new RuntimeException("ERROR.VOUCHER_CAMPAIGN.NEGATIVE_DISCOUNT");
-        }
-
-        if ("PERCENT".equals(request.discountType()) && request.discountValue() != null) {
-            if (request.discountValue().compareTo(new java.math.BigDecimal("100")) > 0) {
-                throw new RuntimeException("ERROR.VOUCHER_CAMPAIGN.PERCENT_OVER_100");
-            }
-            // Pentru discount PERCENT, maxDiscountAmount este obligatoriu
-            if (request.maxDiscountAmount() == null) {
-                throw new RuntimeException("ERROR.VOUCHER_CAMPAIGN.MAX_DISCOUNT_REQUIRED");
-            }
-            if (request.maxDiscountAmount().compareTo(java.math.BigDecimal.ZERO) <= 0) {
-                throw new RuntimeException("ERROR.VOUCHER_CAMPAIGN.MAX_DISCOUNT_POSITIVE");
-            }
-        }
+        CampaignType campaignType = campaignTypeRepository.findByCode(
+                request.campaignType() != null ? request.campaignType() : "REGULAR")
+                .orElseThrow(() -> new RuntimeException("ERROR.VOUCHER_CAMPAIGN.INVALID_TYPE"));
 
         String finalPrefix = request.prefix() != null ? request.prefix() : "JOACA-";
-
         if (campaign.getActive() && repository.existsByPrefixAndActiveTrueAndIdNot(finalPrefix, campaign.getId())) {
             throw new RuntimeException("ERROR.VOUCHER_CAMPAIGN.PREFIX_ALREADY_ACTIVE");
         }
@@ -147,29 +101,25 @@ public class VoucherCampaignService {
         campaign.setMaxDiscountAmount(request.maxDiscountAmount());
         campaign.setMinAmount(request.minAmount());
         campaign.setMinHoursPlayed(request.minHoursPlayed());
-        campaign.setRequiredProductId(request.requiredProductId());
+        campaign.setRequiredProductIds(request.requiredProductIds());
         campaign.setApplicableProductId(request.applicableProductId());
         campaign.setValidDays(request.validDays() != null ? request.validDays() : 30);
         campaign.setApplicableDays(request.applicableDays());
         campaign.setPrefix(finalPrefix);
         campaign.setCodeLength(request.codeLength() != null ? request.codeLength() : 4);
         campaign.setReceiptTemplate(request.receiptTemplate());
-        
-        // Reactivare automat daca campaign era inactiv dar acum are date valide
-        if (!campaign.getActive() && request.validUntilDate().isAfter(LocalDate.now())) {
-            campaign.setActive(true);
-        }
+        campaign.setCampaignType(campaignType);
+        campaign.setVouchersPerReceipt(request.vouchersPerReceipt() != null ? request.vouchersPerReceipt() : 1);
+        campaign.setStampsRequired(request.stampsRequired());
 
-        VoucherCampaign updated = repository.save(campaign);
-        return mapToResponse(updated);
+        return mapToResponse(repository.save(campaign));
     }
 
     @Transactional
     public List<VoucherCampaignDTOs.Response> getAll() {
         return repository.findAll().stream()
                 .peek(campaign -> {
-                    // Dezactivare automata daca campania a expirat
-                    if (campaign.getActive() && campaign.getValidUntilDate() != null 
+                    if (campaign.getActive() && campaign.getValidUntilDate() != null
                             && campaign.getValidUntilDate().isBefore(LocalDate.now())) {
                         campaign.setActive(false);
                         repository.save(campaign);
@@ -197,13 +147,52 @@ public class VoucherCampaignService {
     public VoucherCampaignDTOs.Response toggleStatus(Integer id) {
         VoucherCampaign campaign = repository.findById(id)
                 .orElseThrow(() -> new RuntimeException("ERROR.VOUCHER_CAMPAIGN.NOT_FOUND"));
-
         campaign.setActive(!campaign.getActive());
-        VoucherCampaign updated = repository.save(campaign);
-        return mapToResponse(updated);
+        return mapToResponse(repository.save(campaign));
     }
 
-    private VoucherCampaignDTOs.Response mapToResponse(VoucherCampaign c) {
+    // --- HELPERS ---
+
+    private void validateDates(VoucherCampaignDTOs.Request request) {
+        if (request.validUntilDate().isBefore(request.validFromDate())) {
+            throw new RuntimeException("ERROR.VOUCHER_CAMPAIGN.INVALID_DATE_RANGE");
+        }
+    }
+
+    private void validateProducts(VoucherCampaignDTOs.Request request) {
+        if (request.requiredProductIds() != null) {
+            for (Integer id : request.requiredProductIds()) {
+                if (!productRepository.existsById(id)) {
+                    throw new RuntimeException("ERROR.VOUCHER_CAMPAIGN.REQUIRED_PRODUCT_NOT_FOUND");
+                }
+            }
+        }
+        if (request.applicableProductId() != null && !productRepository.existsById(request.applicableProductId())) {
+            throw new RuntimeException("ERROR.VOUCHER_CAMPAIGN.APPLICABLE_PRODUCT_NOT_FOUND");
+        }
+    }
+
+    private void validateDiscount(VoucherCampaignDTOs.Request request) {
+        boolean isGiftCard = "GIFT_CARD".equals(request.campaignType());
+        if (isGiftCard) return; // valoarea vine din bon la runtime
+
+        if (request.discountValue() == null || request.discountValue().signum() == 0) {
+            throw new RuntimeException("ERROR.VOUCHER_CAMPAIGN.DISCOUNT_VALUE_REQUIRED");
+        }
+        if (request.discountValue().signum() < 0) {
+            throw new RuntimeException("ERROR.VOUCHER_CAMPAIGN.NEGATIVE_DISCOUNT");
+        }
+        if ("PERCENT".equals(request.discountType())) {
+            if (request.discountValue().compareTo(new java.math.BigDecimal("100")) > 0) {
+                throw new RuntimeException("ERROR.VOUCHER_CAMPAIGN.PERCENT_OVER_100");
+            }
+            if (request.maxDiscountAmount() == null || request.maxDiscountAmount().compareTo(java.math.BigDecimal.ZERO) <= 0) {
+                throw new RuntimeException("ERROR.VOUCHER_CAMPAIGN.MAX_DISCOUNT_REQUIRED");
+            }
+        }
+    }
+
+    VoucherCampaignDTOs.Response mapToResponse(VoucherCampaign c) {
         return new VoucherCampaignDTOs.Response(
                 c.getId(),
                 c.getName(),
@@ -216,22 +205,30 @@ public class VoucherCampaignService {
                 c.getMinAmount(),
                 c.getMinHoursPlayed(),
                 c.getApplicableDays(),
-                c.getRequiredProductId(),
+                c.getRequiredProductIds(),
                 c.getApplicableProductId(),
-                getProductName(c.getRequiredProductId()),
+                getProductNames(c.getRequiredProductIds()),
                 getProductName(c.getApplicableProductId()),
                 c.getValidDays(),
                 c.getPrefix(),
                 c.getCodeLength(),
-                c.getReceiptTemplate());
+                c.getReceiptTemplate(),
+                c.getCampaignType() != null ? c.getCampaignType().getCode() : "REGULAR",
+                c.getCampaignType() != null ? c.getCampaignType().getLabel() : "Campanie Regulată",
+                c.getVouchersPerReceipt(),
+                c.getStampsRequired()
+        );
     }
 
     private String getProductName(Integer productId) {
-        if (productId == null) {
-            return null;
-        }
-        return productRepository.findById(productId)
-                .map(p -> p.getName())
-                .orElse(null);
+        if (productId == null) return null;
+        return productRepository.findById(productId).map(p -> p.getName()).orElse(null);
+    }
+
+    private List<String> getProductNames(List<Integer> productIds) {
+        if (productIds == null || productIds.isEmpty()) return null;
+        return productIds.stream()
+                .map(this::getProductName)
+                .collect(Collectors.toList());
     }
 }

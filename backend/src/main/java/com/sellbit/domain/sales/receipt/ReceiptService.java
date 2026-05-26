@@ -180,7 +180,7 @@ public class ReceiptService {
         }
 
         @Transactional
-        public void closeReceipt(Integer receiptId) {
+        public com.sellbit.domain.voucher.customervoucher.CustomerVoucherDTOs.VoucherIssuanceResult closeReceipt(Integer receiptId) {
                 Receipt receipt = receiptRepository.findById(receiptId)
                                 .orElseThrow(() -> new RuntimeException("ERROR.RECEIPT.NOT_FOUND"));
 
@@ -220,7 +220,7 @@ public class ReceiptService {
                 receipt.setClosedAt(LocalDateTime.now());
                 receiptRepository.save(receipt);
 
-                voucherService.checkAndIssueVouchers(receipt);
+                return voucherService.checkAndIssueVouchers(receipt);
         }
 
         @Transactional
@@ -308,6 +308,8 @@ public class ReceiptService {
                                                 : null)
                                 .orElse(null);
 
+                boolean hasVouchers = customerVoucherRepository.existsByIssuedReceiptId(receipt.getId());
+
                 return new ReceiptDTOs.Response(
                                 receipt.getId(),
                                 receipt.getStatus().getLabel(),
@@ -325,7 +327,8 @@ public class ReceiptService {
                                 receipt.getOriginalReceipt() != null ? receipt.getOriginalReceipt().getId() : null,
                                 receipt.isInternalCorrection(),
                                 itemDTOs,
-                                paymentDTOs);
+                                paymentDTOs,
+                                hasVouchers);
         }
 
         // Creează un bon de stornare (parțială sau totală).
@@ -625,6 +628,104 @@ public class ReceiptService {
                                         movementNote,
                                         receipt.getId());
                 }
+        }
+
+        /**
+         * Vânzare card cadou: creează bon CLOSED (ca avans) + emite voucher FIXED cu suma specificată.
+         */
+        @Transactional
+        public com.sellbit.domain.voucher.customervoucher.CustomerVoucherDTOs.IssuedVoucherInfo registerGiftCardPayment(
+                        Integer warehouseId, BigDecimal amount, String paymentMethodCode,
+                        Integer userId, String note) {
+
+                if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+                        throw new RuntimeException("ERROR.GIFT_CARD.INVALID_AMOUNT");
+                }
+
+                Warehouse warehouse = warehouseRepository.findById(warehouseId)
+                                .orElseThrow(() -> new RuntimeException("ERROR.WAREHOUSE.NOT_FOUND"));
+
+                User user = userRepository.findById(userId)
+                                .orElseThrow(() -> new RuntimeException("ERROR.USER.NOT_FOUND"));
+
+                Product giftCardProduct = productRepository.findByProductTypeCode("GIFT_CARD")
+                                .stream().findFirst()
+                                .orElseThrow(() -> new RuntimeException("ERROR.PRODUCT.GIFT_CARD_NOT_CONFIGURED"));
+
+                ReceiptStatus closedStatus = statusRepository.findByCode("CLOSED")
+                                .orElseThrow(() -> new RuntimeException("ERROR.STATUS.NOT_FOUND"));
+
+                PaymentMethod method = paymentMethodRepository.findByCode(paymentMethodCode)
+                                .orElseThrow(() -> new RuntimeException("ERROR.PAYMENT_METHOD.NOT_FOUND"));
+
+                BigDecimal vatPercent = (giftCardProduct.getVatRate() != null
+                                && giftCardProduct.getVatRate().getRate() != null)
+                                                ? giftCardProduct.getVatRate().getRate()
+                                                : BigDecimal.ZERO;
+
+                BigDecimal vatDivisor = BigDecimal.ONE
+                                .add(vatPercent.divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP));
+                BigDecimal netAmount = amount.divide(vatDivisor, 2, RoundingMode.HALF_UP);
+                BigDecimal vatAmount = amount.subtract(netAmount);
+
+                Receipt receipt = Receipt.builder()
+                                .warehouse(warehouse)
+                                .user(user)
+                                .status(closedStatus)
+                                .tableName("Card Cadou")
+                                .note(note)
+                                .totalAmount(amount)
+                                .totalNet(netAmount)
+                                .totalVat(vatAmount)
+                                .createdAt(LocalDateTime.now())
+                                .closedAt(LocalDateTime.now())
+                                .build();
+
+                receipt = receiptRepository.save(receipt);
+
+                ReceiptItem item = ReceiptItem.builder()
+                                .product(giftCardProduct)
+                                .warehouse(warehouse)
+                                .quantity(BigDecimal.ONE)
+                                .unitPrice(amount)
+                                .purchaseUnitPrice(BigDecimal.ZERO)
+                                .vatRate(vatPercent)
+                                .lineTotal(amount)
+                                .netTotal(netAmount)
+                                .vatTotal(vatAmount)
+                                .isServiceTime(false)
+                                .serviceEndAt(null)
+                                .build();
+
+                receipt.addItem(item);
+                itemRepository.save(item);
+
+                ReceiptPayment payment = ReceiptPayment.builder()
+                                .paymentMethod(method)
+                                .amount(amount)
+                                .paidAt(LocalDateTime.now())
+                                .warehouse(warehouse)
+                                .build();
+
+                receipt.addPayment(payment);
+                paymentRepository.save(payment);
+
+                if ("CASH".equals(paymentMethodCode)) {
+                        String movementNote = "Vanzare Card Cadou (Bon #" + receipt.getId() + ")";
+                        if (note != null && !note.isBlank()) {
+                                movementNote += ": " + note;
+                        }
+                        cashMovementService.createMovement(
+                                        warehouse.getId(),
+                                        "SALE",
+                                        amount,
+                                        userId,
+                                        movementNote,
+                                        receipt.getId());
+                }
+
+                // Emite voucherul cu valoarea din bon
+                return voucherService.issueGiftCardVoucher(amount, receipt);
         }
 
         /**
