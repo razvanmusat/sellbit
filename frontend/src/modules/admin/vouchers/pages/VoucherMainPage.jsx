@@ -35,7 +35,7 @@ async function previewCampaign(campaign) {
   const code = campaign.prefix ? `${campaign.prefix}-${suffix}` : suffix;
   const isGiftCard = campaign.campaignType === 'GIFT_CARD';
   let expiresAt = campaign.validUntilDate;
-  if (isGiftCard && campaign.validDays) {
+  if (campaign.validDays) {
     const d = new Date();
     d.setDate(d.getDate() + campaign.validDays);
     expiresAt = d.toISOString().slice(0, 10);

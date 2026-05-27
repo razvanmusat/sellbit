@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -153,6 +154,16 @@ public class CustomerVoucherService {
             voucher.setUsedReceipt(null);
             voucher.setUsedAt(null);
             voucherRepository.save(voucher);
+        });
+    }
+
+    @Transactional
+    public Optional<String> cancelIssuedVoucher(Integer receiptId) {
+        return voucherRepository.findByIssuedReceiptId(receiptId).map(voucher -> {
+            voucher.setUsed(true);
+            voucher.setUsedAt(LocalDateTime.now());
+            voucherRepository.save(voucher);
+            return voucher.getCode();
         });
     }
 

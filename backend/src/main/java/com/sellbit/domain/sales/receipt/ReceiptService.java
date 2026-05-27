@@ -344,13 +344,20 @@ public class ReceiptService {
                 ReceiptStatus closedStatus = statusRepository.findByCode("CLOSED")
                                 .orElseThrow(() -> new RuntimeException("ERROR.STATUS.NOT_FOUND"));
 
+                Optional<String> cancelledVoucher = voucherService.cancelIssuedVoucher(originalReceiptId);
+                String refundNote = request.note();
+                if (cancelledVoucher.isPresent()) {
+                        String appendix = "Voucher " + cancelledVoucher.get() + " anulat";
+                        refundNote = (refundNote != null && !refundNote.isBlank()) ? refundNote + " | " + appendix : appendix;
+                }
+
                 Receipt refundReceipt = Receipt.builder()
                                 .warehouse(null)
                                 .status(closedStatus)
                                 .user(userRepository.getReferenceById(request.userId()))
                                 .tableName("Retur Bon #" + original.getId())
                                 .originalReceipt(original)
-                                .note(request.note())
+                                .note(refundNote)
                                 .totalAmount(BigDecimal.ZERO)
                                 .totalNet(BigDecimal.ZERO)
                                 .totalVat(BigDecimal.ZERO)

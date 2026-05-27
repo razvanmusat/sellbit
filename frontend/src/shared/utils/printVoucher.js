@@ -4,8 +4,10 @@ const LOGO_SRC = `${window.location.origin}/logoprint.png`;
 
 const VCARD = [
   'BEGIN:VCARD',
-  'VERSION:3.0',  
-  'ORG:Luca Land',
+  'VERSION:3.0',
+  'N:Land;Luca;;;',
+  'FN:Luca Land',
+  'ORG:Luca Land Play SRL',
   'TEL;TYPE=CELL:+40750233644',
   'EMAIL:office@LucaLand.ro',
   'ADR;TYPE=WORK:;;Str. Chiristigii nr. 1, Buzău',
@@ -33,7 +35,6 @@ const PAGE_STYLE = `<style>
     align-items: center;
   }
   .wrap {
-    border: 0.7px dashed #888;
     padding: 1.5mm 0.5mm;
     width: 55mm;
     height: 116mm;
@@ -46,7 +47,7 @@ const PAGE_STYLE = `<style>
   .discount { font-size: 11px; font-weight: bold; text-align: center; margin-bottom: 1mm; }
   .prefix { font-size: 8px; text-align: center; letter-spacing: 1px; color: #333; margin-bottom: 0.5mm; }
   .suffix { font-size: 18px; font-weight: bold; letter-spacing: 3px; border: 1.5px solid #000; padding: 1mm; display: inline-block; margin: 1.5mm 0; line-height: 1; }
-  hr.div { border: none; border-top: 0.5px dashed #000; width: 100%; margin: 1.5mm 0; }
+  hr.div { border: none; border-top: 0.5px solid #000; width: 100%; margin: 1.5mm 0; }
   .notes { font-size: 10px; text-align: center; line-height: 1.2; width: 100%; }
   .expiry { font-size: 14px; font-weight: bold; text-align: center; color: #222; margin-top: 1mm; }
   .qr { display: block; width: 30mm; height: 30mm; margin: auto auto 0; }
