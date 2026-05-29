@@ -159,12 +159,15 @@ public class CustomerVoucherService {
 
     @Transactional
     public Optional<String> cancelIssuedVoucher(Integer receiptId) {
-        return voucherRepository.findByIssuedReceiptId(receiptId).map(voucher -> {
+        List<CustomerVoucher> vouchers = voucherRepository.findAllByIssuedReceiptId(receiptId);
+        if (vouchers.isEmpty()) return Optional.empty();
+        vouchers.forEach(voucher -> {
             voucher.setUsed(true);
             voucher.setUsedAt(LocalDateTime.now());
             voucherRepository.save(voucher);
-            return voucher.getCode();
         });
+        String codes = vouchers.stream().map(CustomerVoucher::getCode).collect(java.util.stream.Collectors.joining(", "));
+        return Optional.of(codes);
     }
 
     @Transactional
