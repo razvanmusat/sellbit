@@ -47,6 +47,7 @@ const VoucherIssuanceDialog = ({ issuance, onDismiss, cashierId }) => {
 
   const handlePrintVouchers = async () => {
     await printVoucherPages(vouchers.map(buildBody));
+    onDismiss();
   };
 
   const handleIssueLoyaltyVoucher = async () => {

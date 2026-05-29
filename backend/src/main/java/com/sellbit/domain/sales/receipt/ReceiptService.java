@@ -220,6 +220,12 @@ public class ReceiptService {
                 receipt.setClosedAt(LocalDateTime.now());
                 receiptRepository.save(receipt);
 
+                boolean paidWithVoucher = receipt.getPayments().stream()
+                                .anyMatch(p -> "VOUCHER".equals(p.getPaymentMethod().getCode()));
+                if (paidWithVoucher) {
+                        return new com.sellbit.domain.voucher.customervoucher.CustomerVoucherDTOs.VoucherIssuanceResult(
+                                        java.util.List.of(), null);
+                }
                 return voucherService.checkAndIssueVouchers(receipt);
         }
 
