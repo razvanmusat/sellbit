@@ -12,7 +12,7 @@ export const useInventoryPrintList = (warehouseId) => {
 
         let isMounted = true;
         setLoading(true);
-        StockCurrentService.getStockByWarehouse(warehouseId)
+        StockCurrentService.getStockByWarehouseForPrint(warehouseId)
             .then(data => {
                 if (isMounted) setStockData(data || []);
             })

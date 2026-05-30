@@ -101,6 +101,8 @@ const EmitedVouchersPage = ({
           <AvailableTab
             vouchersLoading={vouchersLoading}
             vouchers={vouchers}
+            saving={saving}
+            onDeactivate={onDeactivateByCode}
           />
         )}
 

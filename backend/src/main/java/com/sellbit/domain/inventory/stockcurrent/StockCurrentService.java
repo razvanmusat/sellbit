@@ -49,6 +49,16 @@ public class StockCurrentService {
                 .collect(Collectors.toList());
     }
 
+    @Transactional(readOnly = true)
+    public List<StockCurrentDTOs.Response> getStockByWarehouseForPrint(Integer warehouseId) {
+        if (!warehouseRepository.existsById(warehouseId)) {
+            throw new RuntimeException("ERROR.WAREHOUSE.NOT_FOUND");
+        }
+        return stockCurrentRepository.findByWarehouseIdForPrint(warehouseId).stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    }
+
     /**
      * LOGICA INVENTAR: Înlocuire faptică.
      * Folosește Lock pentru a preveni suprascrierea dacă se face inventar simultan.

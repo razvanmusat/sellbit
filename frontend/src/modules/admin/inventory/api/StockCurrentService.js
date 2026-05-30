@@ -13,6 +13,14 @@ export const StockCurrentService = {
     },
 
     /**
+     * PRINT: Stoc per depozit filtrat — qty > 0 sau vândut cel puțin o dată.
+     * @param {number} warehouseId
+     */
+    getStockByWarehouseForPrint: async (warehouseId) => {
+        return await client(`${ENDPOINT}/warehouse/${warehouseId}/for-print`);
+    },
+
+    /**
      * POS/Live: Stoc live pentru un produs specific într-o gestiune.
      * @param {number} warehouseId 
      * @param {number} productId 

@@ -4,6 +4,7 @@ import {
   AccordionDetails,
   AccordionSummary,
   Box,
+  Button,
   Chip,
   CircularProgress,
   Paper,
@@ -11,6 +12,7 @@ import {
   Typography,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import BlockIcon from '@mui/icons-material/Block';
 import dayjs from 'dayjs';
 import 'dayjs/locale/ro';
 
@@ -38,6 +40,8 @@ const getDiscountLabel = (type, value) => {
 const AvailableTab = ({
   vouchersLoading,
   vouchers,
+  saving,
+  onDeactivate,
 }) => {
   // Grupez vouchere pe zile de emitere
   const groupedByDay = useMemo(() => {
@@ -123,6 +127,16 @@ const AvailableTab = ({
                         <Chip size="small" label={`Expira: ${formatDate(voucher.expiresAt)}`} />
                       </Stack>
                     </Box>
+                    <Button
+                      size="small"
+                      color="error"
+                      variant="outlined"
+                      startIcon={<BlockIcon />}
+                      disabled={saving}
+                      onClick={() => onDeactivate(voucher.code)}
+                    >
+                      Dezactivează
+                    </Button>
                   </Box>
                 </Paper>
               ))}

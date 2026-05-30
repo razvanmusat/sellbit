@@ -25,6 +25,13 @@ public class StockCurrentController {
         return ResponseEntity.ok(stockCurrentService.getStockByWarehouse(warehouseId));
     }
 
+    // PRINT: Stoc per depozit filtrat — doar produse cu qty > 0 sau vândute cel puțin o dată.
+    @PreAuthorize("hasAnyAuthority('50', '100')")
+    @GetMapping("/warehouse/{warehouseId}/for-print")
+    public ResponseEntity<List<StockCurrentDTOs.Response>> getStockByWarehouseForPrint(@PathVariable Integer warehouseId) {
+        return ResponseEntity.ok(stockCurrentService.getStockByWarehouseForPrint(warehouseId));
+    }
+
     // POS: Stoc live pentru produsul selectat.
     // Permite Casierului să vadă instant dacă mai are produsul pe stoc înainte de
     // a-l vinde.
