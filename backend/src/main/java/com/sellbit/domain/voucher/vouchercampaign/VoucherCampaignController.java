@@ -62,7 +62,7 @@ public class VoucherCampaignController {
     @PreAuthorize("hasAnyAuthority('50','100')")
     @GetMapping("/active-prefixes")
     public ResponseEntity<List<String>> getActivePrefixes() {
-        return ResponseEntity.ok(campaignService.getActivePrefixes(LocalDate.now()));
+        return ResponseEntity.ok(campaignService.getActivePrefixes());
     }
 
     // Verifică dacă există o campanie GIFT_CARD activă (pentru butonul din sell page)
@@ -96,7 +96,12 @@ public class VoucherCampaignController {
     @PreAuthorize("hasAuthority('100')")
     @GetMapping("/{campaignId}/loyalty-stats")
     public ResponseEntity<CustomerVoucherDTOs.LoyaltyStats> getLoyaltyStats(
-            @PathVariable Integer campaignId) {
+            @PathVariable Integer campaignId,
+            @RequestParam(required = false) LocalDate fromDate,
+            @RequestParam(required = false) LocalDate toDate) {
+        if (fromDate != null && toDate != null) {
+            return ResponseEntity.ok(voucherService.getLoyaltyStats(campaignId, fromDate, toDate));
+        }
         return ResponseEntity.ok(voucherService.getLoyaltyStats(campaignId));
     }
 

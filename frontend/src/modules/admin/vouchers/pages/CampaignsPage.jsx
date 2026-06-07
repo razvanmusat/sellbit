@@ -1,6 +1,5 @@
 import React from 'react';
 import {
-  Alert,
   Box,
   Button,
   Chip,
@@ -13,6 +12,7 @@ import AddIcon from '@mui/icons-material/Add';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import EditIcon from '@mui/icons-material/Edit';
 import VisibilityIcon from '@mui/icons-material/Visibility';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 
 import dayjs from 'dayjs';
 
@@ -48,19 +48,22 @@ const CampaignsPage = ({
   return (
     <>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, gap: 2 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'info.main' }}>
+          <InfoOutlinedIcon fontSize="small" />
+          <Typography variant="body2" color="text.secondary">
+            Campaniile active emit automat vouchere la bonurile eligibile. Doar una cu acelasi prefix poate fi activa.
+          </Typography>
+        </Box>
         <Button
           variant="contained"
           startIcon={<AddIcon />}
           onClick={onCreateCampaign}
           disabled={saving}
+          sx={{ flexShrink: 0 }}
         >
           Campanie noua
         </Button>
       </Box>
-
-      <Alert severity="info" sx={{ mb: 2 }}>
-        Campaniile active emit automat vouchere la bonurile eligibile. Doar una cu acelasi prefix poate fi activa.
-      </Alert>
 
       {campaignsLoading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}>
@@ -69,7 +72,15 @@ const CampaignsPage = ({
       ) : (
         <Stack spacing={1.2}>
           {sortedCampaigns.map((campaign) => (
-            <Paper key={campaign.id} variant="outlined" sx={{ p: 1.5 }}>
+            <Paper
+              key={campaign.id}
+              variant="outlined"
+              sx={{
+                p: 1.5,
+                bgcolor: campaign.active ? '#ffffff' : '#eeeeee',
+                borderColor: campaign.active ? '#e0e0e0' : '#bdbdbd',
+              }}
+            >
               <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
                 <Box sx={{ minWidth: 0 }}>
                   <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
@@ -89,11 +100,14 @@ const CampaignsPage = ({
                         variant="outlined"
                       />
                     )}
+                    <Typography variant="body2" color="text.secondary">
+                      Perioada campaniei:{' '}
+                      <Box component="span" sx={{ color: 'text.primary', fontWeight: 500 }}>
+                        {formatDate(campaign.validFromDate)} – {formatDate(campaign.validUntilDate)}
+                      </Box>
+                    </Typography>
                   </Stack>
-                  <Typography variant="body2" color="text.secondary">
-                    {formatDate(campaign.validFromDate)} - {formatDate(campaign.validUntilDate)}
-                  </Typography>
-                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mt: 1 }}>
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mt: 0.5 }}>
                     {campaign.campaignType !== 'GIFT_CARD' && (
                       <Chip size="small" label={getDiscountLabel(campaign.discountType, campaign.discountValue)} />
                     )}
@@ -137,7 +151,7 @@ const CampaignsPage = ({
                     variant="outlined"
                     startIcon={<EditIcon />}
                     onClick={() => onEditCampaign(campaign)}
-                    disabled={saving}
+                    disabled={saving || !campaign.active}
                   >
                     Editeaza
                   </Button>

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchAvailableVouchers, fetchUsedVouchers } from '../store/customerVouchersSlice';
+import { fetchAvailableVouchers, fetchUsedVouchers, fetchAnnulledVouchers, fetchExpiredVouchers } from '../store/customerVouchersSlice';
 
 const getDefaultFromDate = () => {
   const today = new Date();
@@ -22,7 +22,7 @@ export const useVoucherFilters = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const dispatch = useDispatch();
   
-  const { available, used, loadingAvailable, loadingUsed } = useSelector((state) => state.customerVouchers);
+  const { available, used, annulled, expired, loadingAvailable, loadingUsed, loadingAnnulled, loadingExpired } = useSelector((state) => state.customerVouchers);
 
   const filterParam = searchParams.get('filter') || '';
   const fromDateParam = searchParams.get('fromDate') || getDefaultFromDate();
@@ -37,6 +37,10 @@ export const useVoucherFilters = () => {
     availableToDate: null,
     usedFromDate: null,
     usedToDate: null,
+    annulledFromDate: null,
+    annulledToDate: null,
+    expiredFromDate: null,
+    expiredToDate: null,
   });
 
   const setFilter = useCallback((newFilter) => {
@@ -75,14 +79,34 @@ export const useVoucherFilters = () => {
         lastFetchParamsRef.current.availableToDate = toDate;
       }
     } else if (filter === 'used' && fromDate && toDate) {
-      const isCached = 
+      const isCached =
         lastFetchParamsRef.current.usedFromDate === fromDate &&
         lastFetchParamsRef.current.usedToDate === toDate;
-      
+
       if (!isCached) {
         dispatch(fetchUsedVouchers({ fromDate, toDate }));
         lastFetchParamsRef.current.usedFromDate = fromDate;
         lastFetchParamsRef.current.usedToDate = toDate;
+      }
+    } else if (filter === 'annulled' && fromDate && toDate) {
+      const isCached =
+        lastFetchParamsRef.current.annulledFromDate === fromDate &&
+        lastFetchParamsRef.current.annulledToDate === toDate;
+
+      if (!isCached) {
+        dispatch(fetchAnnulledVouchers({ fromDate, toDate }));
+        lastFetchParamsRef.current.annulledFromDate = fromDate;
+        lastFetchParamsRef.current.annulledToDate = toDate;
+      }
+    } else if (filter === 'expired' && fromDate && toDate) {
+      const isCached =
+        lastFetchParamsRef.current.expiredFromDate === fromDate &&
+        lastFetchParamsRef.current.expiredToDate === toDate;
+
+      if (!isCached) {
+        dispatch(fetchExpiredVouchers({ fromDate, toDate }));
+        lastFetchParamsRef.current.expiredFromDate = fromDate;
+        lastFetchParamsRef.current.expiredToDate = toDate;
       }
     }
   }, [filter, fromDate, toDate, dispatch]);
@@ -93,30 +117,39 @@ export const useVoucherFilters = () => {
       availableToDate: null,
       usedFromDate: null,
       usedToDate: null,
+      annulledFromDate: null,
+      annulledToDate: null,
+      expiredFromDate: null,
+      expiredToDate: null,
     };
 
     if (fromDate && toDate) {
       await Promise.all([
         dispatch(fetchAvailableVouchers({ fromDate, toDate })),
         dispatch(fetchUsedVouchers({ fromDate, toDate })),
+        dispatch(fetchAnnulledVouchers({ fromDate, toDate })),
       ]);
-      
+
       lastFetchParamsRef.current.availableFromDate = fromDate;
       lastFetchParamsRef.current.availableToDate = toDate;
       lastFetchParamsRef.current.usedFromDate = fromDate;
       lastFetchParamsRef.current.usedToDate = toDate;
+      lastFetchParamsRef.current.annulledFromDate = fromDate;
+      lastFetchParamsRef.current.annulledToDate = toDate;
     }
   }, [dispatch, fromDate, toDate]);
 
   const vouchers = useMemo(() => {
     if (filter === 'available') return available;
     if (filter === 'used') return used;
+    if (filter === 'annulled') return annulled;
+    if (filter === 'expired') return expired;
     return [];
-  }, [filter, available, used]);
+  }, [filter, available, used, annulled, expired]);
 
   const loading = useMemo(() => {
-    return loadingAvailable || loadingUsed;
-  }, [loadingAvailable, loadingUsed]);
+    return loadingAvailable || loadingUsed || loadingAnnulled || loadingExpired;
+  }, [loadingAvailable, loadingUsed, loadingAnnulled, loadingExpired]);
 
   return {
     filter,

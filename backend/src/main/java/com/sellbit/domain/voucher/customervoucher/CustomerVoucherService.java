@@ -49,7 +49,14 @@ public class CustomerVoucherService {
 
     @Transactional(readOnly = true)
     public List<CustomerVoucherDTOs.SummaryResponse> getUsedVouchers() {
-        return voucherRepository.findAllByUsedTrueOrderByUsedAtDesc().stream()
+        return voucherRepository.findAllConsumedOrderByUsedAtDesc().stream()
+                .map(this::mapToSummary)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public List<CustomerVoucherDTOs.SummaryResponse> getAnnulledVouchers() {
+        return voucherRepository.findAllAnnulledOrderByUsedAtDesc().stream()
                 .map(this::mapToSummary)
                 .collect(Collectors.toList());
     }
@@ -71,6 +78,20 @@ public class CustomerVoucherService {
     @Transactional(readOnly = true)
     public List<CustomerVoucherDTOs.SummaryResponse> getUsedVouchers(LocalDate fromDate, LocalDate toDate) {
         return voucherRepository.findUsedBetween(fromDate, toDate).stream()
+                .map(this::mapToSummary)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public List<CustomerVoucherDTOs.SummaryResponse> getAnnulledVouchers(LocalDate fromDate, LocalDate toDate) {
+        return voucherRepository.findAnnulledBetween(fromDate, toDate).stream()
+                .map(this::mapToSummary)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public List<CustomerVoucherDTOs.SummaryResponse> getExpiredVouchers(LocalDate fromDate, LocalDate toDate) {
+        return voucherRepository.findExpiredBetween(fromDate, toDate, LocalDateTime.now()).stream()
                 .map(this::mapToSummary)
                 .collect(Collectors.toList());
     }
@@ -145,6 +166,13 @@ public class CustomerVoucherService {
         voucher.setUsedReceipt(receipt);
         voucher.setUsedAt(receipt != null && receipt.getClosedAt() != null ? receipt.getClosedAt() : LocalDateTime.now());
         voucherRepository.save(voucher);
+    }
+
+    @Transactional(readOnly = true)
+    public String getVoucherCodeByReceiptId(Integer receiptId) {
+        return voucherRepository.findByUsedReceiptId(receiptId)
+                .map(CustomerVoucher::getCode)
+                .orElse(null);
     }
 
     @Transactional
@@ -292,11 +320,40 @@ public class CustomerVoucherService {
                 .orElseThrow(() -> new RuntimeException("ERROR.VOUCHER_CAMPAIGN.NOT_FOUND"));
 
         long vouchersIssued = voucherRepository.countByCampaignId(campaignId);
-        long vouchersUsed = voucherRepository.countByCampaignIdAndUsedTrue(campaignId);
+        long vouchersUsed = voucherRepository.countByCampaignIdAndUsedTrueAndNotAnnulled(campaignId);
         long stampsGiven = stampLogRepository.countByCampaignId(campaignId);
 
         List<CustomerVoucherDTOs.StampLogEntry> stampHistory = stampLogRepository
                 .findByCampaignIdOrderByGivenAtDesc(campaignId).stream()
+                .map(s -> new CustomerVoucherDTOs.StampLogEntry(
+                        s.getId(),
+                        s.getCashier() != null ? s.getCashier().getFullName() : "Necunoscut",
+                        s.getReceipt() != null ? s.getReceipt().getId() : null,
+                        s.getGivenAt()))
+                .collect(Collectors.toList());
+
+        return new CustomerVoucherDTOs.LoyaltyStats(
+                campaignId,
+                campaign.getName(),
+                campaign.getStampsRequired(),
+                vouchersIssued,
+                vouchersUsed,
+                stampsGiven,
+                stampHistory
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public CustomerVoucherDTOs.LoyaltyStats getLoyaltyStats(Integer campaignId, LocalDate fromDate, LocalDate toDate) {
+        VoucherCampaign campaign = campaignRepository.findById(campaignId)
+                .orElseThrow(() -> new RuntimeException("ERROR.VOUCHER_CAMPAIGN.NOT_FOUND"));
+
+        long vouchersIssued = voucherRepository.countByCampaignIdAndCreatedBetween(campaignId, fromDate, toDate);
+        long vouchersUsed = voucherRepository.countByCampaignIdAndUsedTrueAndNotAnnulledBetween(campaignId, fromDate, toDate);
+        long stampsGiven = stampLogRepository.countByCampaignIdAndGivenAtBetween(campaignId, fromDate, toDate);
+
+        List<CustomerVoucherDTOs.StampLogEntry> stampHistory = stampLogRepository
+                .findByCampaignIdAndGivenAtBetweenOrderByGivenAtDesc(campaignId, fromDate, toDate).stream()
                 .map(s -> new CustomerVoucherDTOs.StampLogEntry(
                         s.getId(),
                         s.getCashier() != null ? s.getCashier().getFullName() : "Necunoscut",
@@ -520,7 +577,9 @@ public class CustomerVoucherService {
     }
 
     private String getStatus(CustomerVoucher voucher) {
-        if (Boolean.TRUE.equals(voucher.getUsed())) return "USED";
+        if (Boolean.TRUE.equals(voucher.getUsed())) {
+            return voucher.getUsedReceipt() != null ? "USED" : "ANNULLED";
+        }
         if (voucher.getExpiresAt() != null && voucher.getExpiresAt().isBefore(LocalDateTime.now())) return "EXPIRED";
         return "AVAILABLE";
     }

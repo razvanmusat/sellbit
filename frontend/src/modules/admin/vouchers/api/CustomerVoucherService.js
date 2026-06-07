@@ -22,6 +22,16 @@ export const CustomerVoucherService = {
     return client(`${BASE_URL}/available${query ? '?' + query : ''}`);
   },
 
+  getAnnulled: async (fromDate = null, toDate = null) => {
+    const query = buildQuery(fromDate, toDate);
+    return client(`${BASE_URL}/annulled${query ? '?' + query : ''}`);
+  },
+
+  getExpired: async (fromDate = null, toDate = null) => {
+    const query = buildQuery(fromDate, toDate);
+    return client(`${BASE_URL}/expired${query ? '?' + query : ''}`);
+  },
+
   reactivate: async (code) => client(`${BASE_URL}/reactivate/${encodeURIComponent(code)}`, { method: 'POST' }),
 
   consume: async (code, receiptId = null) => client(`${BASE_URL}/consume`, {

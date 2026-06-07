@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Accordion,
   AccordionDetails,
@@ -13,8 +13,11 @@ import {
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import RestoreIcon from '@mui/icons-material/Restore';
+import ReceiptIcon from '@mui/icons-material/Receipt';
 import dayjs from 'dayjs';
 import 'dayjs/locale/ro';
+import { SalesService } from '../../../admin/sales/api/SalesService';
+import ReceiptDetailModal from '../../../admin/sales/components/ReceiptDetailModal';
 
 const formatDateTime = (value) => {
   if (!value) return '-';
@@ -43,20 +46,30 @@ const UsedTab = ({
   saving,
   onReactivate,
 }) => {
-  // Grupez vouchere pe zile de consum
+  const [selectedReceipt, setSelectedReceipt] = useState(null);
+  const [receiptModalOpen, setReceiptModalOpen] = useState(false);
+  const [loadingReceiptId, setLoadingReceiptId] = useState(null);
+
+  const handleOpenReceipt = async (receiptId) => {
+    if (!receiptId || loadingReceiptId) return;
+    setLoadingReceiptId(receiptId);
+    try {
+      const data = await SalesService.getReceiptById(receiptId);
+      setSelectedReceipt(data);
+      setReceiptModalOpen(true);
+    } finally {
+      setLoadingReceiptId(null);
+    }
+  };
+
   const groupedByDay = useMemo(() => {
     if (!vouchers.length) return [];
-    
+
     const groups = {};
     vouchers.forEach((voucher) => {
       const usedDate = voucher.usedAt ? new Date(voucher.usedAt) : null;
-      const dayKey = usedDate
-        ? dayjs(usedDate).format('YYYY-MM-DD')
-        : 'fara-data';
-      
-      if (!groups[dayKey]) {
-        groups[dayKey] = [];
-      }
+      const dayKey = usedDate ? dayjs(usedDate).format('YYYY-MM-DD') : 'fara-data';
+      if (!groups[dayKey]) groups[dayKey] = [];
       groups[dayKey].push(voucher);
     });
 
@@ -89,62 +102,79 @@ const UsedTab = ({
   }
 
   return (
-    <Stack spacing={1}>
-      {groupedByDay.map((dayGroup) => (
-        <Accordion
-          key={dayGroup.date}
-          disableGutters
-          sx={{ mb: 1, border: '1px solid #e0e0e0', borderRadius: 1 }}
-        >
-          <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ bgcolor: 'warning.50' }}>
-            <Stack direction="row" justifyContent="space-between" width="100%" alignItems="center" mr={2}>
-              <Typography fontWeight="bold">
-                {dayGroup.displayDate}
-              </Typography>
-              <Chip
-                label={`${dayGroup.voucherCount} vouchere`}
-                color="warning"
-                size="small"
-              />
-            </Stack>
-          </AccordionSummary>
+    <>
+      <Stack spacing={1}>
+        {groupedByDay.map((dayGroup) => (
+          <Accordion
+            key={dayGroup.date}
+            disableGutters
+            sx={{ mb: 1, border: '1px solid #e0e0e0', borderRadius: 1 }}
+          >
+            <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ bgcolor: '#fff3e0' }}>
+              <Stack direction="row" justifyContent="space-between" width="100%" alignItems="center" mr={2}>
+                <Typography fontWeight="bold">{dayGroup.displayDate}</Typography>
+                <Chip label={`${dayGroup.voucherCount} vouchere`} color="warning" size="small" />
+              </Stack>
+            </AccordionSummary>
 
-          <AccordionDetails sx={{ p: 1, bgcolor: '#fafafa' }}>
-            <Stack spacing={1}>
-              {dayGroup.vouchers.map((voucher) => (
-                <Paper key={voucher.id} variant="outlined" sx={{ p: 1.5 }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1, alignItems: 'center' }}>
-                    <Box sx={{ flex: 1 }}>
-                      <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-                        <Typography variant="subtitle2" fontWeight={600}>
-                          {voucher.code}
-                        </Typography>
-                        <Chip size="small" label={voucher.campaignName || 'Campanie'} />
-                        <Chip size="small" color="default" label="Utilizat" />
-                      </Stack>
-                      <Stack direction="row" spacing={1} sx={{ mt: 0.5 }}>
-                        <Chip size="small" label={getDiscountLabel(voucher.discountType, voucher.discountValue)} />
-                        <Chip size="small" label={`Expira: ${formatDate(voucher.expiresAt)}`} />
-                      </Stack>
+            <AccordionDetails sx={{ p: 1, bgcolor: '#fafafa' }}>
+              <Stack spacing={0.5}>
+                {dayGroup.vouchers.map((voucher) => (
+                  <Paper key={voucher.id} variant="outlined" sx={{ p: 1.5 }}>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
+                      <Typography variant="subtitle2" fontWeight={600}>{voucher.code}</Typography>
+                      <Chip size="small" label={voucher.campaignName || 'Campanie'} />
+                      <Chip size="small" label={getDiscountLabel(voucher.discountType, voucher.discountValue)} />
+                      <Chip size="small" label={`Emis: ${formatDateTime(voucher.createdAt)}`} />
+                      {voucher.issuedReceiptId && (
+                        <Chip
+                          size="small"
+                          icon={loadingReceiptId === voucher.issuedReceiptId ? <CircularProgress size={12} /> : <ReceiptIcon />}
+                          label={`Bon emis #${voucher.issuedReceiptId}`}
+                          onClick={() => handleOpenReceipt(voucher.issuedReceiptId)}
+                          color="primary"
+                          variant="outlined"
+                          sx={{ cursor: 'pointer' }}
+                        />
+                      )}
+                      <Chip size="small" label={`Utilizat: ${formatDateTime(voucher.usedAt)}`} />
+                      {voucher.usedReceiptId && (
+                        <Chip
+                          size="small"
+                          icon={loadingReceiptId === voucher.usedReceiptId ? <CircularProgress size={12} /> : <ReceiptIcon />}
+                          label={`Bon utilizat #${voucher.usedReceiptId}`}
+                          onClick={() => handleOpenReceipt(voucher.usedReceiptId)}
+                          color="warning"
+                          variant="outlined"
+                          sx={{ cursor: 'pointer' }}
+                        />
+                      )}
+                      <Chip size="small" label={`Expira: ${formatDate(voucher.expiresAt)}`} />
+                      <Chip size="small" color="default" label="Utilizat" />
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        startIcon={<RestoreIcon />}
+                        onClick={() => onReactivate(voucher)}
+                        disabled={saving}
+                      >
+                        Reactiveaza
+                      </Button>
                     </Box>
+                  </Paper>
+                ))}
+              </Stack>
+            </AccordionDetails>
+          </Accordion>
+        ))}
+      </Stack>
 
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      startIcon={<RestoreIcon />}
-                      onClick={() => onReactivate(voucher)}
-                      disabled={saving}
-                    >
-                      Reactiveaza
-                    </Button>
-                  </Box>
-                </Paper>
-              ))}
-            </Stack>
-          </AccordionDetails>
-        </Accordion>
-      ))}
-    </Stack>
+      <ReceiptDetailModal
+        open={receiptModalOpen}
+        onClose={() => setReceiptModalOpen(false)}
+        receipt={selectedReceipt}
+      />
+    </>
   );
 };
 

@@ -12,7 +12,7 @@ import {
   Typography,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import BlockIcon from '@mui/icons-material/Block';
+import RestoreIcon from '@mui/icons-material/Restore';
 import ReceiptIcon from '@mui/icons-material/Receipt';
 import dayjs from 'dayjs';
 import 'dayjs/locale/ro';
@@ -40,11 +40,11 @@ const getDiscountLabel = (type, value) => {
   return `${Number(value).toFixed(2)} lei`;
 };
 
-const AvailableTab = ({
+const AnnulledTab = ({
   vouchersLoading,
   vouchers,
   saving,
-  onDeactivate,
+  onReactivate,
 }) => {
   const [selectedReceipt, setSelectedReceipt] = useState(null);
   const [receiptModalOpen, setReceiptModalOpen] = useState(false);
@@ -67,8 +67,8 @@ const AvailableTab = ({
 
     const groups = {};
     vouchers.forEach((voucher) => {
-      const createdDate = voucher.createdAt ? new Date(voucher.createdAt) : null;
-      const dayKey = createdDate ? dayjs(createdDate).format('YYYY-MM-DD') : 'fara-data';
+      const usedDate = voucher.usedAt ? new Date(voucher.usedAt) : null;
+      const dayKey = usedDate ? dayjs(usedDate).format('YYYY-MM-DD') : 'fara-data';
       if (!groups[dayKey]) groups[dayKey] = [];
       groups[dayKey].push(voucher);
     });
@@ -95,7 +95,7 @@ const AvailableTab = ({
     return (
       <Paper variant="outlined" sx={{ p: 3, textAlign: 'center' }}>
         <Typography variant="body2" color="text.secondary">
-          Nu exista vouchere active.
+          Nu exista vouchere anulate.
         </Typography>
       </Paper>
     );
@@ -110,10 +110,10 @@ const AvailableTab = ({
             disableGutters
             sx={{ mb: 1, border: '1px solid #e0e0e0', borderRadius: 1 }}
           >
-            <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ bgcolor: '#e8f5e9' }}>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ bgcolor: '#ffebee' }}>
               <Stack direction="row" justifyContent="space-between" width="100%" alignItems="center" mr={2}>
                 <Typography fontWeight="bold">{dayGroup.displayDate}</Typography>
-                <Chip label={`${dayGroup.voucherCount} vouchere`} color="success" size="small" />
+                <Chip label={`${dayGroup.voucherCount} vouchere`} color="error" size="small" />
               </Stack>
             </AccordionSummary>
 
@@ -137,17 +137,17 @@ const AvailableTab = ({
                           sx={{ cursor: 'pointer' }}
                         />
                       )}
+                      <Chip size="small" label={`Anulat la: ${formatDateTime(voucher.usedAt)}`} />
                       <Chip size="small" label={`Expira: ${formatDate(voucher.expiresAt)}`} />
-                      <Chip size="small" color="success" label="Activ" />
+                      <Chip size="small" color="error" label="Anulat" />
                       <Button
                         size="small"
-                        color="error"
                         variant="outlined"
-                        startIcon={<BlockIcon />}
+                        startIcon={<RestoreIcon />}
+                        onClick={() => onReactivate(voucher)}
                         disabled={saving}
-                        onClick={() => onDeactivate(voucher.code)}
                       >
-                        Dezactivează
+                        Reactiveaza
                       </Button>
                     </Box>
                   </Paper>
@@ -167,4 +167,4 @@ const AvailableTab = ({
   );
 };
 
-export default AvailableTab;
+export default AnnulledTab;

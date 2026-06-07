@@ -29,6 +29,7 @@ const INITIAL_CAMPAIGN_FORM = {
   isReactivating: false,
   oldValidFromDate: null,
   oldValidUntilDate: null,
+  shouldActivate: false,
 };
 
 export const useVoucherMainPage = () => {
@@ -77,8 +78,9 @@ export const useVoucherMainPage = () => {
 
   const sortedCampaigns = useMemo(() => {
     return [...campaigns.campaigns].sort((a, b) => {
-      if (a.active !== b.active) return a.active ? -1 : 1;
-      return String(a.name || '').localeCompare(String(b.name || ''));
+      const dateA = a.validFromDate || '';
+      const dateB = b.validFromDate || '';
+      return dateB.localeCompare(dateA);
     });
   }, [campaigns.campaigns]);
 
@@ -117,6 +119,7 @@ export const useVoucherMainPage = () => {
       isReactivating: isExpired,
       oldValidFromDate: isExpired ? campaign.validFromDate : null,
       oldValidUntilDate: isExpired ? campaign.validUntilDate : null,
+      shouldActivate: false,
     });
     setOpenCampaignDialog(true);
     await loadActivePrefixes();
@@ -193,7 +196,12 @@ export const useVoucherMainPage = () => {
     try {
       if (campaignForm.id) {
         await campaigns.updateCampaign(campaignForm.id, campaignForm);
-        setSnackbar({ open: true, severity: 'success', message: 'Campania de vouchere a fost actualizata.' });
+        if (campaignForm.shouldActivate) {
+          await campaigns.toggleCampaignStatus(campaignForm.id);
+          setSnackbar({ open: true, severity: 'success', message: 'Campania a fost reactivata cu noua perioada.' });
+        } else {
+          setSnackbar({ open: true, severity: 'success', message: 'Campania de vouchere a fost actualizata.' });
+        }
       } else {
         await campaigns.createCampaign(campaignForm);
         setSnackbar({ open: true, severity: 'success', message: 'Campania de vouchere a fost creata.' });
@@ -206,9 +214,44 @@ export const useVoucherMainPage = () => {
     }
   };
 
+  const openActivateCampaign = async (campaign) => {
+    setCampaignForm({
+      id: campaign.id,
+      name: campaign.name || '',
+      campaignType: campaign.campaignType || 'REGULAR',
+      validFromDate: '',
+      validUntilDate: '',
+      discountType: campaign.discountType || '',
+      discountValue: campaign.discountValue ?? '',
+      maxDiscountAmount: campaign.maxDiscountAmount ?? '',
+      minAmount: campaign.minAmount ?? '',
+      minHoursPlayed: campaign.minHoursPlayed ?? '',
+      requiredProductIds: campaign.requiredProductIds ?? [],
+      requiredProductNames: campaign.requiredProductNames ?? [],
+      applicableProductId: campaign.applicableProductId ?? '',
+      applicableProductName: campaign.applicableProductName || '',
+      vouchersPerReceipt: campaign.vouchersPerReceipt ?? 1,
+      stampsRequired: campaign.stampsRequired ?? '',
+      validDays: campaign.validDays ?? '',
+      applicableDays: campaign.applicableDays || '',
+      prefix: campaign.prefix || '',
+      codeLength: campaign.codeLength ?? 4,
+      receiptTemplate: campaign.receiptTemplate || '',
+      isReactivating: false,
+      oldValidFromDate: null,
+      oldValidUntilDate: null,
+      shouldActivate: true,
+    });
+    setOpenCampaignDialog(true);
+    await loadActivePrefixes();
+  };
+
   const requestToggleCampaign = (campaign) => {
-    const nextStatus = campaign.active ? 'deactivate-campaign' : 'activate-campaign';
-    setConfirmDialog({ open: true, type: nextStatus, payload: campaign });
+    if (!campaign.active) {
+      openActivateCampaign(campaign);
+    } else {
+      setConfirmDialog({ open: true, type: 'deactivate-campaign', payload: campaign });
+    }
   };
 
   const requestReactivateVoucher = (voucher) => {
@@ -232,7 +275,7 @@ export const useVoucherMainPage = () => {
     if (!confirmDialog.payload) return;
     setSaving(true);
     try {
-      if (confirmDialog.type === 'deactivate-campaign' || confirmDialog.type === 'activate-campaign') {
+      if (confirmDialog.type === 'deactivate-campaign') {
         await campaigns.toggleCampaignStatus(confirmDialog.payload.id);
         setSnackbar({ open: true, severity: 'success', message: 'Statusul campaniei a fost actualizat.' });
       }

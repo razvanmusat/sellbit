@@ -37,12 +37,14 @@ const getDiscountLabel = (type, value) => {
 
 const getStatusLabel = (status) => {
   if (status === 'USED') return 'Utilizat';
+  if (status === 'ANNULLED') return 'Anulat';
   if (status === 'EXPIRED') return 'Expirat';
   return 'Activ';
 };
 
 const getStatusColor = (status) => {
   if (status === 'USED') return 'default';
+  if (status === 'ANNULLED') return 'error';
   if (status === 'EXPIRED') return 'warning';
   return 'success';
 };
@@ -105,16 +107,18 @@ const SearchVoucherTab = ({
               <Chip label={searchResult.code} />
               <Chip label={getDiscountLabel(searchResult.discountType, searchResult.discountValue)} />
               <Chip label={`Emis: ${formatDateTime(searchResult.createdAt)}`} />
-              {searchResult.usedAt && <Chip label={`Utilizat: ${formatDateTime(searchResult.usedAt)}`} />}
+              {searchResult.usedAt && (
+                <Chip label={`${searchResult.status === 'ANNULLED' ? 'Anulat la' : 'Utilizat'}: ${formatDateTime(searchResult.usedAt)}`} />
+              )}
               <Chip label={`Expira: ${formatDate(searchResult.expiresAt)}`} />
               <Chip
                 color={getStatusColor(searchResult.status)}
                 label={getStatusLabel(searchResult.status)}
               />
-              {searchResult.errorCode && !['USED', 'EXPIRED'].includes(searchResult.status) && (
+              {searchResult.errorCode && !['USED', 'ANNULLED', 'EXPIRED'].includes(searchResult.status) && (
                 <Chip color="warning" label={getFriendlyErrorMessage(searchResult.errorCode)} />
               )}
-              {searchResult.status === 'USED' && (
+              {(searchResult.status === 'USED' || searchResult.status === 'ANNULLED') && (
                 <Button
                   size="small"
                   variant="outlined"

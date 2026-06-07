@@ -27,6 +27,9 @@ public interface VoucherCampaignRepository extends JpaRepository<VoucherCampaign
             "AND vc.prefix IS NOT NULL")
     List<String> findActivePrefixes(@Param("today") java.time.LocalDate today);
 
+    @Query("SELECT DISTINCT vc.prefix FROM VoucherCampaign vc WHERE vc.prefix IS NOT NULL")
+    List<String> findAllPrefixes();
+
     boolean existsByPrefixAndActiveTrue(String prefix);
 
     boolean existsByPrefixAndActiveTrueAndIdNot(String prefix, Integer id);

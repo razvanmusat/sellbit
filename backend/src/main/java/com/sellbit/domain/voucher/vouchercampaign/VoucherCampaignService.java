@@ -23,8 +23,8 @@ public class VoucherCampaignService {
     private final CampaignTypeRepository campaignTypeRepository;
 
     @Transactional(readOnly = true)
-    public List<String> getActivePrefixes(LocalDate today) {
-        return repository.findActivePrefixes(today);
+    public List<String> getActivePrefixes() {
+        return repository.findAllPrefixes();
     }
 
     @Transactional(readOnly = true)

@@ -14,7 +14,8 @@ public class ReceiptPaymentDTO {
             BigDecimal amount,
             Integer warehouseId,
             String warehouseName,
-            LocalDateTime paidAt) {
+            LocalDateTime paidAt,
+            String voucherCode) {
     }
 
     public record ReportResponse(

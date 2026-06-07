@@ -14,6 +14,8 @@ import dayjs from 'dayjs';
 import 'dayjs/locale/ro';
 import AvailableTab from '../components/AvailableTab';
 import UsedTab from '../components/UsedTab';
+import AnnulledTab from '../components/AnnulledTab';
+import ExpiredTab from '../components/ExpiredTab';
 import SearchVoucherTab from '../components/SearchVoucherTab';
 
 const EmitedVouchersPage = ({
@@ -48,10 +50,12 @@ const EmitedVouchersPage = ({
         >
           <Tab label="Active" value="available" />
           <Tab label="Utilizate" value="used" />
+          <Tab label="Anulate" value="annulled" />
+          <Tab label="Expirate" value="expired" />
           <Tab label="Caută cod" value="search" />
         </Tabs>
 
-        {/* Date Filter - below tabs, only for Active and Utilizate */}
+        {/* Date Filter - below tabs, only for Active, Utilizate, Anulate and Expirate */}
         {voucherFilter !== 'search' && voucherFilter && (
           <Box sx={{ mb: 2, p: 1.5, bgcolor: '#f5f5f5', borderRadius: 1 }}>
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center">
@@ -79,6 +83,14 @@ const EmitedVouchersPage = ({
               >
                 Reset (Luna curentă)
               </Button>
+              {voucherFilter === 'expired' && (
+                <Typography variant="body2" color="text.secondary" sx={{ ml: 'auto' }}>
+                  Vouchere expirate în perioada selectată:{' '}
+                  <Box component="span" sx={{ fontWeight: 700, color: 'warning.main' }}>
+                    {vouchers.length}
+                  </Box>
+                </Typography>
+              )}
             </Stack>
           </Box>
         )}
@@ -112,6 +124,22 @@ const EmitedVouchersPage = ({
             vouchers={vouchers}
             saving={saving}
             onReactivate={onReactivate}
+          />
+        )}
+
+        {voucherFilter === 'annulled' && (
+          <AnnulledTab
+            vouchersLoading={vouchersLoading}
+            vouchers={vouchers}
+            saving={saving}
+            onReactivate={onReactivate}
+          />
+        )}
+
+        {voucherFilter === 'expired' && (
+          <ExpiredTab
+            vouchersLoading={vouchersLoading}
+            vouchers={vouchers}
           />
         )}
 

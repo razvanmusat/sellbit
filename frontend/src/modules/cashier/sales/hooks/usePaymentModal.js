@@ -12,8 +12,6 @@ export const usePaymentModal = ({
     onRemovePayment,
     onCloseReceipt
 }) => {
-    const voucherBlockKey = `sellbit_blocked_vouchers_${receipt?.id || 'unknown'}`;
-
     const [amount, setAmount] = useState('');
     const [voucherPrefix, setVoucherPrefix] = useState('');
     const [voucherCode, setVoucherCode] = useState('');
@@ -30,7 +28,6 @@ export const usePaymentModal = ({
     const [toastOpen, setToastOpen] = useState(false);
     const [toastMessage, setToastMessage] = useState('');
     const [toastSeverity, setToastSeverity] = useState('success');
-    const blockedVoucherCodesRef = useRef(new Set());
     const previousOpenRef = useRef(false);
 
     // --- GESTIUNI DIN BON ---
@@ -103,17 +100,6 @@ export const usePaymentModal = ({
 
     // --- RESET LA DESCHIDERE ---
     useEffect(() => {
-        if (!receipt?.id) return;
-        try {
-            const raw = sessionStorage.getItem(voucherBlockKey);
-            const parsed = raw ? JSON.parse(raw) : [];
-            blockedVoucherCodesRef.current = new Set(Array.isArray(parsed) ? parsed : []);
-        } catch {
-            blockedVoucherCodesRef.current = new Set();
-        }
-    }, [receipt?.id, voucherBlockKey]);
-
-    useEffect(() => {
         if (open && !previousOpenRef.current) {
             refreshPayments(true);
             setChangeDue(0);
@@ -164,7 +150,7 @@ export const usePaymentModal = ({
         setAmount(val);
         const numVal = parseFloat(val);
         if (selectedMethod?.code === 'CASH' && numVal > remainingAmount) {
-            setChangeDue(numVal - remainingAmount);
+            setChangeDue(Math.round((numVal - remainingAmount) * 100) / 100);
         } else {
             setChangeDue(0);
         }
@@ -173,7 +159,7 @@ export const usePaymentModal = ({
     const handleRemove = async (id) => {
         await onRemovePayment(id);
         setLastChange(0);
-        refreshPayments(false);
+        await refreshPayments(false);
     };
 
     const handleSubmit = async () => {
@@ -185,7 +171,7 @@ export const usePaymentModal = ({
             if (!voucherPrefix || !voucherCode) return;
             const fullCode = `${voucherPrefix}-${voucherCode}`.trim().toUpperCase();
 
-            if (blockedVoucherCodesRef.current.has(fullCode)) {
+            if (localPayments.some(p => p.voucherCode === fullCode)) {
                 showToast('Acest voucher a fost deja folosit pe bonul curent.', 'warning');
                 return;
             }
@@ -198,8 +184,6 @@ export const usePaymentModal = ({
                     const whId = warehouseTotals[0]?.warehouseId || null;
                     const distributions = whId ? [{ warehouseId: whId, amount: voucherAmt }] : null;
                     await onApplyVoucher(fullCode, distributions);
-                    blockedVoucherCodesRef.current.add(fullCode);
-                    sessionStorage.setItem(voucherBlockKey, JSON.stringify(Array.from(blockedVoucherCodesRef.current)));
                     setVoucherPrefix('');
                     setVoucherCode('');
                     setPaymentMethodId('');
@@ -236,21 +220,26 @@ export const usePaymentModal = ({
 
         if (currentChange > 0) setLastChange(currentChange);
 
-        if (isSingleWarehouse) {
-            const whId = warehouseTotals[0]?.warehouseId || null;
-            await onAddPayment(paymentMethodId, amountToSend, currentChange, whId);
-            refreshPayments(false);
-            setChangeDue(0);
-            setPaymentMethodId('');
-            return;
-        }
+        try {
+            if (isSingleWarehouse) {
+                const whId = warehouseTotals[0]?.warehouseId || null;
+                await onAddPayment(paymentMethodId, amountToSend, currentChange, whId);
+                refreshPayments(false);
+                setChangeDue(0);
+                setPaymentMethodId('');
+                return;
+            }
 
-        // Multi-gestiune: dacă suma acoperă tot ce a rămas → split proporțional automat
-        if (amountToSend >= remainingAmount - 0.001) {
-            await splitAndPayProportionally(paymentMethodId, amountToSend, currentChange);
-            refreshPayments(false);
-            setChangeDue(0);
-            setPaymentMethodId('');
+            // Multi-gestiune: dacă suma acoperă tot ce a rămas → split proporțional automat
+            if (amountToSend >= remainingAmount - 0.001) {
+                await splitAndPayProportionally(paymentMethodId, amountToSend, currentChange);
+                refreshPayments(false);
+                setChangeDue(0);
+                setPaymentMethodId('');
+                return;
+            }
+        } catch (err) {
+            showToast(getFriendlyErrorMessage(err), 'error');
             return;
         }
 
@@ -292,8 +281,6 @@ export const usePaymentModal = ({
             try {
                 const distributions = [{ warehouseId, amount: pendingPayment.amount }];
                 await onApplyVoucher(pendingPayment.voucherCode, distributions);
-                blockedVoucherCodesRef.current.add(pendingPayment.voucherCode);
-                sessionStorage.setItem(voucherBlockKey, JSON.stringify(Array.from(blockedVoucherCodesRef.current)));
                 setVoucherPrefix('');
                 setVoucherCode('');
                 setPaymentMethodId('');

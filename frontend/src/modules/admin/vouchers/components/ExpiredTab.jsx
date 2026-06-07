@@ -4,7 +4,6 @@ import {
   AccordionDetails,
   AccordionSummary,
   Box,
-  Button,
   Chip,
   CircularProgress,
   Paper,
@@ -12,7 +11,6 @@ import {
   Typography,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import BlockIcon from '@mui/icons-material/Block';
 import ReceiptIcon from '@mui/icons-material/Receipt';
 import dayjs from 'dayjs';
 import 'dayjs/locale/ro';
@@ -26,13 +24,6 @@ const formatDateTime = (value) => {
   return date.format('DD.MM.YYYY HH:mm');
 };
 
-const formatDate = (value) => {
-  if (!value) return '-';
-  const date = dayjs(value);
-  if (!date.isValid()) return value;
-  return date.format('DD.MM.YYYY');
-};
-
 const getDiscountLabel = (type, value) => {
   if (value === null || value === undefined) return '-';
   if (type === 'PERCENT') return `${Number(value).toFixed(2)}%`;
@@ -40,12 +31,7 @@ const getDiscountLabel = (type, value) => {
   return `${Number(value).toFixed(2)} lei`;
 };
 
-const AvailableTab = ({
-  vouchersLoading,
-  vouchers,
-  saving,
-  onDeactivate,
-}) => {
+const ExpiredTab = ({ vouchersLoading, vouchers }) => {
   const [selectedReceipt, setSelectedReceipt] = useState(null);
   const [receiptModalOpen, setReceiptModalOpen] = useState(false);
   const [loadingReceiptId, setLoadingReceiptId] = useState(null);
@@ -67,8 +53,8 @@ const AvailableTab = ({
 
     const groups = {};
     vouchers.forEach((voucher) => {
-      const createdDate = voucher.createdAt ? new Date(voucher.createdAt) : null;
-      const dayKey = createdDate ? dayjs(createdDate).format('YYYY-MM-DD') : 'fara-data';
+      const expDate = voucher.expiresAt ? new Date(voucher.expiresAt) : null;
+      const dayKey = expDate ? dayjs(expDate).format('YYYY-MM-DD') : 'fara-data';
       if (!groups[dayKey]) groups[dayKey] = [];
       groups[dayKey].push(voucher);
     });
@@ -76,7 +62,7 @@ const AvailableTab = ({
     return Object.entries(groups)
       .map(([date, items]) => ({
         date,
-        displayDate: date === 'fara-data' ? 'Fără dată' : dayjs(date).format('DD MMMM YYYY'),
+        displayDate: date === 'fara-data' ? 'Fără dată' : dayjs(date).locale('ro').format('DD MMMM YYYY'),
         voucherCount: items.length,
         vouchers: items,
       }))
@@ -95,7 +81,7 @@ const AvailableTab = ({
     return (
       <Paper variant="outlined" sx={{ p: 3, textAlign: 'center' }}>
         <Typography variant="body2" color="text.secondary">
-          Nu exista vouchere active.
+          Nu exista vouchere expirate in aceasta perioada.
         </Typography>
       </Paper>
     );
@@ -108,12 +94,12 @@ const AvailableTab = ({
           <Accordion
             key={dayGroup.date}
             disableGutters
-            sx={{ mb: 1, border: '1px solid #e0e0e0', borderRadius: 1 }}
+            sx={{ mb: 1, border: '1px solid #ffe0b2', borderRadius: 1 }}
           >
-            <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ bgcolor: '#e8f5e9' }}>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ bgcolor: '#fff8e1' }}>
               <Stack direction="row" justifyContent="space-between" width="100%" alignItems="center" mr={2}>
                 <Typography fontWeight="bold">{dayGroup.displayDate}</Typography>
-                <Chip label={`${dayGroup.voucherCount} vouchere`} color="success" size="small" />
+                <Chip label={`${dayGroup.voucherCount} vouchere`} color="warning" size="small" />
               </Stack>
             </AccordionSummary>
 
@@ -137,18 +123,8 @@ const AvailableTab = ({
                           sx={{ cursor: 'pointer' }}
                         />
                       )}
-                      <Chip size="small" label={`Expira: ${formatDate(voucher.expiresAt)}`} />
-                      <Chip size="small" color="success" label="Activ" />
-                      <Button
-                        size="small"
-                        color="error"
-                        variant="outlined"
-                        startIcon={<BlockIcon />}
-                        disabled={saving}
-                        onClick={() => onDeactivate(voucher.code)}
-                      >
-                        Dezactivează
-                      </Button>
+                      <Chip size="small" label={`Expirat la: ${formatDateTime(voucher.expiresAt)}`} />
+                      <Chip size="small" color="warning" label="Expirat" />
                     </Box>
                   </Paper>
                 ))}
@@ -167,4 +143,4 @@ const AvailableTab = ({
   );
 };
 
-export default AvailableTab;
+export default ExpiredTab;

@@ -37,6 +37,10 @@ const AddPaymentModal = (props) => {
   } = usePaymentModal(props);
 
   const displayChange = changeDue > 0 ? changeDue : lastChange;
+  const hasVoucherPayment = localPayments.some(p => p.paymentMethodCode === 'VOUCHER');
+  const visiblePaymentMethods = activePrefixes.length > 0
+    ? paymentMethods
+    : paymentMethods.filter(m => m.code !== 'VOUCHER');
 
   const pendingMethod = paymentMethods.find(m => m.id === pendingPayment?.methodId);
   const pickerTitle = pendingPayment?.voucherCode ? 'Pe ce gestiune se aplică voucherul?' : 'Pe ce gestiune?';
@@ -192,8 +196,15 @@ const AddPaymentModal = (props) => {
                   <Select value={paymentMethodId} label="Metodă Plată"
                     onChange={e => setPaymentMethodId(e.target.value)} disabled={loading}>
                     <MenuItem value="" disabled><em>Alege metoda...</em></MenuItem>
-                    {paymentMethods.map(method => (
-                      <MenuItem key={method.id} value={method.id}>{method.label}</MenuItem>
+                    {visiblePaymentMethods.map(method => (
+                      <MenuItem
+                        key={method.id}
+                        value={method.id}
+                        disabled={method.code === 'VOUCHER' && hasVoucherPayment}
+                      >
+                        {method.label}
+                        {method.code === 'VOUCHER' && hasVoucherPayment ? ' (deja aplicat)' : ''}
+                      </MenuItem>
                     ))}
                   </Select>
                 </FormControl>

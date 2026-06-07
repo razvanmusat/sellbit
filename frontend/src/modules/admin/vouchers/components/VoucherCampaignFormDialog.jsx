@@ -76,11 +76,22 @@ const VoucherCampaignFormDialog = ({
     <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="ro">
       <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
         <DialogTitle>
-          {form.isReactivating ? 'Reactivare Campanie Expirata' : 'Campanie noua de vouchere'}
+          {form.shouldActivate
+            ? 'Reactivare Campanie'
+            : form.isReactivating
+              ? 'Reactivare Campanie Expirata'
+              : form.id
+                ? 'Editeaza Campanie'
+                : 'Campanie noua de vouchere'}
         </DialogTitle>
         <DialogContent>
           <Stack spacing={1.5} sx={{ mt: 1 }}>
-            {form.isReactivating && (
+            {form.shouldActivate && (
+              <Alert severity="info">
+                Campania este dezactivata. Selecteaza o noua perioada de valabilitate pentru a o reactiva. Celelalte setari raman neschimbate.
+              </Alert>
+            )}
+            {form.isReactivating && !form.shouldActivate && (
               <Alert severity="warning">
                 Campania a expirat. Selecteaza o noua perioada pentru reactivare. Datele trebuie sa fie diferite de cea anterioara ({dayjs(form.oldValidFromDate).format('DD/MM/YYYY')} - {dayjs(form.oldValidUntilDate).format('DD/MM/YYYY')})
               </Alert>
@@ -368,7 +379,7 @@ const VoucherCampaignFormDialog = ({
             {!!activePrefixes?.length && (
               <Box sx={{ mt: 0.5 }}>
                 <Typography variant="caption" color="text.secondary">
-                  Prefixe active: {activePrefixes.join(', ')}
+                  Prefixe in sistem: {activePrefixes.join(', ')}
                 </Typography>
               </Box>
             )}

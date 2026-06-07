@@ -130,8 +130,9 @@ public class ReceiptPaymentService {
 
     @Transactional(readOnly = true)
     public List<ReceiptPaymentDTO.Response> getPaymentsByReceipt(Integer receiptId) {
+        String voucherCode = voucherService.getVoucherCodeByReceiptId(receiptId);
         return paymentRepository.findByReceiptId(receiptId).stream()
-                .map(this::mapToResponse)
+                .map(p -> mapToResponse(p, voucherCode))
                 .toList();
     }
 
@@ -252,15 +253,17 @@ public class ReceiptPaymentService {
         return reports;
     }
 
-    private ReceiptPaymentDTO.Response mapToResponse(ReceiptPayment payment) {
-    return new ReceiptPaymentDTO.Response(
-            payment.getId(),
-            payment.getPaymentMethod().getId(),
-            payment.getPaymentMethod().getLabel(),
-            payment.getPaymentMethod().getCode(),
-            payment.getAmount(),
-            payment.getWarehouse() != null ? payment.getWarehouse().getId() : null,
-            payment.getWarehouse() != null ? payment.getWarehouse().getName() : null,
-            payment.getPaidAt());
-}
+    private ReceiptPaymentDTO.Response mapToResponse(ReceiptPayment payment, String voucherCode) {
+        String code = "VOUCHER".equals(payment.getPaymentMethod().getCode()) ? voucherCode : null;
+        return new ReceiptPaymentDTO.Response(
+                payment.getId(),
+                payment.getPaymentMethod().getId(),
+                payment.getPaymentMethod().getLabel(),
+                payment.getPaymentMethod().getCode(),
+                payment.getAmount(),
+                payment.getWarehouse() != null ? payment.getWarehouse().getId() : null,
+                payment.getWarehouse() != null ? payment.getWarehouse().getName() : null,
+                payment.getPaidAt(),
+                code);
+    }
 }

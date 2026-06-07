@@ -65,6 +65,30 @@ public class CustomerVoucherController {
         return ResponseEntity.ok(customerVoucherService.getAvailableVouchers());
     }
     
+    // Listarea voucherelor anulate (used=true dar fara bon de utilizare).
+    @PreAuthorize("hasAuthority('100')")
+    @GetMapping("/annulled")
+    public ResponseEntity<List<CustomerVoucherDTOs.SummaryResponse>> getAnnulledVouchers(
+            @RequestParam Optional<LocalDate> fromDate,
+            @RequestParam Optional<LocalDate> toDate) {
+        if (fromDate.isPresent() && toDate.isPresent()) {
+            return ResponseEntity.ok(customerVoucherService.getAnnulledVouchers(fromDate.get(), toDate.get()));
+        }
+        return ResponseEntity.ok(customerVoucherService.getAnnulledVouchers());
+    }
+
+    @PreAuthorize("hasAuthority('100')")
+    @GetMapping("/expired")
+    public ResponseEntity<List<CustomerVoucherDTOs.SummaryResponse>> getExpiredVouchers(
+            @RequestParam Optional<LocalDate> fromDate,
+            @RequestParam Optional<LocalDate> toDate) {
+        if (fromDate.isPresent() && toDate.isPresent()) {
+            return ResponseEntity.ok(customerVoucherService.getExpiredVouchers(fromDate.get(), toDate.get()));
+        }
+        return ResponseEntity.ok(customerVoucherService.getExpiredVouchers(
+                LocalDate.now().withDayOfMonth(1), LocalDate.now()));
+    }
+
     // Reactivarea unui voucher (undo la consumare).
     @PreAuthorize("hasAuthority('100')")
     @PostMapping("/reactivate/{code}")

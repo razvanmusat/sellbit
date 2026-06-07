@@ -30,7 +30,13 @@ export const VoucherCampaignService = {
     return client(`${BASE_URL}/${campaignId}/stamp${query ? `?${query}` : ''}`, { method: 'POST' });
   },
 
-  getLoyaltyStats: async (campaignId) => client(`${BASE_URL}/${campaignId}/loyalty-stats`),
+  getLoyaltyStats: async (campaignId, fromDate = null, toDate = null) => {
+    const params = new URLSearchParams();
+    if (fromDate) params.append('fromDate', fromDate);
+    if (toDate) params.append('toDate', toDate);
+    const query = params.toString();
+    return client(`${BASE_URL}/${campaignId}/loyalty-stats${query ? `?${query}` : ''}`);
+  },
 
   getIssuedByReceipt: async (receiptId) => client(`${BASE_URL}/issued-by-receipt/${receiptId}`),
 };
