@@ -187,7 +187,7 @@ export const usePaymentModal = ({
                     setVoucherPrefix('');
                     setVoucherCode('');
                     setPaymentMethodId('');
-                    refreshPayments(false);
+                    await refreshPayments(false);
                 } else {
                     setPendingPayment({ voucherCode: fullCode, amount: voucherAmt });
                     setPickerOpen(true);
@@ -224,7 +224,7 @@ export const usePaymentModal = ({
             if (isSingleWarehouse) {
                 const whId = warehouseTotals[0]?.warehouseId || null;
                 await onAddPayment(paymentMethodId, amountToSend, currentChange, whId);
-                refreshPayments(false);
+                await refreshPayments(false);
                 setChangeDue(0);
                 setPaymentMethodId('');
                 return;
@@ -233,7 +233,7 @@ export const usePaymentModal = ({
             // Multi-gestiune: dacă suma acoperă tot ce a rămas → split proporțional automat
             if (amountToSend >= remainingAmount - 0.001) {
                 await splitAndPayProportionally(paymentMethodId, amountToSend, currentChange);
-                refreshPayments(false);
+                await refreshPayments(false);
                 setChangeDue(0);
                 setPaymentMethodId('');
                 return;
@@ -288,37 +288,41 @@ export const usePaymentModal = ({
                 showToast(getFriendlyErrorMessage(err), 'error');
             }
         } else {
-            // Cât mai e de plătit pe gestiunea selectată
-            const selectedWh = remainingPerWarehouse.find(wh => wh.warehouseId === warehouseId);
-            const maxForSelected = selectedWh?.remaining ?? pendingPayment.amount;
+            try {
+                // Cât mai e de plătit pe gestiunea selectată
+                const selectedWh = remainingPerWarehouse.find(wh => wh.warehouseId === warehouseId);
+                const maxForSelected = selectedWh?.remaining ?? pendingPayment.amount;
 
-            // Suma care merge pe gestiunea selectată (cel mult cât are de plătit)
-            const amountForSelected = parseFloat(Math.min(pendingPayment.amount, maxForSelected).toFixed(2));
+                // Suma care merge pe gestiunea selectată (cel mult cât are de plătit)
+                const amountForSelected = parseFloat(Math.min(pendingPayment.amount, maxForSelected).toFixed(2));
 
-            await onAddPayment(pendingPayment.methodId, amountForSelected, pendingPayment.change, warehouseId);
+                await onAddPayment(pendingPayment.methodId, amountForSelected, pendingPayment.change, warehouseId);
 
-            // Dacă a mai rămas de distribuit, merge pe celelalte gestiuni în ordine
-            const leftover = parseFloat((pendingPayment.amount - amountForSelected).toFixed(2));
-            if (leftover > 0.001) {
-                const others = remainingPerWarehouse.filter(
-                    wh => wh.warehouseId !== warehouseId && wh.remaining > 0
-                );
-                let rest = leftover;
-                for (let i = 0; i < others.length; i++) {
-                    const wh = others[i];
-                    const whAmount = i === others.length - 1
-                        ? parseFloat(rest.toFixed(2))
-                        : parseFloat(Math.min(rest, wh.remaining).toFixed(2));
-                    if (whAmount <= 0.001) continue;
-                    await onAddPayment(pendingPayment.methodId, whAmount, 0, wh.warehouseId);
-                    rest = parseFloat((rest - whAmount).toFixed(2));
-                    if (rest <= 0.001) break;
+                // Dacă a mai rămas de distribuit, merge pe celelalte gestiuni în ordine
+                const leftover = parseFloat((pendingPayment.amount - amountForSelected).toFixed(2));
+                if (leftover > 0.001) {
+                    const others = remainingPerWarehouse.filter(
+                        wh => wh.warehouseId !== warehouseId && wh.remaining > 0
+                    );
+                    let rest = leftover;
+                    for (let i = 0; i < others.length; i++) {
+                        const wh = others[i];
+                        const whAmount = i === others.length - 1
+                            ? parseFloat(rest.toFixed(2))
+                            : parseFloat(Math.min(rest, wh.remaining).toFixed(2));
+                        if (whAmount <= 0.001) continue;
+                        await onAddPayment(pendingPayment.methodId, whAmount, 0, wh.warehouseId);
+                        rest = parseFloat((rest - whAmount).toFixed(2));
+                        if (rest <= 0.001) break;
+                    }
                 }
+            } catch (err) {
+                showToast(getFriendlyErrorMessage(err), 'error');
             }
         }
 
         setPendingPayment(null);
-        refreshPayments(false);
+        await refreshPayments(false);
         setChangeDue(0);
         setPaymentMethodId('');
     };

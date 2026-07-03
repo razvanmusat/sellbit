@@ -1,6 +1,7 @@
 package com.sellbit.domain.voucher.vouchercampaign;
 
 import com.sellbit.domain.security.auth.JwtUtils;
+import com.sellbit.domain.voucher.customervoucher.CustomerVoucherService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,7 +38,10 @@ class VoucherCampaignControllerTest {
     private UserDetailsService userDetailsService;
 
     @MockitoBean
-    private PasswordEncoder passwordEncoder;   
+    private PasswordEncoder passwordEncoder;
+
+    @MockitoBean
+    private CustomerVoucherService customerVoucherService;
 
     // --- create ---
     @Test 
@@ -56,7 +60,8 @@ class VoucherCampaignControllerTest {
                                                     "discountValue": 10.00,
                                                     "maxDiscountAmount": 50.00,
                                                     "minAmount": 50.00,
-                                                    "validDays": 30
+                                                    "validDays": 30,
+                                                    "campaignType": "REGULAR"
                                                 }
                                                 """))
                 .andExpect(status().isOk());
@@ -75,7 +80,8 @@ class VoucherCampaignControllerTest {
                                             "discountValue": 10.00,
                                             "maxDiscountAmount": 50.00,
                                             "minAmount": 50.00,
-                                            "validDays": 30
+                                            "validDays": 30,
+                                            "campaignType": "REGULAR"
                     }
                     """))
                     .andExpect(status().isBadRequest())
@@ -96,7 +102,8 @@ class VoucherCampaignControllerTest {
                                             "discountValue": 10.00,
                                             "maxDiscountAmount": 50.00,
                                             "minAmount": 50.00,
-                                            "validDays": 30
+                                            "validDays": 30,
+                                            "campaignType": "REGULAR"
                         }
                         """))
                         .andExpect(status().isOk());

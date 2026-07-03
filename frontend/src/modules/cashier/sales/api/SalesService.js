@@ -24,8 +24,9 @@ export class SalesService {
     return response;
   }
 
-  static async closeReceipt(id) {
-    const result = await client(`sales/receipts/${id}/close`, { method: 'POST' });
+  static async closeReceipt(id, skipFiscal = false) {
+    const url = skipFiscal ? `sales/receipts/${id}/close?skipFiscal=true` : `sales/receipts/${id}/close`;
+    const result = await client(url, { method: 'POST' });
     emitSalesDataChanged({ type: 'receipt-closed' });
     return result;
   }
@@ -40,15 +41,22 @@ export class SalesService {
     return await client(`sales/receipts/${id}/print-bill-note`);
   }
 
-  static async registerAdvancePayment(request) {
-    await client('sales/receipts/advance', { body: request });
+  static async registerAdvancePayment(request, skipFiscal = false) {
+    const url = skipFiscal ? 'sales/receipts/advance?skipFiscal=true' : 'sales/receipts/advance';
+    await client(url, { body: request });
     emitSalesDataChanged({ type: 'advance-registered', warehouseId: request?.warehouseId ?? null });
   }
 
-  static async registerGiftCard(request) {
-    const result = await client('sales/receipts/gift-card', { body: request });
+  static async registerGiftCard(request, skipFiscal = false) {
+    const url = skipFiscal ? 'sales/receipts/gift-card?skipFiscal=true' : 'sales/receipts/gift-card';
+    const result = await client(url, { body: request });
     emitSalesDataChanged({ type: 'gift-card-sold', warehouseId: request?.warehouseId ?? null });
     return result;
+  }
+
+  // Reconstruiește dialogul de vouchere pentru un bon închis prin reconciliere fiscală
+  static async getVoucherIssuance(receiptId) {
+    return await client(`voucher/customer-vouchers/issuance/${receiptId}`);
   }
 
   static async getReceiptsReport(warehouseId, status, start, end) {

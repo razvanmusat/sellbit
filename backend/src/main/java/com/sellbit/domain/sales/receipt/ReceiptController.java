@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import jakarta.validation.Valid;
+import com.sellbit.domain.sales.fiscal.ReceiptFiscalService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -27,6 +28,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 public class ReceiptController {
 
     private final ReceiptService receiptService;
+    private final ReceiptFiscalService receiptFiscalService;
 
     @PreAuthorize("hasAuthority('100')")
     @GetMapping("/{id}")
@@ -92,8 +94,13 @@ public class ReceiptController {
 
     @PreAuthorize("hasAnyAuthority('50', '100')")
     @PostMapping("/{id}/close")
-    public ResponseEntity<com.sellbit.domain.voucher.customervoucher.CustomerVoucherDTOs.VoucherIssuanceResult> close(@PathVariable Integer id) {
-        return ResponseEntity.ok(receiptService.closeReceipt(id));
+    public ResponseEntity<com.sellbit.domain.voucher.customervoucher.CustomerVoucherDTOs.VoucherIssuanceResult> close(
+            @PathVariable Integer id,
+            @RequestParam(defaultValue = "false") boolean skipFiscal) {
+        if (skipFiscal) {
+            return ResponseEntity.ok(receiptService.closeReceipt(id));
+        }
+        return ResponseEntity.ok(receiptFiscalService.closeFiscal(id));
     }
 
     @PreAuthorize("hasAnyAuthority('50', '100')")
@@ -111,21 +118,41 @@ public class ReceiptController {
 
     @PreAuthorize("hasAnyAuthority('50', '100')")
     @PostMapping("/advance")
-    public ResponseEntity<Void> registerAdvance(@RequestBody @Valid ReceiptDTOs.AdvancePaymentRequest request) {
-        receiptService.registerAdvancePayment(
-                request.warehouseId(),
-                request.amount(),
-                request.paymentMethodCode(),
-                request.userId(),
-                request.note());
+    public ResponseEntity<Void> registerAdvance(
+            @RequestBody @Valid ReceiptDTOs.AdvancePaymentRequest request,
+            @RequestParam(defaultValue = "false") boolean skipFiscal) {
+        if (skipFiscal) {
+            receiptService.registerAdvancePayment(
+                    request.warehouseId(),
+                    request.amount(),
+                    request.paymentMethodCode(),
+                    request.userId(),
+                    request.note());
+        } else {
+            receiptFiscalService.registerAdvanceFiscal(
+                    request.warehouseId(),
+                    request.amount(),
+                    request.paymentMethodCode(),
+                    request.userId(),
+                    request.note());
+        }
         return ResponseEntity.ok().build();
     }
 
     @PreAuthorize("hasAnyAuthority('50', '100')")
     @PostMapping("/gift-card")
     public ResponseEntity<com.sellbit.domain.voucher.customervoucher.CustomerVoucherDTOs.IssuedVoucherInfo> registerGiftCard(
-            @RequestBody @Valid ReceiptDTOs.GiftCardRequest request) {
-        return ResponseEntity.ok(receiptService.registerGiftCardPayment(
+            @RequestBody @Valid ReceiptDTOs.GiftCardRequest request,
+            @RequestParam(defaultValue = "false") boolean skipFiscal) {
+        if (skipFiscal) {
+            return ResponseEntity.ok(receiptService.registerGiftCardPayment(
+                    request.warehouseId(),
+                    request.amount(),
+                    request.paymentMethodCode(),
+                    request.userId(),
+                    request.note()));
+        }
+        return ResponseEntity.ok(receiptFiscalService.registerGiftCardFiscal(
                 request.warehouseId(),
                 request.amount(),
                 request.paymentMethodCode(),

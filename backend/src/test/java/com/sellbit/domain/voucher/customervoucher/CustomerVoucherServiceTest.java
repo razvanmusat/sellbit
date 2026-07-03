@@ -4,6 +4,7 @@ import com.sellbit.domain.catalog.product.Product;
 import com.sellbit.domain.sales.receipt.Receipt;
 import com.sellbit.domain.sales.receipt.ReceiptRepository;
 import com.sellbit.domain.sales.receiptitem.ReceiptItem;
+import com.sellbit.domain.voucher.vouchercampaign.CampaignType;
 import com.sellbit.domain.voucher.vouchercampaign.VoucherCampaign;
 import com.sellbit.domain.voucher.vouchercampaign.VoucherCampaignRepository;
 import org.junit.jupiter.api.Test;
@@ -41,6 +42,7 @@ class CustomerVoucherServiceTest {
                 .codeLength(5)
                 .validDays(7)
                 .maxDiscountAmount(new BigDecimal("100.00")) // Setare implicit pentru teste
+                .campaignType(CampaignType.builder().code("REGULAR").build())
                 .build();
         return CustomerVoucher.builder()
                 .code(code)
@@ -64,11 +66,11 @@ class CustomerVoucherServiceTest {
 
     // --- 2. getUsedVouchers ---
     @Test void getUsedVouchers_Valid() {
-        when(voucherRepository.findAllByUsedTrueOrderByUsedAtDesc()).thenReturn(List.of(createBaseVoucher("V1")));
+        when(voucherRepository.findAllConsumedOrderByUsedAtDesc()).thenReturn(List.of(createBaseVoucher("V1")));
         assertThat(voucherService.getUsedVouchers()).hasSize(1);
     }
     @Test void getUsedVouchers_Empty() {
-        when(voucherRepository.findAllByUsedTrueOrderByUsedAtDesc()).thenReturn(List.of());
+        when(voucherRepository.findAllConsumedOrderByUsedAtDesc()).thenReturn(List.of());
         assertThat(voucherService.getUsedVouchers()).isEmpty();
     }
 
@@ -181,15 +183,16 @@ class CustomerVoucherServiceTest {
 
     // --- 7. checkAndIssueVouchers (isEligible) ---
     @Test void issueVouchers_Eligible_Saves() {
-        VoucherCampaign cp = VoucherCampaign.builder().id(1).minAmount(new BigDecimal("50")).validDays(5).codeLength(5).build();
+        VoucherCampaign cp = VoucherCampaign.builder().id(1).minAmount(new BigDecimal("50")).validDays(5).codeLength(5).campaignType(CampaignType.builder().code("REGULAR").build()).build();
         when(campaignRepository.findAllActive(any())).thenReturn(List.of(cp));
         when(voucherRepository.existsByCode(any())).thenReturn(false);
-        
+        when(voucherRepository.save(any(CustomerVoucher.class))).thenAnswer(i -> i.getArgument(0));
+
         voucherService.checkAndIssueVouchers(Receipt.builder().totalAmount(new BigDecimal("100")).build());
         verify(voucherRepository).save(any(CustomerVoucher.class));
     }
     @Test void issueVouchers_NotEligible_ProductMissing() {
-        VoucherCampaign cp = VoucherCampaign.builder().requiredProductIds(List.of(99)).build();
+        VoucherCampaign cp = VoucherCampaign.builder().requiredProductIds(List.of(99)).campaignType(CampaignType.builder().code("REGULAR").build()).build();
         when(campaignRepository.findAllActive(any())).thenReturn(List.of(cp));
         
         Receipt r = Receipt.builder().items(List.of()).totalAmount(new BigDecimal("100")).build();

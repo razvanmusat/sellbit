@@ -50,6 +50,7 @@ public class ReceiptDTOs {
          */
         public record Response(
                         Integer id,
+                        String statusCode,
                         String statusLabel,
                         String tableName,
                         BigDecimal totalAmount,

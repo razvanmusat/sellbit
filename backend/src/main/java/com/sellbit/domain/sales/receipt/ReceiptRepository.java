@@ -3,15 +3,15 @@ package com.sellbit.domain.sales.receipt;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
 import java.util.List;
 
-@Repository
 public interface ReceiptRepository extends JpaRepository<Receipt, Integer> {
 
         List<Receipt> findByStatus_Code(String statusCode);
+
+        List<Receipt> findByStatus_CodeIn(java.util.List<String> statusCodes);
 
         @Query("""
                 SELECT DISTINCT r FROM Receipt r
@@ -70,4 +70,23 @@ public interface ReceiptRepository extends JpaRepository<Receipt, Integer> {
         List<Receipt> findRefundsForReceipt(
                         @Param("originalId") Integer originalId,
                         @Param("statusCode") String statusCode);
+
+        @Query("""
+                SELECT r FROM Receipt r
+                LEFT JOIN FETCH r.items i
+                LEFT JOIN FETCH i.product p
+                LEFT JOIN FETCH p.vatRate
+                LEFT JOIN FETCH i.warehouse
+                WHERE r.id = :id
+                """)
+        java.util.Optional<Receipt> findByIdWithItems(@Param("id") Integer id);
+
+        @Query("""
+                SELECT r FROM Receipt r
+                LEFT JOIN FETCH r.payments pay
+                LEFT JOIN FETCH pay.paymentMethod
+                LEFT JOIN FETCH pay.warehouse
+                WHERE r.id = :id
+                """)
+        java.util.Optional<Receipt> findByIdWithPayments(@Param("id") Integer id);
 }

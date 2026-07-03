@@ -12,6 +12,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -53,6 +54,7 @@ import com.sellbit.domain.sales.receiptpayment.ReceiptPaymentRepository;
 import com.sellbit.domain.security.user.User;
 import com.sellbit.domain.security.user.UserRepository;
 import com.sellbit.domain.store.StoreRepository;
+import com.sellbit.domain.voucher.customervoucher.CustomerVoucherDTOs;
 import com.sellbit.domain.voucher.customervoucher.CustomerVoucherRepository;
 import com.sellbit.domain.voucher.customervoucher.CustomerVoucherService;
 
@@ -103,7 +105,8 @@ class ReceiptServiceTest {
                 .build();
         receipt.setPayments(List.of(payment));
 
-        when(receiptRepository.findById(100)).thenReturn(Optional.of(receipt));
+        when(receiptRepository.findByIdWithItems(100)).thenReturn(Optional.of(receipt));
+        when(receiptRepository.findByIdWithPayments(100)).thenReturn(Optional.of(receipt));
         when(statusRepository.findByCode("CLOSED")).thenReturn(Optional.of(closedStatus));
         when(purchaseService.consumeForReceiptItemAndRecord(warehouse.getId(), receipt, item)).thenReturn(new BigDecimal("3.00"));
 
@@ -342,7 +345,8 @@ class ReceiptServiceTest {
         receipt.setPayments(new ArrayList<>(List.of(payment)));
         receipt.setItems(new ArrayList<>());
 
-        when(receiptRepository.findById(100)).thenReturn(Optional.of(receipt));
+        when(receiptRepository.findByIdWithItems(100)).thenReturn(Optional.of(receipt));
+        when(receiptRepository.findByIdWithPayments(100)).thenReturn(Optional.of(receipt));
         when(statusRepository.findByCode("CLOSED")).thenReturn(Optional.of(closedStatus));
 
         receiptService.closeReceipt(100);
@@ -355,7 +359,8 @@ class ReceiptServiceTest {
     @DisplayName("closeReceipt - Eroare: Plată incompletă")
     void closeReceipt_Fail_Payment() {
         receipt.getPayments().add(ReceiptPayment.builder().amount(new BigDecimal("99.99")).build());
-        when(receiptRepository.findById(100)).thenReturn(Optional.of(receipt));
+        when(receiptRepository.findByIdWithItems(100)).thenReturn(Optional.of(receipt));
+        when(receiptRepository.findByIdWithPayments(100)).thenReturn(Optional.of(receipt));
 
         RuntimeException ex = assertThrows(RuntimeException.class, () -> receiptService.closeReceipt(100));
         assertEquals("ERROR.RECEIPT.INCOMPLETE_PAYMENT", ex.getMessage());
@@ -379,7 +384,8 @@ class ReceiptServiceTest {
         ReceiptItem item = ReceiptItem.builder().product(cateringProduct).quantity(BigDecimal.ONE).build();
         receipt.setItems(List.of(item));
 
-        when(receiptRepository.findById(100)).thenReturn(Optional.of(receipt));
+        when(receiptRepository.findByIdWithItems(100)).thenReturn(Optional.of(receipt));
+        when(receiptRepository.findByIdWithPayments(100)).thenReturn(Optional.of(receipt));
 
         RuntimeException ex = assertThrows(RuntimeException.class, () -> receiptService.closeReceipt(100));
         assertEquals("ERROR.CATERING.PURCHASE_PRICE_NULL", ex.getMessage());
@@ -537,7 +543,7 @@ class ReceiptServiceTest {
     @Test
     @DisplayName("getActiveReceipts - Succes: Returnează bonurile deschise pentru gestiunea corectă")
     void getActiveReceipts_Success() {
-        when(receiptRepository.findByStatus_Code("OPEN"))
+        when(receiptRepository.findByStatus_CodeIn(List.of("OPEN", "FISCAL_PENDING", "FISCAL_FAILED")))
                 .thenReturn(List.of(receipt));
 
         List<ReceiptDTOs.Response> result = receiptService.getActiveReceipts();
@@ -545,19 +551,19 @@ class ReceiptServiceTest {
         assertFalse(result.isEmpty());
         assertEquals(1, result.size());
         assertEquals("Masa: Masa 10", result.get(0).tableName());
-        verify(receiptRepository).findByStatus_Code("OPEN");
+        verify(receiptRepository).findByStatus_CodeIn(List.of("OPEN", "FISCAL_PENDING", "FISCAL_FAILED"));
     }
 
     @Test
     @DisplayName("getActiveReceipts - Valid: Returnează listă goală dacă nu sunt bonuri deschise")
     void getActiveReceipts_Empty() {
-        when(receiptRepository.findByStatus_Code("OPEN"))
+        when(receiptRepository.findByStatus_CodeIn(List.of("OPEN", "FISCAL_PENDING", "FISCAL_FAILED")))
                 .thenReturn(List.of());
 
         List<ReceiptDTOs.Response> result = receiptService.getActiveReceipts();
 
         assertTrue(result.isEmpty());
-        verify(receiptRepository).findByStatus_Code("OPEN");
+        verify(receiptRepository).findByStatus_CodeIn(List.of("OPEN", "FISCAL_PENDING", "FISCAL_FAILED"));
     }
 
     // --- 9. getReceiptsReport ---
@@ -613,9 +619,12 @@ class ReceiptServiceTest {
         receipt.setItems(new ArrayList<>(List.of(item)));
         receipt.setWarehouse(warehouse);
         receipt.setTotalAmount(new BigDecimal("100.00")); // suma plății = totalAmount
-        receipt.setPayments(List.of(ReceiptPayment.builder().amount(new BigDecimal("100.00")).build()));
+        PaymentMethod fifoPayMethod = new PaymentMethod();
+        fifoPayMethod.setCode("CASH");
+        receipt.setPayments(List.of(ReceiptPayment.builder().amount(new BigDecimal("100.00")).paymentMethod(fifoPayMethod).build()));
 
-        when(receiptRepository.findById(100)).thenReturn(Optional.of(receipt));
+        when(receiptRepository.findByIdWithItems(100)).thenReturn(Optional.of(receipt));
+        when(receiptRepository.findByIdWithPayments(100)).thenReturn(Optional.of(receipt));
         when(statusRepository.findByCode("CLOSED")).thenReturn(Optional.of(closedStatus));
         when(purchaseService.consumeForReceiptItemAndRecord(eq(1), eq(receipt), eq(item)))
                 .thenReturn(new BigDecimal("40.00"));
@@ -896,6 +905,148 @@ class ReceiptServiceTest {
     void registerAdvancePayment_Fail_NoWarehouseId() {
         assertThrows(RuntimeException.class,
                 () -> receiptService.registerAdvancePayment(null, BigDecimal.TEN, "CASH", 1, "Test"));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // --- fiscalizare bonuri directe (createDirectReceiptPending / finalizeClosedReceipt) ---
+    // ─────────────────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("closeReceipt - Succes: închidere manuală din FISCAL_FAILED")
+    void closeReceipt_Success_FromFiscalFailed() {
+        ReceiptStatus fiscalFailed = new ReceiptStatus();
+        fiscalFailed.setCode("FISCAL_FAILED");
+        receipt.setStatus(fiscalFailed);
+
+        PaymentMethod cash = new PaymentMethod();
+        cash.setCode("CASH");
+        receipt.getPayments().add(ReceiptPayment.builder()
+                .paymentMethod(cash)
+                .amount(new BigDecimal("10.00"))
+                .build());
+
+        when(receiptRepository.findByIdWithItems(100)).thenReturn(Optional.of(receipt));
+        when(receiptRepository.findByIdWithPayments(100)).thenReturn(Optional.of(receipt));
+        when(statusRepository.findByCode("CLOSED")).thenReturn(Optional.of(closedStatus));
+        when(voucherService.checkAndIssueVouchers(receipt))
+                .thenReturn(new CustomerVoucherDTOs.VoucherIssuanceResult(List.of(), null));
+
+        receiptService.closeReceipt(100);
+
+        assertEquals("CLOSED", receipt.getStatus().getCode());
+    }
+
+    @Test
+    @DisplayName("createDirectReceiptPending - Succes: bon FISCAL_PENDING, fără mișcare de casă")
+    void createDirectReceiptPending_Success() {
+        when(warehouseRepository.findById(1)).thenReturn(Optional.of(warehouse));
+        User user = new User();
+        user.setId(5);
+        when(userRepository.findById(5)).thenReturn(Optional.of(user));
+
+        Product advanceProd = new Product();
+        VatRate vat = new VatRate();
+        vat.setRate(new BigDecimal("21.00"));
+        advanceProd.setVatRate(vat);
+        when(productRepository.findByProductTypeCode("ADVANCE")).thenReturn(List.of(advanceProd));
+
+        ReceiptStatus pendingStatus = new ReceiptStatus();
+        pendingStatus.setCode("FISCAL_PENDING");
+        when(statusRepository.findByCode("FISCAL_PENDING")).thenReturn(Optional.of(pendingStatus));
+
+        PaymentMethod cash = new PaymentMethod();
+        cash.setCode("CASH");
+        when(paymentMethodRepository.findByCode("CASH")).thenReturn(Optional.of(cash));
+
+        when(receiptRepository.save(any(Receipt.class))).thenAnswer(i -> {
+            Receipt r = i.getArgument(0);
+            r.setId(900);
+            return r;
+        });
+
+        Integer id = receiptService.createDirectReceiptPending(
+                "ADVANCE", 1, new BigDecimal("121.00"), "CASH", 5, "nota");
+
+        assertEquals(900, id);
+        verify(receiptRepository).save(argThat(r -> "FISCAL_PENDING".equals(r.getStatus().getCode())
+                && "Avans Petrecere".equals(r.getTableName())
+                && r.getTotalNet().compareTo(new BigDecimal("100.00")) == 0));
+        // Mișcarea de casă și voucherul se creează abia la finalizare
+        verify(cashMovementService, never()).createMovement(anyInt(), anyString(), any(), anyInt(), anyString(), anyInt());
+    }
+
+    @Test
+    @DisplayName("finalizeClosedReceipt - Avans: mișcare de casă pentru CASH, fără campanii de vouchere")
+    void finalizeClosedReceipt_Advance_MovementNoCampaigns() {
+        ProductType advanceType = new ProductType();
+        advanceType.setCode("ADVANCE");
+        Product advanceProd = new Product();
+        advanceProd.setProductType(advanceType);
+
+        PaymentMethod cash = new PaymentMethod();
+        cash.setCode("CASH");
+
+        User user = new User();
+        user.setId(5);
+        receipt.setUser(user);
+        receipt.setNote("Petrecere Ana");
+        receipt.setItems(List.of(ReceiptItem.builder()
+                .product(advanceProd)
+                .quantity(BigDecimal.ONE)
+                .warehouse(warehouse)
+                .build()));
+        receipt.setPayments(List.of(ReceiptPayment.builder()
+                .paymentMethod(cash)
+                .amount(new BigDecimal("200.00"))
+                .warehouse(warehouse)
+                .build()));
+
+        var result = receiptService.finalizeClosedReceipt(receipt);
+
+        verify(cashMovementService).createMovement(eq(1), eq("SALE"), eq(new BigDecimal("200.00")),
+                eq(5), anyString(), eq(100));
+        verify(voucherService, never()).checkAndIssueVouchers(any());
+        assertTrue(result.vouchers().isEmpty());
+        assertNull(result.loyaltyCampaign());
+    }
+
+    @Test
+    @DisplayName("finalizeClosedReceipt - Card cadou: emite voucherul, fără mișcare de casă la plata CARD")
+    void finalizeClosedReceipt_GiftCard_IssuesVoucher() {
+        ProductType giftType = new ProductType();
+        giftType.setCode("GIFT_CARD");
+        Product giftProd = new Product();
+        giftProd.setProductType(giftType);
+
+        PaymentMethod card = new PaymentMethod();
+        card.setCode("CARD");
+
+        User user = new User();
+        user.setId(5);
+        receipt.setUser(user);
+        receipt.setTotalAmount(new BigDecimal("300.00"));
+        receipt.setItems(List.of(ReceiptItem.builder()
+                .product(giftProd)
+                .quantity(BigDecimal.ONE)
+                .warehouse(warehouse)
+                .build()));
+        receipt.setPayments(List.of(ReceiptPayment.builder()
+                .paymentMethod(card)
+                .amount(new BigDecimal("300.00"))
+                .warehouse(warehouse)
+                .build()));
+
+        var issued = new CustomerVoucherDTOs.IssuedVoucherInfo(
+                7, "GIFT-XYZ", "Card Cadou", "GIFT_CARD", "FIXED", new BigDecimal("300.00"),
+                null, null, null, null, null);
+        when(voucherService.issueGiftCardVoucher(new BigDecimal("300.00"), receipt)).thenReturn(issued);
+
+        var result = receiptService.finalizeClosedReceipt(receipt);
+
+        assertEquals(1, result.vouchers().size());
+        assertEquals("GIFT-XYZ", result.vouchers().get(0).code());
+        verify(cashMovementService, never()).createMovement(anyInt(), anyString(), any(), anyInt(), anyString(), anyInt());
+        verify(voucherService, never()).checkAndIssueVouchers(any());
     }
 
     // ─────────────────────────────────────────────────────────────────────────

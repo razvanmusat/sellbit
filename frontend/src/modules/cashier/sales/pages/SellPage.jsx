@@ -13,6 +13,7 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import PaymentsIcon from '@mui/icons-material/Payments';
 import CardGiftcardIcon from '@mui/icons-material/CardGiftcard';
+import PointOfSaleIcon from '@mui/icons-material/PointOfSale';
 import { Navigate, useNavigate } from 'react-router-dom';
 
 import { useSellPage } from '../hooks/useSellPage';
@@ -25,6 +26,7 @@ import OpenedReceiptCard from '../components/receipt/OpenedReceiptCard';
 import AddPaymentModal from '../components/modals/AddPaymentModal';
 import CancelReceiptModal from '../components/modals/CancelReceiptModal';
 import VoucherIssuanceDialog from '../components/modals/VoucherIssuanceDialog';
+import FiscalModal from '../components/modals/FiscalModal';
 
 const SellPage = () => {
   const navigate = useNavigate();
@@ -47,6 +49,8 @@ const SellPage = () => {
     actions,
     voucherIssuance,
     giftCardStatus,
+    fiscalStatus,
+    fiscalPendingReceiptId,
     user,
   } = useSellPage();
 
@@ -113,6 +117,15 @@ const SellPage = () => {
                 Vinde Card Cadou
               </Button>
             )}
+            <Button
+              variant="outlined"
+              color="inherit"
+              startIcon={<PointOfSaleIcon />}
+              onClick={() => toggleModal('fiscal', true)}
+              size={isSmallScreen ? 'small' : 'medium'}
+            >
+              Casa de Marcat
+            </Button>
           </Box>
 
           <Box sx={{ p: 1 }}>
@@ -176,15 +189,18 @@ const SellPage = () => {
 
       {editingReceipt && (
         <AddPaymentModal
-          open={modals.addPayment}
-          onClose={() => toggleModal('addPayment', false)}
+          open={modals.addPayment || fiscalPendingReceiptId === editingReceipt.id}
+          onClose={fiscalPendingReceiptId === editingReceipt.id ? () => {} : () => toggleModal('addPayment', false)}
           receipt={editingReceipt}
           paymentMethods={paymentMethods}
           onAddPayment={actions.addPayment}
           onApplyVoucher={actions.applyVoucher}
           onRemovePayment={actions.removePayment}
           onCloseReceipt={actions.closeReceipt}
+          onCloseReceiptManual={actions.closeReceiptManual}
+          fiscalStatus={fiscalStatus}
           loading={loading.receipts === 'pending' || loading.paymentMethods === 'pending'}
+          isFiscalPending={fiscalPendingReceiptId === editingReceipt.id}
         />
       )}
 
@@ -194,6 +210,12 @@ const SellPage = () => {
         onConfirm={actions.cancelReceipt}
         reasons={cancelReasons}
         loading={loading.cancelReasons === 'pending'}
+      />
+
+      <FiscalModal
+        open={!!modals.fiscal}
+        onClose={() => toggleModal('fiscal', false)}
+        fiscalStatus={fiscalStatus}
       />
 
       {/* --- FEEDBACK (SNACKBAR) --- */}

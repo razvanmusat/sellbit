@@ -39,6 +39,7 @@ import com.sellbit.domain.security.user.UserRepository;
 import com.sellbit.domain.store.Store;
 import com.sellbit.domain.store.StoreRepository;
 import com.sellbit.domain.voucher.customervoucher.CustomerVoucher;
+import com.sellbit.domain.voucher.customervoucher.CustomerVoucherDTOs;
 import com.sellbit.domain.voucher.customervoucher.CustomerVoucherRepository;
 import com.sellbit.domain.voucher.customervoucher.CustomerVoucherService;
 
@@ -74,7 +75,7 @@ public class ReceiptService {
 
         @Transactional(readOnly = true)
         public List<ReceiptDTOs.Response> getActiveReceipts() {
-                return receiptRepository.findByStatus_Code("OPEN")
+                return receiptRepository.findByStatus_CodeIn(List.of("OPEN", "FISCAL_PENDING", "FISCAL_FAILED"))
                                 .stream()
                                 .map(this::mapToResponse)
                                 .collect(Collectors.toList());
@@ -180,11 +181,15 @@ public class ReceiptService {
         }
 
         @Transactional
-        public com.sellbit.domain.voucher.customervoucher.CustomerVoucherDTOs.VoucherIssuanceResult closeReceipt(Integer receiptId) {
-                Receipt receipt = receiptRepository.findById(receiptId)
+        public CustomerVoucherDTOs.VoucherIssuanceResult closeReceipt(Integer receiptId) {
+                receiptRepository.findByIdWithItems(receiptId)
+                                .orElseThrow(() -> new RuntimeException("ERROR.RECEIPT.NOT_FOUND"));
+                Receipt receipt = receiptRepository.findByIdWithPayments(receiptId)
                                 .orElseThrow(() -> new RuntimeException("ERROR.RECEIPT.NOT_FOUND"));
 
-                if (!"OPEN".equals(receipt.getStatus().getCode())) {
+                // FISCAL_FAILED: permite închiderea manuală (fără bon fiscal) când casa de marcat e defectă
+                String statusCode = receipt.getStatus().getCode();
+                if (!"OPEN".equals(statusCode) && !"FISCAL_FAILED".equals(statusCode)) {
                         throw new RuntimeException("ERROR.RECEIPT.NOT_OPEN");
                 }
 
@@ -220,13 +225,69 @@ public class ReceiptService {
                 receipt.setClosedAt(LocalDateTime.now());
                 receiptRepository.save(receipt);
 
+                return finalizeClosedReceipt(receipt);
+        }
+
+        /**
+         * Finalizări la închiderea bonului, comune închiderii directe (closeReceipt) și celei
+         * fiscale (completeFiscalClose / reconciliere), în funcție de tipul bonului:
+         * - bon direct (ADVANCE / GIFT_CARD): mișcarea de casă amânată din faza de creare
+         *   + voucherul cadou pentru GIFT_CARD; fără campanii de vouchere.
+         * - vânzare normală: campanii de vouchere, sărite dacă bonul a fost plătit cu voucher.
+         * Rulează în tranzacția apelantului.
+         */
+        public CustomerVoucherDTOs.VoucherIssuanceResult finalizeClosedReceipt(Receipt receipt) {
+                String directKind = directReceiptKind(receipt);
+
+                if (directKind != null) {
+                        createDirectReceiptCashMovement(receipt, directKind);
+                        if ("GIFT_CARD".equals(directKind)) {
+                                return new CustomerVoucherDTOs.VoucherIssuanceResult(
+                                                List.of(voucherService.issueGiftCardVoucher(receipt.getTotalAmount(), receipt)),
+                                                null);
+                        }
+                        return new CustomerVoucherDTOs.VoucherIssuanceResult(List.of(), null);
+                }
+
                 boolean paidWithVoucher = receipt.getPayments().stream()
                                 .anyMatch(p -> "VOUCHER".equals(p.getPaymentMethod().getCode()));
                 if (paidWithVoucher) {
-                        return new com.sellbit.domain.voucher.customervoucher.CustomerVoucherDTOs.VoucherIssuanceResult(
-                                        java.util.List.of(), null);
+                        return new CustomerVoucherDTOs.VoucherIssuanceResult(List.of(), null);
                 }
                 return voucherService.checkAndIssueVouchers(receipt);
+        }
+
+        /** ADVANCE sau GIFT_CARD dacă bonul e unul direct (avans / card cadou), altfel null. */
+        private String directReceiptKind(Receipt receipt) {
+                for (ReceiptItem item : receipt.getItems()) {
+                        var type = item.getProduct().getProductType();
+                        if (type != null && ("ADVANCE".equals(type.getCode()) || "GIFT_CARD".equals(type.getCode()))) {
+                                return type.getCode();
+                        }
+                }
+                return null;
+        }
+
+        // Bonurile directe fiscalizate se creează fără mișcare de casă (ca să se poată șterge
+        // curat la eșec de printare) — mișcarea se creează aici, la finalizare
+        private void createDirectReceiptCashMovement(Receipt receipt, String directKind) {
+                for (ReceiptPayment payment : receipt.getPayments()) {
+                        if (!"CASH".equals(payment.getPaymentMethod().getCode())) {
+                                continue;
+                        }
+                        String movementNote = ("GIFT_CARD".equals(directKind) ? "Vanzare Card Cadou" : "Incasare Avans")
+                                        + " (Bon #" + receipt.getId() + ")";
+                        if (receipt.getNote() != null && !receipt.getNote().isBlank()) {
+                                movementNote += ": " + receipt.getNote();
+                        }
+                        cashMovementService.createMovement(
+                                        payment.getWarehouse().getId(),
+                                        "SALE",
+                                        payment.getAmount(),
+                                        receipt.getUser().getId(),
+                                        movementNote,
+                                        receipt.getId());
+                }
         }
 
         @Transactional
@@ -318,6 +379,7 @@ public class ReceiptService {
 
                 return new ReceiptDTOs.Response(
                                 receipt.getId(),
+                                receipt.getStatus().getCode(),
                                 receipt.getStatus().getLabel(),
                                 explanation,
                                 receipt.getTotalAmount(),
@@ -647,7 +709,7 @@ public class ReceiptService {
          * Vânzare card cadou: creează bon CLOSED (ca avans) + emite voucher FIXED cu suma specificată.
          */
         @Transactional
-        public com.sellbit.domain.voucher.customervoucher.CustomerVoucherDTOs.IssuedVoucherInfo registerGiftCardPayment(
+        public CustomerVoucherDTOs.IssuedVoucherInfo registerGiftCardPayment(
                         Integer warehouseId, BigDecimal amount, String paymentMethodCode,
                         Integer userId, String note) {
 
@@ -739,6 +801,100 @@ public class ReceiptService {
 
                 // Emite voucherul cu valoarea din bon
                 return voucherService.issueGiftCardVoucher(amount, receipt);
+        }
+
+        /**
+         * Faza 1 a fiscalizării unui bon direct (avans petrecere / card cadou): creează bonul
+         * complet (item + plată) cu status FISCAL_PENDING. Mișcarea de casă și voucherul cadou
+         * se creează abia în finalizeClosedReceipt, după confirmarea bonului fiscal — astfel,
+         * dacă printarea eșuează sigur, bonul se poate șterge fără urme.
+         * Calea manuală (skipFiscal) folosește în continuare registerAdvancePayment /
+         * registerGiftCardPayment, care creează bonul direct CLOSED.
+         */
+        @Transactional
+        public Integer createDirectReceiptPending(String productTypeCode, Integer warehouseId, BigDecimal amount,
+                        String paymentMethodCode, Integer userId, String note) {
+                boolean giftCard = "GIFT_CARD".equals(productTypeCode);
+
+                if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+                        throw new RuntimeException(giftCard
+                                        ? "ERROR.GIFT_CARD.INVALID_AMOUNT"
+                                        : "ERROR.ADVANCE.INVALID_AMOUNT");
+                }
+                if (warehouseId == null) {
+                        throw new RuntimeException("ERROR.WAREHOUSE.ID_REQUIRED");
+                }
+
+                Warehouse warehouse = warehouseRepository.findById(warehouseId)
+                                .orElseThrow(() -> new RuntimeException("ERROR.WAREHOUSE.NOT_FOUND"));
+
+                User user = userRepository.findById(userId)
+                                .orElseThrow(() -> new RuntimeException("ERROR.USER.NOT_FOUND"));
+
+                Product product = productRepository.findByProductTypeCode(productTypeCode)
+                                .stream().findFirst()
+                                .orElseThrow(() -> new RuntimeException(giftCard
+                                                ? "ERROR.PRODUCT.GIFT_CARD_NOT_CONFIGURED"
+                                                : "ERROR.PRODUCT.ADVANCE_NOT_CONFIGURED"));
+
+                ReceiptStatus pendingStatus = statusRepository.findByCode("FISCAL_PENDING")
+                                .orElseThrow(() -> new RuntimeException("ERROR.STATUS.NOT_FOUND"));
+
+                PaymentMethod method = paymentMethodRepository.findByCode(paymentMethodCode)
+                                .orElseThrow(() -> new RuntimeException("ERROR.PAYMENT_METHOD.NOT_FOUND"));
+
+                BigDecimal vatPercent = (product.getVatRate() != null
+                                && product.getVatRate().getRate() != null)
+                                                ? product.getVatRate().getRate()
+                                                : BigDecimal.ZERO;
+
+                BigDecimal vatDivisor = BigDecimal.ONE
+                                .add(vatPercent.divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP));
+                BigDecimal netAmount = amount.divide(vatDivisor, 2, RoundingMode.HALF_UP);
+                BigDecimal vatAmount = amount.subtract(netAmount);
+
+                Receipt receipt = Receipt.builder()
+                                .warehouse(warehouse)
+                                .user(user)
+                                .status(pendingStatus)
+                                .tableName(giftCard ? "Card Cadou" : "Avans Petrecere")
+                                .note(note)
+                                .totalAmount(amount)
+                                .totalNet(netAmount)
+                                .totalVat(vatAmount)
+                                .createdAt(LocalDateTime.now())
+                                .build();
+
+                receipt = receiptRepository.save(receipt);
+
+                ReceiptItem item = ReceiptItem.builder()
+                                .product(product)
+                                .warehouse(warehouse)
+                                .quantity(BigDecimal.ONE)
+                                .unitPrice(amount)
+                                .purchaseUnitPrice(BigDecimal.ZERO)
+                                .vatRate(vatPercent)
+                                .lineTotal(amount)
+                                .netTotal(netAmount)
+                                .vatTotal(vatAmount)
+                                .isServiceTime(false)
+                                .serviceEndAt(null)
+                                .build();
+
+                receipt.addItem(item);
+                itemRepository.save(item);
+
+                ReceiptPayment payment = ReceiptPayment.builder()
+                                .paymentMethod(method)
+                                .amount(amount)
+                                .paidAt(LocalDateTime.now())
+                                .warehouse(warehouse)
+                                .build();
+
+                receipt.addPayment(payment);
+                paymentRepository.save(payment);
+
+                return receipt.getId();
         }
 
         /**

@@ -276,6 +276,18 @@ const ERROR_MESSAGES = {
     "Există bonuri deschise! Nu poți modifica rețeta în timpul programului.",  
   "ERROR.QUANTITY.REQUIRED": "Cantitatea este obligatorie.",
 
+  // --- FISCAL ---
+  "ERROR.FISCAL.CONNECT_FAILED": "Casa de marcat nu răspunde. Încearcă din nou.",
+  "ERROR.FISCAL.PRINT_FAILED": "Eroare la printarea bonului fiscal. Încearcă din nou.",
+  "ERROR.FISCAL.PRINT_REJECTED": "Bonul fiscal a fost respins de casa de marcat. Verifică comenzile și încearcă din nou.",
+  "ERROR.FISCAL.AGENT_UNREACHABLE": "Casa de marcat nu răspunde. Verifică conexiunea și încearcă din nou.",
+  "ERROR.FISCAL.TIMEOUT": "Casa de marcat nu a răspuns în timp util. Verifică starea ultimului bon fiscal.",
+  "ERROR.FISCAL.INTERRUPTED": "Printarea bonului fiscal a fost întreruptă. Încearcă din nou.",
+  "ERROR.FISCAL.POLLING_LOST": "Conexiunea cu casa de marcat s-a pierdut după trimiterea bonului. Verificare automată în curs — nu reîncerca manual.",
+  "ERROR.RECEIPT.NOT_FISCAL_PENDING": "Bonul nu este în stare de procesare fiscală.",
+  "ERROR.RECEIPT.ALREADY_FISCAL_PENDING": "Bonul este deja în procesare la casa de marcat.",
+  "ERROR.STATUS.NOT_FOUND": "Status intern nedefinit — contactează suportul tehnic.",
+
   // --- GENERICE ---
   INTERNAL_SERVER_ERROR: "A apărut o eroare internă la server.",
   DEFAULT: "A apărut o eroare neașteptată. Încearcă din nou.",

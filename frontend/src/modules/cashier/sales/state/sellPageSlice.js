@@ -53,9 +53,9 @@ export const fetchActivePaymentMethods = createAsyncThunk(
 
 export const registerAdvancePayment = createAsyncThunk(
   'sellPage/registerAdvancePayment',
-  async ({ warehouseId, amount, paymentMethodCode, userId, note }, { rejectWithValue }) => {
+  async ({ warehouseId, amount, paymentMethodCode, userId, note, skipFiscal }, { rejectWithValue }) => {
     try {
-      await SalesService.registerAdvancePayment({ warehouseId, amount, paymentMethodCode, userId, note });
+      await SalesService.registerAdvancePayment({ warehouseId, amount, paymentMethodCode, userId, note }, skipFiscal);
     } catch (error) {
       return rejectWithValue(error.message || 'Nu s-a putut înregistra avansul.');
     }
@@ -159,11 +159,23 @@ export const closeReceipt = createAsyncThunk(
   }
 );
 
+export const closeReceiptManual = createAsyncThunk(
+  'sellPage/closeReceiptManual',
+  async (receiptId, { rejectWithValue }) => {
+    try {
+      const issuanceResult = await SalesService.closeReceipt(receiptId, true);
+      return { receiptId: Number(receiptId), issuanceResult: issuanceResult || { vouchers: [], loyaltyCampaign: null } };
+    } catch (error) {
+      return rejectWithValue(error.message || 'Eroare la închiderea bonului.');
+    }
+  }
+);
+
 export const registerGiftCard = createAsyncThunk(
   'sellPage/registerGiftCard',
-  async ({ warehouseId, amount, paymentMethodCode, userId, note }, { rejectWithValue }) => {
+  async ({ warehouseId, amount, paymentMethodCode, userId, note, skipFiscal }, { rejectWithValue }) => {
     try {
-      return await SalesService.registerGiftCard({ warehouseId, amount, paymentMethodCode, userId, note });
+      return await SalesService.registerGiftCard({ warehouseId, amount, paymentMethodCode, userId, note }, skipFiscal);
     } catch (error) {
       return rejectWithValue(error.message || 'Nu s-a putut vinde cardul cadou.');
     }
@@ -234,8 +246,16 @@ const sellPageSlice = createSlice({
         state.receipts = state.receipts.filter(r => r.id !== action.payload);
         state.error = null;
       })
+      .addCase(closeReceipt.pending, (state) => { state.receiptsLoading = 'pending'; })
       .addCase(closeReceipt.fulfilled, (state, action) => {
         state.receipts = state.receipts.filter(r => r.id !== action.payload.receiptId);
+        state.receiptsLoading = 'succeeded';
+        state.error = null;
+      })
+      .addCase(closeReceiptManual.pending, (state) => { state.receiptsLoading = 'pending'; })
+      .addCase(closeReceiptManual.fulfilled, (state, action) => {
+        state.receipts = state.receipts.filter(r => r.id !== action.payload.receiptId);
+        state.receiptsLoading = 'succeeded';
         state.error = null;
       })
 
@@ -258,8 +278,29 @@ const sellPageSlice = createSlice({
         (state) => { state.error = null; }
       )
 
+      // Erorile acestor acțiuni sunt gestionate local în modal (toast) — nu le punem în state.error global
       .addMatcher(
-        (action) => action.type.endsWith('/rejected') && action.type.startsWith('sellPage/'),
+        isAnyOf(
+          addPaymentToReceipt.rejected,
+          removePaymentFromReceipt.rejected,
+          applyVoucherToReceipt.rejected
+        ),
+        (state) => {
+          if (state.receiptsLoading === 'pending') state.receiptsLoading = 'failed';
+        }
+      )
+
+      .addMatcher(
+        (action) => {
+          const locallyHandled = [
+            'sellPage/addPaymentToReceipt/rejected',
+            'sellPage/removePaymentFromReceipt/rejected',
+            'sellPage/applyVoucherToReceipt/rejected',
+          ];
+          return action.type.endsWith('/rejected')
+            && action.type.startsWith('sellPage/')
+            && !locallyHandled.includes(action.type);
+        },
         (state, action) => {
           state.error = action.payload;
           if (state.warehousesLoading === 'pending') state.warehousesLoading = 'failed';

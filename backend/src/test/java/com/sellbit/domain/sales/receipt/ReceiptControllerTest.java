@@ -1,7 +1,9 @@
 package com.sellbit.domain.sales.receipt;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sellbit.domain.sales.fiscal.ReceiptFiscalService;
 import com.sellbit.domain.security.auth.JwtUtils;
+import com.sellbit.domain.voucher.customervoucher.CustomerVoucherDTOs;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,6 +34,7 @@ class ReceiptControllerTest {
     @Autowired private ObjectMapper objectMapper;
     
     @MockitoBean private ReceiptService receiptService;
+    @MockitoBean private ReceiptFiscalService receiptFiscalService;
 
     // Mock-uri necesare pentru pornirea contextului (satisfac JwtAuthenticationFilter)
     @MockitoBean private JwtUtils jwtUtils;
@@ -47,7 +50,7 @@ class ReceiptControllerTest {
         var req = new ReceiptDTOs.CreateRequest("Masa 5", 1, "Nota test");
         
         var res = new ReceiptDTOs.Response(
-                1, "Deschis", "Masa: Masa 5",
+                1, "OPEN", "Deschis", "Masa: Masa 5",
                 BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
                 "Central",
                 1,
@@ -111,11 +114,13 @@ class ReceiptControllerTest {
     @Test
     @DisplayName("POST /api/sales/receipts/{id}/close - Succes")
     void close_Success() throws Exception {
-        doNothing().when(receiptService).closeReceipt(100);
+        when(receiptService.closeReceipt(100))
+                .thenReturn(new CustomerVoucherDTOs.VoucherIssuanceResult(List.of(), null));
 
-        mockMvc.perform(post("/api/sales/receipts/100/close"))
+        mockMvc.perform(post("/api/sales/receipts/100/close")
+                        .param("skipFiscal", "true"))
                 .andExpect(status().isOk());
-        
+
         verify(receiptService).closeReceipt(100);
     }
 
@@ -127,7 +132,7 @@ class ReceiptControllerTest {
         var refundReq = new ReceiptDTOs.RefundRequest(1, List.of(itemReq), 1, null);
         
         var response = new ReceiptDTOs.Response(
-                101, "Inchis", "Stornare la Bon #100",
+                101, "CLOSED", "Inchis", "Stornare la Bon #100",
                 new BigDecimal("-50.00"), new BigDecimal("-42.00"), new BigDecimal("-8.00"),
                 "Central",
                 1,
@@ -180,7 +185,7 @@ class ReceiptControllerTest {
     @DisplayName("GET /api/sales/receipts/active - Succes: Returnează lista de mese active")
     void getActive_Success() throws Exception {
         var response = new ReceiptDTOs.Response(
-                1, "Deschis", "Masa: Masa 10",
+                1, "OPEN", "Deschis", "Masa: Masa 10",
                 BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
                 "Central",
                 1,
@@ -211,7 +216,7 @@ class ReceiptControllerTest {
     @DisplayName("GET /api/sales/receipts/report - Succes: Returnează istoricul filtrat")
     void getReport_Success() throws Exception {
         var response = new ReceiptDTOs.Response(
-                100, "Inchis", "Masa: Masa 5",
+                100, "CLOSED", "Inchis", "Masa: Masa 5",
                 new BigDecimal("150.00"), new BigDecimal("126.00"), new BigDecimal("24.00"),
                 "Central",
                 1,
@@ -280,18 +285,34 @@ class ReceiptControllerTest {
 
     // --- 11. ADVANCE PAYMENT (INCASARE AVANS) ---
     @Test
-    @DisplayName("POST /api/sales/receipts/advance - Succes: Înregistrare avans")
+    @DisplayName("POST /api/sales/receipts/advance - Succes: Implicit trece prin fluxul fiscal")
     void registerAdvance_Success() throws Exception {
         var req = new ReceiptDTOs.AdvancePaymentRequest(1, new BigDecimal("100.00"), "CASH", 1, "Avans client");
 
-        // Controllerul apeleaza metoda void a serviciului cu 5 argumente
-        doNothing().when(receiptService).registerAdvancePayment(anyInt(), any(), anyString(), anyInt(), anyString());
+        doNothing().when(receiptFiscalService)
+                .registerAdvanceFiscal(anyInt(), any(), anyString(), anyInt(), anyString());
 
         mockMvc.perform(post("/api/sales/receipts/advance")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk());
-        
+
+        verify(receiptFiscalService).registerAdvanceFiscal(1, new BigDecimal("100.00"), "CASH", 1, "Avans client");
+    }
+
+    @Test
+    @DisplayName("POST /api/sales/receipts/advance?skipFiscal=true - Succes: Încasare manuală, fără fiscalizare")
+    void registerAdvance_Success_SkipFiscal() throws Exception {
+        var req = new ReceiptDTOs.AdvancePaymentRequest(1, new BigDecimal("100.00"), "CASH", 1, "Avans client");
+
+        doNothing().when(receiptService).registerAdvancePayment(anyInt(), any(), anyString(), anyInt(), anyString());
+
+        mockMvc.perform(post("/api/sales/receipts/advance")
+                        .param("skipFiscal", "true")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isOk());
+
         verify(receiptService).registerAdvancePayment(1, new BigDecimal("100.00"), "CASH", 1, "Avans client");
     }
 

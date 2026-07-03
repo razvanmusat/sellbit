@@ -377,6 +377,46 @@ public class PurchaseService {
     }
 
     @Transactional(readOnly = true)
+    public void validateStockAvailability(Integer warehouseId, Product product, BigDecimal quantity) {
+        if (quantity == null || quantity.compareTo(BigDecimal.ZERO) <= 0) return;
+
+        List<ProductComponent> components = productComponentRepository
+                .findByParentProductIdAndIsActiveTrue(product.getId());
+
+        if (!components.isEmpty()) {
+            for (ProductComponent comp : components) {
+                BigDecimal componentQty = quantity.multiply(comp.getQuantity());
+                Product child = comp.getChildProduct();
+                Integer childWarehouseId = (child.getForcedWarehouse() != null)
+                        ? child.getForcedWarehouse().getId()
+                        : warehouseId;
+                validateStockAvailability(childWarehouseId, child, componentQty);
+            }
+            return;
+        }
+
+        if (product.getProductType() != null && "CATERING".equals(product.getProductType().getCode())) {
+            return;
+        }
+
+        if (!Boolean.TRUE.equals(product.getTrackStock())) {
+            return;
+        }
+
+        BigDecimal available = purchaseRepository.findActiveBatchesFIFO(warehouseId, product.getId())
+                .stream()
+                .map(Purchase::getRemainingQuantity)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        if (available.compareTo(quantity) < 0) {
+            throw new RuntimeException("ERROR.STOCK.BATCHES_INSUFFICIENT|product=" + product.getName()
+                    + "|warehouseId=" + warehouseId
+                    + "|needed=" + quantity
+                    + "|available=" + available);
+        }
+    }
+
+    @Transactional(readOnly = true)
     public List<PurchaseDTOs.ExpirationAlert> getExpirationAlerts(int daysAhead) {
         LocalDate thresholdDate = LocalDate.now().plusDays(daysAhead);
 

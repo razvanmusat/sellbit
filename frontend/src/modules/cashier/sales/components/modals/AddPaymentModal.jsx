@@ -1,22 +1,31 @@
-import React from 'react';
+import React, { useState } from 'react';
 import PropTypes from 'prop-types';
 import {
-  Dialog, DialogTitle, DialogContent, DialogActions,
+  Dialog, DialogTitle, DialogContent, DialogActions, DialogContentText,
   Button, Typography, FormControl, InputLabel, Select, MenuItem, Box,
   TextField, List, ListItem, ListItemText, IconButton, Divider, Chip,
   Alert, CircularProgress, Snackbar, Table, TableHead, TableBody,
-  TableRow, TableCell
+  TableRow, TableCell, Backdrop, LinearProgress
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ConfirmationNumberIcon from '@mui/icons-material/ConfirmationNumber';
 import StoreIcon from '@mui/icons-material/Store';
+import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
+import PaymentsIcon from '@mui/icons-material/Payments';
+import { keyframes } from '@mui/system';
 
 import { usePaymentModal } from '../../hooks/usePaymentModal';
 
+const pulseRing = keyframes`
+  0%   { box-shadow: 0 0 0 0 rgba(46, 125, 50, 0.45); }
+  70%  { box-shadow: 0 0 0 22px rgba(46, 125, 50, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(46, 125, 50, 0); }
+`;
+
 const AddPaymentModal = (props) => {
-  const { open, onClose, receipt, paymentMethods, loading, closeLabel = 'ÎNCHIDE BONUL' } = props;
+  const { open, onClose, receipt, paymentMethods, loading, fiscalStatus, closeLabel = 'ÎNCHIDE BONUL', onCloseReceiptManual, isFiscalPending = false } = props;
 
   const {
     amount, setAmount,
@@ -35,6 +44,8 @@ const AddPaymentModal = (props) => {
     remainingPerWarehouse,
     pickerOpen, pendingPayment, handlePickerSelect, handlePickerClose,
   } = usePaymentModal(props);
+
+  const [manualConfirmOpen, setManualConfirmOpen] = useState(false);
 
   const displayChange = changeDue > 0 ? changeDue : lastChange;
   const hasVoucherPayment = localPayments.some(p => p.paymentMethodCode === 'VOUCHER');
@@ -61,6 +72,17 @@ const AddPaymentModal = (props) => {
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <AttachMoneyIcon fontSize="large" color="primary" />
             <Typography variant="h6" fontWeight="bold" component="span">Adaugă Plată</Typography>
+            <FiberManualRecordIcon sx={{
+              fontSize: 12,
+              ml: 6,
+              color: fiscalStatus === true ? '#2e7d32' : fiscalStatus === false ? '#c62828' : '#9e9e9e',
+            }} />
+            <Typography variant="caption" sx={{
+              color: fiscalStatus === true ? '#2e7d32' : fiscalStatus === false ? '#c62828' : 'text.secondary',
+              fontWeight: 500,
+            }}>
+              {fiscalStatus === true ? 'Casă Activă' : fiscalStatus === false ? 'Casă Inactivă' : 'Verificare...'}
+            </Typography>
           </Box>
           <Chip label={`Total: ${receipt.totalAmount.toFixed(2)} Lei`} color="primary" sx={{ fontWeight: 'bold' }} />
         </DialogTitle>
@@ -248,28 +270,67 @@ const AddPaymentModal = (props) => {
         </DialogContent>
 
         <DialogActions sx={{ p: 3, justifyContent: 'space-between', alignItems: 'center', bgcolor: '#f5f5f5' }}>
-          <Button onClick={onClose} color="inherit" variant="outlined" disabled={loading}>Înapoi</Button>
+          <Button onClick={onClose} color="inherit" variant="outlined" disabled={loading || isFiscalPending}>Înapoi</Button>
 
           {displayChange > 0 && !isVoucher && (
-            <Typography variant="h5" color="error" fontWeight="bold" sx={{ whiteSpace: 'nowrap', mx: 2 }}>
+            <Typography variant="h5" color="error" fontWeight="bold" sx={{ whiteSpace: 'nowrap' }}>
               REST: {displayChange.toFixed(2)} LEI
             </Typography>
           )}
 
-          <Button
-            onClick={handleSubmit}
-            variant="contained"
-            color={isFullyPaid ? 'success' : 'primary'}
-            size="large"
-            disabled={loading || (!isFullyPaid && (!paymentMethodId ||
-              (isVoucher && (!voucherPrefix || !voucherCode)) ||
-              (!isVoucher && (!amount || parseFloat(amount) <= 0.01))))}
-            sx={{ minWidth: 200, fontWeight: 'bold', fontSize: '1rem', py: 1 }}
-            startIcon={isFullyPaid ? <CheckCircleIcon /> : (isVoucher ? <ConfirmationNumberIcon /> : <AttachMoneyIcon />)}
-          >
-            {loading ? 'Procesare...' : (isFullyPaid ? closeLabel : (isVoucher ? 'APLICĂ VOUCHER' : 'ADAUGĂ PLATĂ'))}
-          </Button>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            {isFullyPaid && onCloseReceiptManual && (
+              <Button
+                onClick={() => setManualConfirmOpen(true)}
+                variant="outlined"
+                color="warning"
+                size="large"
+                disabled={loading}
+                sx={{ fontWeight: 'bold', fontSize: '0.85rem', py: 1 }}
+              >
+                Incasare manuală
+              </Button>
+            )}
+            <Button
+              onClick={handleSubmit}
+              variant="contained"
+              color={isFullyPaid ? 'success' : 'primary'}
+              size="large"
+              disabled={loading || (!isFullyPaid && (!paymentMethodId ||
+                (isVoucher && (!voucherPrefix || !voucherCode)) ||
+                (!isVoucher && (!amount || parseFloat(amount) <= 0.01))))}
+              sx={{ minWidth: 200, fontWeight: 'bold', fontSize: '1rem', py: 1 }}
+              startIcon={isFullyPaid ? <CheckCircleIcon /> : (isVoucher ? <ConfirmationNumberIcon /> : <AttachMoneyIcon />)}
+            >
+              {loading ? 'Procesare...' : (isFullyPaid ? closeLabel : (isVoucher ? 'APLICĂ VOUCHER' : 'ADAUGĂ PLATĂ'))}
+            </Button>
+          </Box>
         </DialogActions>
+
+        <Dialog open={manualConfirmOpen} onClose={() => setManualConfirmOpen(false)} maxWidth="xs">
+          <DialogTitle>Închidere manuală bon</DialogTitle>
+          <DialogContent>
+            <DialogContentText>
+              Bonul va fi închis <strong>fără a emite bon fiscal</strong> pe casa de marcat.
+              <br /><br />
+              Folosește această opțiune doar dacă casa de marcat nu funcționează sau bonul fiscal a fost deja emis manual direct de pe casă.
+              <br /><br />
+              <Typography component="span" color="warning.dark" fontWeight="bold">
+                Vânzarea va fi înregistrată în Sellbit, dar nu va apărea pe banda fiscală.
+              </Typography>
+            </DialogContentText>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setManualConfirmOpen(false)} autoFocus>Anulează</Button>
+            <Button
+              onClick={() => { setManualConfirmOpen(false); onCloseReceiptManual(); }}
+              variant="contained"
+              color="warning"
+            >
+              Închide fără bon fiscal
+            </Button>
+          </DialogActions>
+        </Dialog>
 
         <Snackbar open={toastOpen} autoHideDuration={2000} onClose={handleCloseToast}
           anchorOrigin={{ vertical: 'top', horizontal: 'center' }}>
@@ -279,6 +340,28 @@ const AddPaymentModal = (props) => {
           </Alert>
         </Snackbar>
       </Dialog>
+
+      {/* ============================================================
+          BACKDROP PROCESARE FISCALĂ
+      ============================================================ */}
+      <Backdrop open={(loading && isFullyPaid) || isFiscalPending} sx={{ zIndex: 9999, backdropFilter: 'blur(3px)', backgroundColor: 'rgba(0,0,0,0.55)' }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+          <Box sx={{
+            width: 80, height: 80, borderRadius: '50%',
+            bgcolor: '#e8f5e9', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            animation: `${pulseRing} 1.6s ease-out infinite`,
+          }}>
+            <PaymentsIcon sx={{ fontSize: 40, color: '#2e7d32' }} />
+          </Box>
+          <Typography variant="h6" color="white" fontWeight="bold">
+            {isFiscalPending ? 'Bon în procesare la casa de marcat' : 'Se procesează plata'}
+          </Typography>
+          <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.8)' }}>
+            {isFiscalPending ? 'Verificare automată în curs — nu reîncerca manual...' : 'Așteptăm confirmarea casei de marcat...'}
+          </Typography>
+          <LinearProgress color="success" sx={{ width: 200, height: 5, borderRadius: 2 }} />
+        </Box>
+      </Backdrop>
 
       {/* ============================================================
           PICKER GESTIUNE
@@ -348,7 +431,10 @@ AddPaymentModal.propTypes = {
   onApplyVoucher: PropTypes.func.isRequired,
   onRemovePayment: PropTypes.func.isRequired,
   onCloseReceipt: PropTypes.func.isRequired,
+  fiscalStatus: PropTypes.bool,
   loading: PropTypes.bool,
+  onCloseReceiptManual: PropTypes.func,
+  isFiscalPending: PropTypes.bool,
 };
 
 export default AddPaymentModal;

@@ -399,6 +399,48 @@ public class CustomerVoucherService {
         return mapToIssuedInfo(saved);
     }
 
+    /**
+     * Reconstruiește rezultatul emiterii pentru un bon închis — folosit când bonul s-a
+     * închis prin reconciliere fiscală și dialogul de vouchere nu a putut fi afișat la close.
+     * Voucherele deja emise se citesc din DB; LOYALTY se re-evaluează doar dacă nu s-a emis
+     * niciun voucher și nu s-a dat deja ștampilă pe acest bon (guard anti-dublare).
+     */
+    @Transactional(readOnly = true)
+    public CustomerVoucherDTOs.VoucherIssuanceResult getIssuanceResultForReceipt(Integer receiptId) {
+        List<CustomerVoucherDTOs.IssuedVoucherInfo> vouchers = voucherRepository.findAllByIssuedReceiptId(receiptId)
+                .stream()
+                .map(this::mapToIssuedInfo)
+                .collect(Collectors.toList());
+
+        if (!vouchers.isEmpty() || stampLogRepository.existsByReceiptId(receiptId)) {
+            return new CustomerVoucherDTOs.VoucherIssuanceResult(vouchers, null);
+        }
+
+        Receipt receipt = receiptRepository.findById(receiptId)
+                .orElseThrow(() -> new RuntimeException("ERROR.RECEIPT.NOT_FOUND"));
+
+        boolean paidWithVoucher = receipt.getPayments().stream()
+                .anyMatch(p -> "VOUCHER".equals(p.getPaymentMethod().getCode()));
+        // Bonurile directe (avans / card cadou) nu participă la campanii — la fel ca la închidere
+        boolean directReceipt = receipt.getItems().stream()
+                .anyMatch(i -> i.getProduct().getProductType() != null
+                        && ("ADVANCE".equals(i.getProduct().getProductType().getCode())
+                                || "GIFT_CARD".equals(i.getProduct().getProductType().getCode())));
+
+        if (!"CLOSED".equals(receipt.getStatus().getCode()) || paidWithVoucher || directReceipt) {
+            return new CustomerVoucherDTOs.VoucherIssuanceResult(vouchers, null);
+        }
+
+        CustomerVoucherDTOs.LoyaltyCampaignInfo loyalty = campaignRepository.findAllActive(LocalDate.now()).stream()
+                .filter(c -> "LOYALTY".equals(c.getCampaignType().getCode()))
+                .filter(c -> isEligible(receipt, c))
+                .max(Comparator.comparing(c -> c.getDiscountValue() != null ? c.getDiscountValue() : BigDecimal.ZERO))
+                .map(this::mapToLoyaltyInfo)
+                .orElse(null);
+
+        return new CustomerVoucherDTOs.VoucherIssuanceResult(vouchers, loyalty);
+    }
+
     // --- CALCUL VALOARE VOUCHER ---
 
     public BigDecimal calculateVoucherValue(CustomerVoucher voucher, Receipt receipt) {

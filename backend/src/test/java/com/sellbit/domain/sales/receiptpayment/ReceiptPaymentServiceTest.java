@@ -8,6 +8,8 @@ import com.sellbit.domain.lookup.paymentmethod.PaymentMethodRepository;
 import com.sellbit.domain.lookup.receiptstatus.ReceiptStatus;
 import com.sellbit.domain.sales.receipt.Receipt;
 import com.sellbit.domain.sales.receipt.ReceiptRepository;
+import com.sellbit.domain.voucher.customervoucher.CustomerVoucherRepository;
+import com.sellbit.domain.voucher.customervoucher.CustomerVoucherService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -34,6 +36,8 @@ class ReceiptPaymentServiceTest {
     @Mock private PaymentMethodRepository paymentMethodRepository;
     @Mock private CashMovementService cashMovementService;
     @Mock private WarehouseRepository warehouseRepository;
+    @Mock private CustomerVoucherService voucherService;
+    @Mock private CustomerVoucherRepository voucherRepository;
 
     @InjectMocks
     private ReceiptPaymentService paymentService;

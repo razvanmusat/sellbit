@@ -26,12 +26,22 @@ public class CustomerVoucherController {
 
     /* Consumă un voucher manual.
      * MOTIV: Dacă integrarea automată eșuează sau voucherul e pe hârtie și nu se leagă de un bon digital,
-     * casierul trebuie să poată invalida voucherul manual ca să nu mai fie folosit a doua oară. */     
+     * casierul trebuie să poată invalida voucherul manual ca să nu mai fie folosit a doua oară. */
     @PreAuthorize("hasAnyAuthority('50', '100')")
     @PostMapping("/consume")
     public ResponseEntity<Void> consume(@RequestBody CustomerVoucherDTOs.ConsumeRequest request) {
         customerVoucherService.consumeVoucher(request.code(), request.receiptId());
         return ResponseEntity.ok().build();
+    }
+
+    /* Reconstruiește dialogul de vouchere pentru un bon închis.
+     * MOTIV: Când bonul se închide prin reconciliere fiscală, dialogul nu apare la close —
+     * casierul îl recuperează de aici (vouchere emise + eventuala campanie loyalty). */
+    @PreAuthorize("hasAnyAuthority('50', '100')")
+    @GetMapping("/issuance/{receiptId}")
+    public ResponseEntity<CustomerVoucherDTOs.VoucherIssuanceResult> getIssuanceForReceipt(
+            @PathVariable Integer receiptId) {
+        return ResponseEntity.ok(customerVoucherService.getIssuanceResultForReceipt(receiptId));
     }
 
     //Listarea tuturor voucherelor emise (Istoric complet).
