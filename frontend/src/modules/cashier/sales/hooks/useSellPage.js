@@ -17,6 +17,8 @@ import {
   removePaymentFromReceipt,
   closeReceipt,
   closeReceiptManual,
+  confirmPrintedFiscal,
+  retryNotPrintedFiscal,
   applyVoucherToReceipt,
 } from "../state/sellPageSlice";
 
@@ -66,7 +68,9 @@ export const useSellPage = () => {
   const [voucherIssuance, setVoucherIssuance] = useState(null); // { vouchers, loyaltyCampaign, receiptId }
   const [giftCardStatus, setGiftCardStatus] = useState({ active: false, campaignId: null });
   const [fiscalStatus, setFiscalStatus] = useState(null);
-  const [fiscalPendingReceiptId, setFiscalPendingReceiptId] = useState(null);
+  // Bon pentru care casa de marcat n-a confirmat clar tipărirea în timp util — cerem
+  // casierului să confirme vizual, la casă, dacă bonul a ieșit sau nu. { id, tableName }
+  const [askPrintedReceipt, setAskPrintedReceipt] = useState(null);
 
   const [feedback, setFeedback] = useState({
     message: null,
@@ -132,58 +136,27 @@ export const useSellPage = () => {
     return () => clearInterval(interval);
   }, [modals.addPayment, modals.fiscal]);
 
-  // Polling stare bon fiscal (FISCAL_PENDING → CLOSED sau FISCAL_FAILED)
+  // Dacă bonul deschis e deja FISCAL_PENDING (ex: pagina s-a reîncărcat în timp ce Fisco
+  // n-a apucat să răspundă) — o singură verificare pasivă, fără retrimitere de comandă.
+  // Dacă Fisco a confirmat între timp, se închide automat; altfel întrebăm casierul.
   useEffect(() => {
-    if (!fiscalPendingReceiptId) return;
-    const poll = () => dispatch(fetchOpenReceipts());
-    poll();
-    const interval = setInterval(poll, 3000);
-    return () => clearInterval(interval);
-  }, [fiscalPendingReceiptId, dispatch]);
-
-  // Reacție la schimbarea statusului bonului aflat în procesare fiscală
-  useEffect(() => {
-    if (!fiscalPendingReceiptId) return;
-    const receipt = receipts.find(r => r.id === fiscalPendingReceiptId);
-    if (!receipt) {
-      // Bon dispărut din lista activă → CLOSED prin reconciliere.
-      // Dialogul de vouchere nu a apărut la close — îl reconstruim din DB.
-      const closedReceiptId = fiscalPendingReceiptId;
-      setFiscalPendingReceiptId(null);
-      dispatch(invalidateCache());
-      SalesService.getVoucherIssuance(closedReceiptId)
-        .then((issuance) => {
-          const hasVouchers = issuance?.vouchers?.length > 0;
-          const hasLoyalty = !!issuance?.loyaltyCampaign;
-          if (hasVouchers || hasLoyalty) {
-            setVoucherIssuance({
-              vouchers: issuance.vouchers || [],
-              loyaltyCampaign: issuance.loyaltyCampaign || null,
-              receiptId: closedReceiptId,
-            });
-          } else {
-            setFeedback({ message: "Bon fiscal emis și bon închis cu succes!", severity: "success" });
-            navigate("/home/sell");
-          }
-        })
-        .catch(() => {
-          setFeedback({ message: "Bon fiscal emis și bon închis cu succes!", severity: "success" });
+    if (editingReceipt?.statusCode !== 'FISCAL_PENDING' || askPrintedReceipt) return;
+    const id = editingReceipt.id;
+    const tableName = editingReceipt.tableName;
+    SalesService.checkFiscalPending(id)
+      .then((closed) => {
+        if (closed) {
+          dispatch(invalidateCache());
+          dispatch(fetchOpenReceipts());
+          showFeedback("Bon fiscal emis și bon închis cu succes!", "success");
           navigate("/home/sell");
-        });
-      return;
-    }
-    if (receipt.statusCode === 'FISCAL_FAILED') {
-      setFiscalPendingReceiptId(null);
-      setFeedback({ message: "Tipărire fiscală eșuată. Verifică casa de marcat și reîncearcă.", severity: "error" });
-    }
-  }, [receipts, fiscalPendingReceiptId, dispatch, navigate]);
-
-  // Dacă bonul deschis este deja FISCAL_PENDING la reload pagină, pornește polling automat
-  useEffect(() => {
-    if (editingReceipt?.statusCode === 'FISCAL_PENDING' && !fiscalPendingReceiptId) {
-      setFiscalPendingReceiptId(editingReceipt.id);
-    }
-  }, [editingReceipt?.statusCode, editingReceipt?.id, fiscalPendingReceiptId]);
+        } else {
+          setAskPrintedReceipt({ id, tableName });
+        }
+      })
+      .catch(() => setAskPrintedReceipt({ id, tableName }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingReceipt?.statusCode, editingReceipt?.id]);
 
   useEffect(() => {
     if (error) {
@@ -223,16 +196,18 @@ export const useSellPage = () => {
         toggleModal("advance", false);
         return true;
       }
-      // Incert: jobul e la Fisco, bonul rămâne FISCAL_PENDING → reconcilierea îl finalizează automat
+      // Incert: nu s-a confirmat clar tipărirea — bonul rămâne FISCAL_PENDING, vizibil în listă
+      // ca „Avans Petrecere". Nu se rezolvă singur — deschide-l din listă ca să confirmi.
       const errorCode = result.payload || "";
       const stillPending = errorCode.includes("POLLING_LOST")
         || errorCode.includes("TIMEOUT")
-        || errorCode.includes("INTERRUPTED");
+        || errorCode.includes("INTERRUPTED")
+        || errorCode.includes("STILL_PROCESSING");
       if (stillPending) {
         dispatch(clearError());
         dispatch(invalidateCache());
         toggleModal("advance", false);
-        setFeedback({ message: "Avans în procesare la casa de marcat — se finalizează automat.", severity: "info" });
+        setFeedback({ message: "Casa de marcat n-a confirmat tipărirea. Deschide bonul „Avans Petrecere\" din listă pentru a confirma.", severity: "warning" });
         dispatch(fetchOpenReceipts());
         return true;
       }
@@ -262,14 +237,15 @@ export const useSellPage = () => {
       const errorCode = result.payload || "";
       const stillPending = errorCode.includes("POLLING_LOST")
         || errorCode.includes("TIMEOUT")
-        || errorCode.includes("INTERRUPTED");
+        || errorCode.includes("INTERRUPTED")
+        || errorCode.includes("STILL_PROCESSING");
       if (stillPending) {
         dispatch(clearError());
         dispatch(invalidateCache());
         toggleModal("giftCard", false);
         setFeedback({
-          message: "Card cadou în procesare la casa de marcat — voucherul se emite automat; deschide bonul «Card Cadou» din listă pentru cod.",
-          severity: "info",
+          message: "Casa de marcat n-a confirmat tipărirea. Deschide bonul „Card Cadou\" din listă pentru a confirma — voucherul se emite abia după confirmare.",
+          severity: "warning",
         });
         dispatch(fetchOpenReceipts());
         return { closed: true, issued: null };
@@ -386,20 +362,70 @@ export const useSellPage = () => {
             actions.backToDashboard();
           }
         } else if (closeReceipt.rejected.match(result)) {
-          const errorCode = result.payload || '';
-          const leavesFiscalPending = errorCode.includes('POLLING_LOST')
-            || errorCode.includes('TIMEOUT')
-            || errorCode.includes('PRINT_FAILED')
-            || errorCode.includes('INTERRUPTED');
-          if (leavesFiscalPending) {
-            // Bonul este FISCAL_PENDING — suprimă eroarea globală și pornește polling
+          // Re-fetch ca să vedem statusul REAL al bonului după eroare — dacă backend-ul a
+          // putut confirma clar (respins/conexiune moartă), bonul revine singur pe OPEN.
+          const fetchResult = await dispatch(fetchOpenReceipts());
+          const updated = fetchResult.payload?.find((r) => Number(r.id) === Number(receiptId));
+          if (updated?.statusCode === 'FISCAL_PENDING') {
+            // Ambiguu — nici Fisco, nici backend-ul nu știu sigur. Întrebăm casierul.
             dispatch(clearError());
-            setFiscalPendingReceiptId(parseInt(receiptId));
-            setFeedback({ message: "Bon în procesare la casa de marcat. Verificare automată în curs...", severity: "info" });
+            toggleModal("addPayment", false);
+            setAskPrintedReceipt({ id: updated.id, tableName: updated.tableName });
           }
-          // Re-fetch în orice caz de eroare: dacă TX2 (completeFiscalClose) a eșuat după print,
-          // bonul e FISCAL_PENDING în DB — efectul de auto-resume îl detectează și pornește polling.
-          await dispatch(fetchOpenReceipts());
+          // Altfel: eroare clară (bon revenit pe OPEN) — toast-ul standard de eroare o arată deja.
+        }
+      }
+    },
+
+    // Casierul a confirmat vizual, la casă, că bonul a ieșit fizic.
+    confirmBonPrinted: async (targetReceiptId) => {
+      const result = await dispatch(confirmPrintedFiscal(targetReceiptId));
+      setAskPrintedReceipt(null);
+      if (confirmPrintedFiscal.fulfilled.match(result)) {
+        dispatch(invalidateCache());
+        const { issuanceResult, receiptId: closedReceiptId } = result.payload;
+        const hasVouchers = issuanceResult?.vouchers?.length > 0;
+        const hasLoyalty = !!issuanceResult?.loyaltyCampaign;
+        if (hasVouchers || hasLoyalty) {
+          setVoucherIssuance({
+            vouchers: issuanceResult.vouchers || [],
+            loyaltyCampaign: issuanceResult.loyaltyCampaign || null,
+            receiptId: closedReceiptId,
+          });
+        } else {
+          showFeedback("Bon închis cu succes!", "success");
+        }
+        navigate("/home/sell");
+      } else {
+        await dispatch(fetchOpenReceipts());
+      }
+    },
+
+    // Casierul a confirmat că bonul NU a ieșit — revine pe OPEN și retrimite imediat.
+    retryBonNotPrinted: async (targetReceiptId) => {
+      setAskPrintedReceipt(null);
+      const result = await dispatch(retryNotPrintedFiscal(targetReceiptId));
+      if (retryNotPrintedFiscal.fulfilled.match(result)) {
+        dispatch(invalidateCache());
+        const { issuanceResult, receiptId: closedReceiptId } = result.payload;
+        const hasVouchers = issuanceResult?.vouchers?.length > 0;
+        const hasLoyalty = !!issuanceResult?.loyaltyCampaign;
+        if (hasVouchers || hasLoyalty) {
+          setVoucherIssuance({
+            vouchers: issuanceResult.vouchers || [],
+            loyaltyCampaign: issuanceResult.loyaltyCampaign || null,
+            receiptId: closedReceiptId,
+          });
+        } else {
+          showFeedback("Bon închis cu succes!", "success");
+        }
+        navigate("/home/sell");
+      } else if (retryNotPrintedFiscal.rejected.match(result)) {
+        const fetchResult = await dispatch(fetchOpenReceipts());
+        const updated = fetchResult.payload?.find((r) => Number(r.id) === Number(targetReceiptId));
+        if (updated?.statusCode === 'FISCAL_PENDING') {
+          dispatch(clearError());
+          setAskPrintedReceipt({ id: updated.id, tableName: updated.tableName });
         }
       }
     },
@@ -472,7 +498,7 @@ export const useSellPage = () => {
     voucherIssuance,
     giftCardStatus,
     fiscalStatus,
-    fiscalPendingReceiptId,
+    askPrintedReceipt,
   };
 };
 

@@ -82,6 +82,7 @@ class ReceiptFiscalServiceTest {
     @DisplayName("markFiscalPending - Eroare: Bon deja în FISCAL_PENDING")
     void markFiscalPending_Fail_AlreadyFiscalPending() {
         Receipt receipt = buildReceipt(fiscalPendingStatus, BigDecimal.ZERO, List.of(), List.of());
+        when(receiptRepository.lockById(1)).thenReturn(Optional.of(receipt));
         when(receiptRepository.findByIdWithItems(1)).thenReturn(Optional.of(receipt));
         when(receiptRepository.findByIdWithPayments(1)).thenReturn(Optional.of(receipt));
 
@@ -95,6 +96,7 @@ class ReceiptFiscalServiceTest {
     @DisplayName("markFiscalPending - Eroare: Status invalid (CLOSED)")
     void markFiscalPending_Fail_InvalidStatus() {
         Receipt receipt = buildReceipt(closedStatus, BigDecimal.ZERO, List.of(), List.of());
+        when(receiptRepository.lockById(1)).thenReturn(Optional.of(receipt));
         when(receiptRepository.findByIdWithItems(1)).thenReturn(Optional.of(receipt));
         when(receiptRepository.findByIdWithPayments(1)).thenReturn(Optional.of(receipt));
 
@@ -111,6 +113,7 @@ class ReceiptFiscalServiceTest {
                 .amount(new BigDecimal("99.00"))
                 .build();
         Receipt receipt = buildReceipt(openStatus, new BigDecimal("100.00"), List.of(), List.of(payment));
+        when(receiptRepository.lockById(1)).thenReturn(Optional.of(receipt));
         when(receiptRepository.findByIdWithItems(1)).thenReturn(Optional.of(receipt));
         when(receiptRepository.findByIdWithPayments(1)).thenReturn(Optional.of(receipt));
 
@@ -142,6 +145,7 @@ class ReceiptFiscalServiceTest {
                 .build();
 
         Receipt receipt = buildReceipt(openStatus, new BigDecimal("100.00"), List.of(item), List.of(payment));
+        when(receiptRepository.lockById(1)).thenReturn(Optional.of(receipt));
         when(receiptRepository.findByIdWithItems(1)).thenReturn(Optional.of(receipt));
         when(receiptRepository.findByIdWithPayments(1)).thenReturn(Optional.of(receipt));
 
@@ -169,6 +173,7 @@ class ReceiptFiscalServiceTest {
                 .build();
 
         Receipt receipt = buildReceipt(openStatus, new BigDecimal("100.00"), List.of(item), List.of(payment));
+        when(receiptRepository.lockById(1)).thenReturn(Optional.of(receipt));
         when(receiptRepository.findByIdWithItems(1)).thenReturn(Optional.of(receipt));
         when(receiptRepository.findByIdWithPayments(1)).thenReturn(Optional.of(receipt));
         when(statusRepository.findByCode("FISCAL_PENDING")).thenReturn(Optional.of(fiscalPendingStatus));
@@ -198,6 +203,7 @@ class ReceiptFiscalServiceTest {
                 .build();
 
         Receipt receipt = buildReceipt(fiscalFailedStatus, new BigDecimal("50.00"), List.of(item), List.of(payment));
+        when(receiptRepository.lockById(1)).thenReturn(Optional.of(receipt));
         when(receiptRepository.findByIdWithItems(1)).thenReturn(Optional.of(receipt));
         when(receiptRepository.findByIdWithPayments(1)).thenReturn(Optional.of(receipt));
         when(statusRepository.findByCode("FISCAL_PENDING")).thenReturn(Optional.of(fiscalPendingStatus));
@@ -226,6 +232,7 @@ class ReceiptFiscalServiceTest {
                 .build();
 
         Receipt receipt = buildReceipt(openStatus, new BigDecimal("100.00"), List.of(item), List.of(payment));
+        when(receiptRepository.lockById(1)).thenReturn(Optional.of(receipt));
         when(receiptRepository.findByIdWithItems(1)).thenReturn(Optional.of(receipt));
         when(receiptRepository.findByIdWithPayments(1)).thenReturn(Optional.of(receipt));
         when(productService.resolveWarehouse(product, warehouse)).thenReturn(warehouse);
@@ -258,6 +265,7 @@ class ReceiptFiscalServiceTest {
                 .build();
 
         Receipt receipt = buildReceipt(openStatus, new BigDecimal("90.00"), List.of(item), List.of(payment));
+        when(receiptRepository.lockById(1)).thenReturn(Optional.of(receipt));
         when(receiptRepository.findByIdWithItems(1)).thenReturn(Optional.of(receipt));
         when(receiptRepository.findByIdWithPayments(1)).thenReturn(Optional.of(receipt));
 
@@ -292,6 +300,7 @@ class ReceiptFiscalServiceTest {
     @DisplayName("completeFiscalClose - Eroare: Bon nu este în FISCAL_PENDING")
     void completeFiscalClose_Fail_NotFiscalPending() {
         Receipt receipt = buildReceipt(openStatus, BigDecimal.ZERO, List.of(), List.of());
+        when(receiptRepository.lockById(1)).thenReturn(Optional.of(receipt));
         when(receiptRepository.findByIdWithItems(1)).thenReturn(Optional.of(receipt));
         when(receiptRepository.findByIdWithPayments(1)).thenReturn(Optional.of(receipt));
 
@@ -323,6 +332,7 @@ class ReceiptFiscalServiceTest {
         Receipt receipt = buildReceipt(fiscalPendingStatus, new BigDecimal("150.00"),
                 List.of(item), List.of(payment));
 
+        when(receiptRepository.lockById(1)).thenReturn(Optional.of(receipt));
         when(receiptRepository.findByIdWithItems(1)).thenReturn(Optional.of(receipt));
         when(receiptRepository.findByIdWithPayments(1)).thenReturn(Optional.of(receipt));
         when(statusRepository.findByCode("CLOSED")).thenReturn(Optional.of(closedStatus));
@@ -353,8 +363,11 @@ class ReceiptFiscalServiceTest {
         Receipt receipt = buildReceipt(fiscalPendingStatus, BigDecimal.TEN, List.of(), List.of());
         when(receiptService.createDirectReceiptPending("ADVANCE", 1, BigDecimal.TEN, "CASH", 5, "nota"))
                 .thenReturn(1);
+        when(receiptRepository.lockById(1)).thenReturn(Optional.of(receipt));
         when(receiptRepository.findByIdWithItems(1)).thenReturn(Optional.of(receipt));
         when(receiptRepository.findByIdWithPayments(1)).thenReturn(Optional.of(receipt));
+        when(fiscalAgentService.needsFiscalPrint(receipt)).thenReturn(true);
+        when(fiscalAgentService.checkHealth()).thenReturn(true);
         when(statusRepository.findByCode("CLOSED")).thenReturn(Optional.of(closedStatus));
         when(receiptService.finalizeClosedReceipt(receipt))
                 .thenReturn(new CustomerVoucherDTOs.VoucherIssuanceResult(List.of(), null));
@@ -362,7 +375,7 @@ class ReceiptFiscalServiceTest {
         receiptFiscalService.registerAdvanceFiscal(1, BigDecimal.TEN, "CASH", 5, "nota");
 
         assertEquals("CLOSED", receipt.getStatus().getCode());
-        verify(fiscalAgentService).printGvBon(receipt);
+        verify(fiscalAgentService).printGvBon(eq(receipt), any());
         verify(receiptService).finalizeClosedReceipt(receipt);
         verify(receiptRepository, never()).delete(any());
     }
@@ -377,6 +390,7 @@ class ReceiptFiscalServiceTest {
 
         when(receiptService.createDirectReceiptPending("GIFT_CARD", 1, BigDecimal.TEN, "CARD", 5, null))
                 .thenReturn(1);
+        when(receiptRepository.lockById(1)).thenReturn(Optional.of(receipt));
         when(receiptRepository.findByIdWithItems(1)).thenReturn(Optional.of(receipt));
         when(receiptRepository.findByIdWithPayments(1)).thenReturn(Optional.of(receipt));
         when(statusRepository.findByCode("CLOSED")).thenReturn(Optional.of(closedStatus));
@@ -398,7 +412,9 @@ class ReceiptFiscalServiceTest {
         when(receiptRepository.findByIdWithItems(1)).thenReturn(Optional.of(receipt));
         when(receiptRepository.findByIdWithPayments(1)).thenReturn(Optional.of(receipt));
         when(receiptRepository.findById(1)).thenReturn(Optional.of(receipt));
-        when(fiscalAgentService.printGvBon(receipt))
+        when(fiscalAgentService.needsFiscalPrint(receipt)).thenReturn(true);
+        when(fiscalAgentService.checkHealth()).thenReturn(true);
+        when(fiscalAgentService.printGvBon(eq(receipt), any()))
                 .thenThrow(new RuntimeException("ERROR.FISCAL.CONNECT_FAILED"));
 
         RuntimeException ex = assertThrows(RuntimeException.class,
@@ -416,9 +432,13 @@ class ReceiptFiscalServiceTest {
                 .thenReturn(1);
         when(receiptRepository.findByIdWithItems(1)).thenReturn(Optional.of(receipt));
         when(receiptRepository.findByIdWithPayments(1)).thenReturn(Optional.of(receipt));
-        when(fiscalAgentService.printGvBon(receipt))
+        when(fiscalAgentService.needsFiscalPrint(receipt)).thenReturn(true);
+        when(fiscalAgentService.checkHealth()).thenReturn(true);
+        when(fiscalAgentService.printGvBon(eq(receipt), any()))
                 .thenThrow(new RuntimeException("ERROR.FISCAL.AGENT_UNREACHABLE"));
-        when(fiscalAgentService.findStatusByExternalId("sb-1")).thenReturn("queued");
+        // primul apel (înainte de print) → "not_found" (nu blochează); al doilea (din catch,
+        // după AGENT_UNREACHABLE) → "queued" (jobul există totuși la Fisco, rămâne pending)
+        when(fiscalAgentService.findStatusByExternalId("sb-1")).thenReturn("not_found", "queued");
 
         assertThrows(RuntimeException.class,
                 () -> receiptFiscalService.registerAdvanceFiscal(1, BigDecimal.TEN, "CASH", 5, null));

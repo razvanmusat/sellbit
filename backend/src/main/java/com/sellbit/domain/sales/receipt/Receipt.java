@@ -75,6 +75,11 @@ public class Receipt {
     @Builder.Default
     private boolean internalCorrection = false;
 
+    // job_id primit de la Fisco la acceptarea comenzii de print — sursă de adevăr 1:1 pentru
+    // verificarea de status (GET /api/v1/status?job_id=...), per manualul Fisco.
+    @Column(name = "fiscal_job_id", length = 100)
+    private String fiscalJobId;
+
     // Relații bidirecționale cu gestionare în cascadă
     @OneToMany(mappedBy = "receipt", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @BatchSize(size = 50)

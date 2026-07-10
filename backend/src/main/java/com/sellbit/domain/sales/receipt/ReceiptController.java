@@ -103,6 +103,31 @@ public class ReceiptController {
         return ResponseEntity.ok(receiptFiscalService.closeFiscal(id));
     }
 
+    // Casierul confirmă vizual, la casă, că bonul chiar a ieșit fizic — folosit când Fisco
+    // n-a răspuns clar în timp util la /close.
+    @PreAuthorize("hasAnyAuthority('50', '100')")
+    @PostMapping("/{id}/fiscal/confirm-printed")
+    public ResponseEntity<com.sellbit.domain.voucher.customervoucher.CustomerVoucherDTOs.VoucherIssuanceResult> confirmPrinted(
+            @PathVariable Integer id) {
+        return ResponseEntity.ok(receiptFiscalService.confirmPrintedManually(id));
+    }
+
+    // Casierul confirmă vizual că bonul NU a ieșit — revine pe OPEN și retrimite imediat comanda.
+    @PreAuthorize("hasAnyAuthority('50', '100')")
+    @PostMapping("/{id}/fiscal/retry-not-printed")
+    public ResponseEntity<com.sellbit.domain.voucher.customervoucher.CustomerVoucherDTOs.VoucherIssuanceResult> retryNotPrinted(
+            @PathVariable Integer id) {
+        return ResponseEntity.ok(receiptFiscalService.retryNotPrinted(id));
+    }
+
+    // Verificare pasivă la redeschiderea unui bon FISCAL_PENDING — dacă Fisco a confirmat
+    // între timp, închide automat; altfel nu face nimic (UI întreabă din nou casierul).
+    @PreAuthorize("hasAnyAuthority('50', '100')")
+    @GetMapping("/{id}/fiscal/check")
+    public ResponseEntity<Boolean> checkFiscalPending(@PathVariable Integer id) {
+        return ResponseEntity.ok(receiptFiscalService.checkAndCloseIfPrinted(id));
+    }
+
     @PreAuthorize("hasAnyAuthority('50', '100')")
     @PostMapping("/{id}/refund")
     public ResponseEntity<ReceiptDTOs.Response> refund(@PathVariable Integer id,

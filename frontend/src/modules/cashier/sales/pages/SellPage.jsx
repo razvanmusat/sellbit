@@ -9,6 +9,10 @@ import {
   useTheme,
   useMediaQuery,
   Snackbar,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import PaymentsIcon from '@mui/icons-material/Payments';
@@ -50,7 +54,7 @@ const SellPage = () => {
     voucherIssuance,
     giftCardStatus,
     fiscalStatus,
-    fiscalPendingReceiptId,
+    askPrintedReceipt,
     user,
   } = useSellPage();
 
@@ -189,8 +193,8 @@ const SellPage = () => {
 
       {editingReceipt && (
         <AddPaymentModal
-          open={modals.addPayment || fiscalPendingReceiptId === editingReceipt.id}
-          onClose={fiscalPendingReceiptId === editingReceipt.id ? () => {} : () => toggleModal('addPayment', false)}
+          open={modals.addPayment}
+          onClose={() => toggleModal('addPayment', false)}
           receipt={editingReceipt}
           paymentMethods={paymentMethods}
           onAddPayment={actions.addPayment}
@@ -200,9 +204,35 @@ const SellPage = () => {
           onCloseReceiptManual={actions.closeReceiptManual}
           fiscalStatus={fiscalStatus}
           loading={loading.receipts === 'pending' || loading.paymentMethods === 'pending'}
-          isFiscalPending={fiscalPendingReceiptId === editingReceipt.id}
         />
       )}
+
+      {/* Fisco n-a confirmat clar în timp util — întrebăm casierul, care poate vedea casa fizic */}
+      <Dialog open={!!askPrintedReceipt} maxWidth="xs" fullWidth>
+        <DialogTitle>Confirmare tipărire bon fiscal</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Casa de marcat nu a confirmat la timp. S-a tipărit fizic bonul fiscal pentru{' '}
+            <strong>{askPrintedReceipt?.tableName}</strong>?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            color="error"
+            variant="outlined"
+            onClick={() => actions.retryBonNotPrinted(askPrintedReceipt.id)}
+          >
+            Nu, reîncearcă
+          </Button>
+          <Button
+            color="success"
+            variant="contained"
+            onClick={() => actions.confirmBonPrinted(askPrintedReceipt.id)}
+          >
+            Da, s-a tipărit
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <CancelReceiptModal
         open={modals.cancel}

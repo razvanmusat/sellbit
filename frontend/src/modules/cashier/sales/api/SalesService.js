@@ -31,6 +31,25 @@ export class SalesService {
     return result;
   }
 
+  // Casierul confirmă vizual, la casă, că bonul chiar a ieșit fizic (Fisco n-a răspuns clar în 30s)
+  static async confirmPrinted(id) {
+    const result = await client(`sales/receipts/${id}/fiscal/confirm-printed`, { method: 'POST' });
+    emitSalesDataChanged({ type: 'receipt-closed' });
+    return result;
+  }
+
+  // Casierul confirmă că bonul NU a ieșit — revine pe OPEN și retrimite imediat comanda
+  static async retryNotPrinted(id) {
+    const result = await client(`sales/receipts/${id}/fiscal/retry-not-printed`, { method: 'POST' });
+    emitSalesDataChanged({ type: 'receipt-closed' });
+    return result;
+  }
+
+  // Verificare pasivă la redeschiderea unui bon FISCAL_PENDING
+  static async checkFiscalPending(id) {
+    return await client(`sales/receipts/${id}/fiscal/check`);
+  }
+
   static async createPartialRefund(id, request) {
     const response = await client(`sales/receipts/${id}/refund`, { body: request });
     emitSalesDataChanged({ type: 'receipt-refunded' });

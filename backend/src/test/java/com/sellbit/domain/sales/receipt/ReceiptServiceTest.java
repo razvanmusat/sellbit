@@ -105,6 +105,7 @@ class ReceiptServiceTest {
                 .build();
         receipt.setPayments(List.of(payment));
 
+        when(receiptRepository.lockById(100)).thenReturn(Optional.of(receipt));
         when(receiptRepository.findByIdWithItems(100)).thenReturn(Optional.of(receipt));
         when(receiptRepository.findByIdWithPayments(100)).thenReturn(Optional.of(receipt));
         when(statusRepository.findByCode("CLOSED")).thenReturn(Optional.of(closedStatus));
@@ -345,6 +346,7 @@ class ReceiptServiceTest {
         receipt.setPayments(new ArrayList<>(List.of(payment)));
         receipt.setItems(new ArrayList<>());
 
+        when(receiptRepository.lockById(100)).thenReturn(Optional.of(receipt));
         when(receiptRepository.findByIdWithItems(100)).thenReturn(Optional.of(receipt));
         when(receiptRepository.findByIdWithPayments(100)).thenReturn(Optional.of(receipt));
         when(statusRepository.findByCode("CLOSED")).thenReturn(Optional.of(closedStatus));
@@ -359,6 +361,7 @@ class ReceiptServiceTest {
     @DisplayName("closeReceipt - Eroare: Plată incompletă")
     void closeReceipt_Fail_Payment() {
         receipt.getPayments().add(ReceiptPayment.builder().amount(new BigDecimal("99.99")).build());
+        when(receiptRepository.lockById(100)).thenReturn(Optional.of(receipt));
         when(receiptRepository.findByIdWithItems(100)).thenReturn(Optional.of(receipt));
         when(receiptRepository.findByIdWithPayments(100)).thenReturn(Optional.of(receipt));
 
@@ -384,6 +387,7 @@ class ReceiptServiceTest {
         ReceiptItem item = ReceiptItem.builder().product(cateringProduct).quantity(BigDecimal.ONE).build();
         receipt.setItems(List.of(item));
 
+        when(receiptRepository.lockById(100)).thenReturn(Optional.of(receipt));
         when(receiptRepository.findByIdWithItems(100)).thenReturn(Optional.of(receipt));
         when(receiptRepository.findByIdWithPayments(100)).thenReturn(Optional.of(receipt));
 
@@ -623,6 +627,7 @@ class ReceiptServiceTest {
         fifoPayMethod.setCode("CASH");
         receipt.setPayments(List.of(ReceiptPayment.builder().amount(new BigDecimal("100.00")).paymentMethod(fifoPayMethod).build()));
 
+        when(receiptRepository.lockById(100)).thenReturn(Optional.of(receipt));
         when(receiptRepository.findByIdWithItems(100)).thenReturn(Optional.of(receipt));
         when(receiptRepository.findByIdWithPayments(100)).thenReturn(Optional.of(receipt));
         when(statusRepository.findByCode("CLOSED")).thenReturn(Optional.of(closedStatus));
@@ -925,6 +930,7 @@ class ReceiptServiceTest {
                 .amount(new BigDecimal("10.00"))
                 .build());
 
+        when(receiptRepository.lockById(100)).thenReturn(Optional.of(receipt));
         when(receiptRepository.findByIdWithItems(100)).thenReturn(Optional.of(receipt));
         when(receiptRepository.findByIdWithPayments(100)).thenReturn(Optional.of(receipt));
         when(statusRepository.findByCode("CLOSED")).thenReturn(Optional.of(closedStatus));

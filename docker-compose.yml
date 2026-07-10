@@ -26,6 +26,8 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: sellbit-backend
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     restart: always
     depends_on:
       db:

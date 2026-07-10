@@ -182,6 +182,12 @@ public class ReceiptService {
 
         @Transactional
         public CustomerVoucherDTOs.VoucherIssuanceResult closeReceipt(Integer receiptId) {
+                // Lock pe rândul bonului — serializează închiderea manuală față de fluxul fiscal
+                // (markFiscalPending/completeFiscalClose folosesc același lock), ca să nu poată
+                // trece amândouă de validare simultan pe același bon.
+                receiptRepository.lockById(receiptId)
+                                .orElseThrow(() -> new RuntimeException("ERROR.RECEIPT.NOT_FOUND"));
+
                 receiptRepository.findByIdWithItems(receiptId)
                                 .orElseThrow(() -> new RuntimeException("ERROR.RECEIPT.NOT_FOUND"));
                 Receipt receipt = receiptRepository.findByIdWithPayments(receiptId)

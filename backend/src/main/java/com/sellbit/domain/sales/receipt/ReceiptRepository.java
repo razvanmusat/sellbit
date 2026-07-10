@@ -1,6 +1,8 @@
 package com.sellbit.domain.sales.receipt;
 
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -8,6 +10,14 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 public interface ReceiptRepository extends JpaRepository<Receipt, Integer> {
+
+        // Blochează rândul bonului (SELECT ... FOR UPDATE) — folosit ca prim pas în
+        // markFiscalPending/completeFiscalClose ca să serializeze cererile concurente
+        // (dublu-click, retry, job-ul de reconciliere) pe același receiptId și să
+        // împiedice trimiterea comenzii de print de două ori pentru același bon.
+        @Lock(LockModeType.PESSIMISTIC_WRITE)
+        @Query("SELECT r FROM Receipt r WHERE r.id = :id")
+        java.util.Optional<Receipt> lockById(@Param("id") Integer id);
 
         List<Receipt> findByStatus_Code(String statusCode);
 

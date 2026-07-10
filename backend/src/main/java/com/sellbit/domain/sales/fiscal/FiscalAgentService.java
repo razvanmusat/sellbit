@@ -4,6 +4,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sellbit.domain.sales.receipt.Receipt;
 import com.sellbit.domain.sales.receiptitem.ReceiptItem;
 import com.sellbit.domain.sales.receiptpayment.ReceiptPayment;
+import com.sellbit.domain.voucher.customervoucher.CustomerVoucher;
+import com.sellbit.domain.voucher.customervoucher.CustomerVoucherRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -18,15 +21,19 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
+@RequiredArgsConstructor
 public class FiscalAgentService {
 
-    private static final String FISCO_BASE = "http://127.0.0.1:4040";
+    private static final String FISCO_BASE = "http://host.docker.internal:4040";
     private static final String FISCAL_WAREHOUSE = "GV";
-    private static final int POLL_TIMEOUT_SECONDS = 45;
+    private static final int POLL_TIMEOUT_SECONDS = 30;
     private static final int POLL_INTERVAL_MS = 1000;
+
+    private final CustomerVoucherRepository voucherRepository;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final HttpClient httpClient = HttpClient.newBuilder()
@@ -51,9 +58,33 @@ public class FiscalAgentService {
         }
     }
 
+    // Determină dacă bonul are nevoie efectiv de fiscalizare — produse pe gestiunea GV, cu
+    // plată reală cash/card (nu doar voucher/avans/transfer). Trebuie verificată ÎNAINTE de
+    // orice verificare de conexiune la Fisco — un bon acoperit integral din voucher/avans
+    // (total de plată zero) nu trebuie să depindă deloc de starea casei de marcat.
+    public boolean needsFiscalPrint(Receipt receipt) {
+        boolean hasGvItems = receipt.getItems().stream()
+                .anyMatch(item -> item.getWarehouse() != null
+                        && FISCAL_WAREHOUSE.equals(item.getWarehouse().getCode()));
+        if (!hasGvItems) return false;
+
+        BigDecimal cashCardTotal = receipt.getPayments().stream()
+                .filter(p -> p.getWarehouse() != null && FISCAL_WAREHOUSE.equals(p.getWarehouse().getCode()))
+                .filter(p -> {
+                    String code = p.getPaymentMethod().getCode();
+                    return "CASH".equals(code) || "CARD".equals(code);
+                })
+                .map(ReceiptPayment::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        return cashCardTotal.compareTo(BigDecimal.ZERO) > 0;
+    }
+
     // POST /api/v1/print + polling status până la printed/failed/timeout
-    // Returnează job_id-ul Fisco
-    public String printGvBon(Receipt receipt) {
+    // Returnează job_id-ul Fisco. onJobAccepted e chemat IMEDIAT ce Fisco confirmă acceptarea
+    // comenzii (înainte de polling) — apelantul trebuie să-l reția pe bon pe loc, ca să nu se
+    // piardă dacă pollingul de mai jos eșuează (conexiune pierdută, timeout etc.).
+    public String printGvBon(Receipt receipt, java.util.function.Consumer<String> onJobAccepted) {
         List<ReceiptItem> gvItems = receipt.getItems().stream()
                 .filter(item -> item.getWarehouse() != null
                         && FISCAL_WAREHOUSE.equals(item.getWarehouse().getCode()))
@@ -81,25 +112,57 @@ public class FiscalAgentService {
         // Fără plată reală pe GV → nu emitem bon fiscal
         if (cashCardTotal.compareTo(BigDecimal.ZERO) <= 0) return null;
 
-        // Voucher, avans și transfer bancar GV → discount valoric (C tip 3) pe bon
-        // (transferul bancar nu se fiscalizează — se facturează prin contabilitate)
-        BigDecimal discountTotal = gvPayments.stream()
-                .filter(p -> {
-                    String code = p.getPaymentMethod().getCode();
-                    return "VOUCHER".equals(code) || "ADVANCE".equals(code) || "BANK_TRANSFER".equals(code);
-                })
-                .map(ReceiptPayment::getAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        // Transfer bancar GV → mereu discount pe subtotal (nu se fiscalizează — se facturează prin contabilitate)
+        BigDecimal bankTransferAmount = sumByMethod(gvPayments, "BANK_TRANSFER");
+        BigDecimal advanceAmount = sumByMethod(gvPayments, "ADVANCE");
+        BigDecimal voucherAmount = sumByMethod(gvPayments, "VOUCHER");
+
+        // Avans → discount pe linia produsului de tip MENU (dacă există pe bon; altfel pe subtotal)
+        ReceiptItem advanceTargetItem = advanceAmount.compareTo(BigDecimal.ZERO) > 0
+                ? gvItems.stream()
+                        .filter(i -> i.getProduct().getProductType() != null
+                                && "MENU".equals(i.getProduct().getProductType().getCode()))
+                        .findFirst().orElse(null)
+                : null;
+
+        // Voucher REGULAR/LOYALTY → discount pe linia produsului țintă al campaniei (altfel pe subtotal).
+        // GIFT_CARD → mereu pe subtotal, nu se știe dinainte ce produse vor fi pe bon.
+        ReceiptItem voucherTargetItem = null;
+        if (voucherAmount.compareTo(BigDecimal.ZERO) > 0) {
+            Optional<CustomerVoucher> usedVoucher = voucherRepository.findByUsedReceiptId(receipt.getId());
+            if (usedVoucher.isPresent()) {
+                String campaignTypeCode = usedVoucher.get().getCampaign().getCampaignType().getCode();
+                Integer targetProductId = usedVoucher.get().getCampaign().getApplicableProductId();
+                if (("REGULAR".equals(campaignTypeCode) || "LOYALTY".equals(campaignTypeCode))
+                        && targetProductId != null) {
+                    voucherTargetItem = gvItems.stream()
+                            .filter(i -> targetProductId.equals(i.getProduct().getId()))
+                            .findFirst().orElse(null);
+                }
+            }
+        }
+
+        // Ce n-a găsit linie țintă (avans fără produs MENU, sau voucher fără produsul din campanie
+        // pe bon) cade pe discount de subtotal, la fel ca înainte — nu blocăm niciodată bonul.
+        BigDecimal subtotalDiscount = bankTransferAmount
+                .add(advanceTargetItem == null ? advanceAmount : BigDecimal.ZERO)
+                .add(voucherTargetItem == null ? voucherAmount : BigDecimal.ZERO);
 
         List<String> commands = new ArrayList<>();
 
         for (ReceiptItem item : gvItems) {
             commands.add(buildProductCommand(item));
+            if (item == advanceTargetItem) {
+                commands.add(buildDiscountCommand(advanceAmount));
+            }
+            if (item == voucherTargetItem) {
+                commands.add(buildDiscountCommand(voucherAmount));
+            }
         }
 
-        if (discountTotal.compareTo(BigDecimal.ZERO) > 0) {
+        if (subtotalDiscount.compareTo(BigDecimal.ZERO) > 0) {
             commands.add("T,1,______,_,__;4;;;;;");
-            commands.add(String.format(Locale.US, "C,1,______,_,__;3;%.2f;;;;", discountTotal));
+            commands.add(buildDiscountCommand(subtotalDiscount));
         }
 
         for (ReceiptPayment payment : cashCardPayments) {
@@ -145,6 +208,7 @@ public class FiscalAgentService {
             }
 
             String jobId = (String) printResult.get("job_id");
+            onJobAccepted.accept(jobId);
             try {
                 return pollUntilDone(jobId);
             } catch (RuntimeException e) {
@@ -231,6 +295,26 @@ public class FiscalAgentService {
         }
     }
 
+    // GET /api/v1/status?job_id=... — verificare precisă 1:1, per manualul Fisco. Returnează
+    // "printed"/"failed"/"queued"/"processing" dacă găsit, "not_found" dacă Fisco e reachabil
+    // dar nu mai are jobul (job_id era totuși confirmat acceptat — nu poate însemna "nu s-a
+    // trimis niciodată"), null dacă Fisco e inaccesibil acum.
+    public String findStatusByJobId(String jobId) {
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(FISCO_BASE + "/api/v1/status?job_id=" + jobId))
+                    .timeout(Duration.ofSeconds(10))
+                    .GET()
+                    .build();
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            Map<?, ?> body = objectMapper.readValue(response.body(), Map.class);
+            String status = (String) body.get("status");
+            return status != null ? status : "not_found";
+        } catch (Exception e) {
+            return null; // Fisco inaccesibil — nu putem confirma nimic acum
+        }
+    }
+
     // GET /api/v1/status?job_id=... — status job specific
     public String getJobStatus(String jobId) {
         try {
@@ -294,8 +378,18 @@ public class FiscalAgentService {
                     .GET()
                     .build();
 
-            HttpResponse<String> statusResponse = httpClient.send(statusRequest, HttpResponse.BodyHandlers.ofString());
-            Map<?, ?> statusResult = objectMapper.readValue(statusResponse.body(), Map.class);
+            // Un singur eșec de rețea la o verificare de status NU înseamnă că jobul s-a
+            // pierdut — Fisco tot îl are, doar noi n-am reușit să-l întrebăm acum. Continuăm
+            // polling-ul până la deadline în loc să renunțăm la primul hiccup (asta arunca
+            // POLLING_LOST prematur, lăsând bonul FISCAL_PENDING deși jobul era încă proaspăt
+            // în bufferul Fisco și s-ar fi confirmat la următoarea încercare).
+            Map<?, ?> statusResult;
+            try {
+                HttpResponse<String> statusResponse = httpClient.send(statusRequest, HttpResponse.BodyHandlers.ofString());
+                statusResult = objectMapper.readValue(statusResponse.body(), Map.class);
+            } catch (Exception e) {
+                continue;
+            }
             String status = (String) statusResult.get("status");
 
             if ("printed".equals(status)) {
@@ -310,6 +404,19 @@ public class FiscalAgentService {
         }
 
         throw new RuntimeException("ERROR.FISCAL.TIMEOUT");
+    }
+
+    private BigDecimal sumByMethod(List<ReceiptPayment> payments, String methodCode) {
+        return payments.stream()
+                .filter(p -> methodCode.equals(p.getPaymentMethod().getCode()))
+                .map(ReceiptPayment::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    // Discount valoric (tip 3) FPrint. Plasată imediat după o comandă S → se aplică doar acelei
+    // linii; plasată după T (subtotal) → se aplică proporțional pe tot bonul de până atunci.
+    private String buildDiscountCommand(BigDecimal amount) {
+        return String.format(Locale.US, "C,1,______,_,__;3;%.2f;;;;", amount);
     }
 
     // Format FPrint pentru linie produs

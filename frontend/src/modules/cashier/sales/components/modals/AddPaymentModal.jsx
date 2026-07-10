@@ -25,7 +25,7 @@ const pulseRing = keyframes`
 `;
 
 const AddPaymentModal = (props) => {
-  const { open, onClose, receipt, paymentMethods, loading, fiscalStatus, closeLabel = 'ÎNCHIDE BONUL', onCloseReceiptManual, isFiscalPending = false } = props;
+  const { open, onClose, receipt, paymentMethods, loading, fiscalStatus, closeLabel = 'ÎNCHIDE BONUL', onCloseReceiptManual } = props;
 
   const {
     amount, setAmount,
@@ -270,7 +270,7 @@ const AddPaymentModal = (props) => {
         </DialogContent>
 
         <DialogActions sx={{ p: 3, justifyContent: 'space-between', alignItems: 'center', bgcolor: '#f5f5f5' }}>
-          <Button onClick={onClose} color="inherit" variant="outlined" disabled={loading || isFiscalPending}>Înapoi</Button>
+          <Button onClick={onClose} color="inherit" variant="outlined" disabled={loading}>Înapoi</Button>
 
           {displayChange > 0 && !isVoucher && (
             <Typography variant="h5" color="error" fontWeight="bold" sx={{ whiteSpace: 'nowrap' }}>
@@ -344,7 +344,7 @@ const AddPaymentModal = (props) => {
       {/* ============================================================
           BACKDROP PROCESARE FISCALĂ
       ============================================================ */}
-      <Backdrop open={(loading && isFullyPaid) || isFiscalPending} sx={{ zIndex: 9999, backdropFilter: 'blur(3px)', backgroundColor: 'rgba(0,0,0,0.55)' }}>
+      <Backdrop open={loading && isFullyPaid} sx={{ zIndex: 9999, backdropFilter: 'blur(3px)', backgroundColor: 'rgba(0,0,0,0.55)' }}>
         <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
           <Box sx={{
             width: 80, height: 80, borderRadius: '50%',
@@ -354,10 +354,10 @@ const AddPaymentModal = (props) => {
             <PaymentsIcon sx={{ fontSize: 40, color: '#2e7d32' }} />
           </Box>
           <Typography variant="h6" color="white" fontWeight="bold">
-            {isFiscalPending ? 'Bon în procesare la casa de marcat' : 'Se procesează plata'}
+            Se procesează plata
           </Typography>
           <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.8)' }}>
-            {isFiscalPending ? 'Verificare automată în curs — nu reîncerca manual...' : 'Așteptăm confirmarea casei de marcat...'}
+            Așteptăm confirmarea casei de marcat...
           </Typography>
           <LinearProgress color="success" sx={{ width: 200, height: 5, borderRadius: 2 }} />
         </Box>
@@ -434,7 +434,6 @@ AddPaymentModal.propTypes = {
   fiscalStatus: PropTypes.bool,
   loading: PropTypes.bool,
   onCloseReceiptManual: PropTypes.func,
-  isFiscalPending: PropTypes.bool,
 };
 
 export default AddPaymentModal;
