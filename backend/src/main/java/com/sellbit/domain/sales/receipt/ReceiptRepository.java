@@ -21,6 +21,13 @@ public interface ReceiptRepository extends JpaRepository<Receipt, Integer> {
 
         List<Receipt> findByStatus_Code(String statusCode);
 
+        // Bonuri trimise către Fisco al căror răspuns s-a pierdut (snapshot luat, job_id
+        // neconfirmat) — blochează orice trimitere nouă până sunt reconciliate.
+        List<Receipt> findByStatus_CodeAndFiscalJobIdIsNullAndFiscalSnapshotJobIdIsNotNull(String statusCode);
+
+        // Folosit la reconciliere ca să excludă din candidați joburile deja atribuite altor bonuri.
+        boolean existsByFiscalJobId(String fiscalJobId);
+
         List<Receipt> findByStatus_CodeIn(java.util.List<String> statusCodes);
 
         @Query("""

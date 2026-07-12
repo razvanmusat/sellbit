@@ -425,8 +425,8 @@ class ReceiptFiscalServiceTest {
     }
 
     @Test
-    @DisplayName("registerAdvanceFiscal - Incert (AGENT_UNREACHABLE, job există în Fisco): bonul rămâne pending")
-    void registerAdvanceFiscal_Unreachable_JobExists_KeepsPending() {
+    @DisplayName("registerAdvanceFiscal - Incert (AGENT_UNREACHABLE): bonul rămâne pending, fără ștergere")
+    void registerAdvanceFiscal_Unreachable_KeepsPending() {
         Receipt receipt = buildReceipt(fiscalPendingStatus, BigDecimal.TEN, List.of(), List.of());
         when(receiptService.createDirectReceiptPending("ADVANCE", 1, BigDecimal.TEN, "CASH", 5, null))
                 .thenReturn(1);
@@ -436,9 +436,8 @@ class ReceiptFiscalServiceTest {
         when(fiscalAgentService.checkHealth()).thenReturn(true);
         when(fiscalAgentService.printGvBon(eq(receipt), any()))
                 .thenThrow(new RuntimeException("ERROR.FISCAL.AGENT_UNREACHABLE"));
-        // primul apel (înainte de print) → "not_found" (nu blochează); al doilea (din catch,
-        // după AGENT_UNREACHABLE) → "queued" (jobul există totuși la Fisco, rămâne pending)
-        when(fiscalAgentService.findStatusByExternalId("sb-1")).thenReturn("not_found", "queued");
+        // Fisco nu ecouă external_id în niciun răspuns (nici /print, nici /status) — nu există
+        // nicio cale programatică de a confirma ce s-a întâmplat. Rămâne FISCAL_PENDING necondiționat.
 
         assertThrows(RuntimeException.class,
                 () -> receiptFiscalService.registerAdvanceFiscal(1, BigDecimal.TEN, "CASH", 5, null));

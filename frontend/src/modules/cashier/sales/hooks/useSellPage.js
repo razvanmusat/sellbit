@@ -137,20 +137,32 @@ export const useSellPage = () => {
   }, [modals.addPayment, modals.fiscal]);
 
   // Dacă bonul deschis e deja FISCAL_PENDING (ex: pagina s-a reîncărcat în timp ce Fisco
-  // n-a apucat să răspundă) — o singură verificare pasivă, fără retrimitere de comandă.
-  // Dacă Fisco a confirmat între timp, se închide automat; altfel întrebăm casierul.
+  // n-a apucat să răspundă) — backend-ul verifică/reconciliază singur starea la casă:
+  // închide dacă s-a tipărit, readuce pe OPEN (sau șterge bonul direct) dacă e sigur că
+  // comanda nu a ajuns. Dialogul apare doar când starea chiar nu poate fi decisă acum.
   useEffect(() => {
     if (editingReceipt?.statusCode !== 'FISCAL_PENDING' || askPrintedReceipt) return;
     const id = editingReceipt.id;
     const tableName = editingReceipt.tableName;
     SalesService.checkFiscalPending(id)
-      .then((closed) => {
+      .then(async (closed) => {
         if (closed) {
           dispatch(invalidateCache());
           dispatch(fetchOpenReceipts());
           showFeedback("Bon fiscal emis și bon închis cu succes!", "success");
           navigate("/home/sell");
-        } else {
+          return;
+        }
+        // Reconcilierea din backend poate schimba starea bonului — citim starea reală
+        const fetchResult = await dispatch(fetchOpenReceipts());
+        const updated = fetchResult.payload?.find((r) => Number(r.id) === Number(id));
+        if (!updated) {
+          // Bon direct șters la reconciliere — comanda sigur nu a ajuns la casă
+          showFeedback("Comanda nu a ajuns la casa de marcat — încasarea a fost anulată. Reia operațiunea.", "warning");
+          navigate("/home/sell");
+        } else if (updated.statusCode === 'OPEN') {
+          showFeedback("Comanda nu a ajuns la casa de marcat. Bonul a revenit pe deschis — reia închiderea.", "warning");
+        } else if (updated.statusCode === 'FISCAL_PENDING') {
           setAskPrintedReceipt({ id, tableName });
         }
       })
@@ -401,7 +413,9 @@ export const useSellPage = () => {
       }
     },
 
-    // Casierul a confirmat că bonul NU a ieșit — revine pe OPEN și retrimite imediat.
+    // „Verifică și reia": backend-ul verifică starea reală la casă și retrimite DOAR cu
+    // dovadă că bonul nu a ieșit (failed/not_found/reconciliere zero-diff). Pe job încă în
+    // lucru sau casă inaccesibilă răspunde cu eroare și bonul rămâne în așteptare.
     retryBonNotPrinted: async (targetReceiptId) => {
       setAskPrintedReceipt(null);
       const result = await dispatch(retryNotPrintedFiscal(targetReceiptId));

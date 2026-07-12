@@ -112,7 +112,6 @@ class ReceiptFiscalServiceVoucherOnlyTest {
         assertNotNull(result);
         assertEquals("CLOSED", receipt.getStatus().getCode(), "Bonul trebuia închis, nu blocat");
         verify(fiscalAgentService, never()).checkHealth();
-        verify(fiscalAgentService, never()).findStatusByExternalId(any());
         verify(fiscalAgentService, never()).printGvBon(any(), any());
     }
 }

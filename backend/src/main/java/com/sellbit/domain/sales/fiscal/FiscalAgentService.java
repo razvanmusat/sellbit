@@ -40,6 +40,12 @@ public class FiscalAgentService {
             .connectTimeout(Duration.ofSeconds(5))
             .build();
 
+    // Datele fiscale din răspunsul "printed" al Fisco (manual 2.1) — salvate pe bon per
+    // recomandarea din manual 2.2: numărul bonului, raportul Z, seria imprimantei.
+    public record PrintedResult(String slipNumber, String zReportNumber,
+                                String bonNumber, String deviceSerial) {
+    }
+
     // GET /api/v1/health — printer.ready indică starea reală a imprimantei (ok=true înseamnă doar că API-ul răspunde)
     public boolean checkHealth() {
         try {
@@ -81,10 +87,11 @@ public class FiscalAgentService {
     }
 
     // POST /api/v1/print + polling status până la printed/failed/timeout
-    // Returnează job_id-ul Fisco. onJobAccepted e chemat IMEDIAT ce Fisco confirmă acceptarea
-    // comenzii (înainte de polling) — apelantul trebuie să-l reția pe bon pe loc, ca să nu se
-    // piardă dacă pollingul de mai jos eșuează (conexiune pierdută, timeout etc.).
-    public String printGvBon(Receipt receipt, java.util.function.Consumer<String> onJobAccepted) {
+    // Returnează datele fiscale din răspunsul "printed" (sau null dacă bonul nu are nimic de
+    // fiscalizat). onJobAccepted e chemat IMEDIAT ce Fisco confirmă acceptarea comenzii
+    // (înainte de polling) — apelantul trebuie să-l reția pe bon pe loc, ca să nu se piardă
+    // dacă pollingul de mai jos eșuează (conexiune pierdută, timeout etc.).
+    public PrintedResult printGvBon(Receipt receipt, java.util.function.Consumer<String> onJobAccepted) {
         List<ReceiptItem> gvItems = receipt.getItems().stream()
                 .filter(item -> item.getWarehouse() != null
                         && FISCAL_WAREHOUSE.equals(item.getWarehouse().getCode()))
@@ -268,30 +275,41 @@ public class FiscalAgentService {
         }
     }
 
-    // GET /api/v1/status — caută un job după external_id în ultimele 100 joburi.
-    // Returnează: statusul jobului ("printed", "failed") dacă găsit,
-    //             "not_found" dacă Fisco e reachabil dar jobul nu există în ultimele 100,
-    //             null dacă Fisco e inaccesibil (retry la ciclul următor).
-    public String findStatusByExternalId(String externalId) {
+    // GET /api/v1/status?limit=1 — job_id-ul celui mai nou job cunoscut de Fisco, sau null
+    // dacă istoricul e gol. Folosit ca snapshot ÎNAINTE de POST /api/v1/print: dacă răspunsul
+    // la POST se pierde, diff-ul față de acest reper identifică (sau exclude) jobul pierdut.
+    public String getLatestJobId() {
+        List<String> jobs = fetchJobIds("/api/v1/status?limit=1");
+        return jobs.isEmpty() ? null : jobs.get(0);
+    }
+
+    // GET /api/v1/status — job_id-urile ultimelor joburi cunoscute de Fisco, cele mai noi
+    // primele (ordinea din manual). Folosit la reconcilierea unui POST rămas fără răspuns.
+    public List<String> listRecentJobIds() {
+        return fetchJobIds("/api/v1/status");
+    }
+
+    private List<String> fetchJobIds(String path) {
         try {
             HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(FISCO_BASE + "/api/v1/status"))
+                    .uri(URI.create(FISCO_BASE + path))
                     .timeout(Duration.ofSeconds(10))
                     .GET()
                     .build();
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             Map<?, ?> body = objectMapper.readValue(response.body(), Map.class);
-            List<?> jobs = (List<?>) body.get("jobs");
-            if (jobs == null) return "not_found";
-            for (Object jobObj : jobs) {
-                Map<?, ?> job = (Map<?, ?>) jobObj;
-                if (externalId.equals(job.get("external_id"))) {
-                    return (String) job.get("status");
+            Object jobsObj = body.get("jobs");
+            List<String> jobIds = new ArrayList<>();
+            if (jobsObj instanceof List<?> jobs) {
+                for (Object job : jobs) {
+                    if (job instanceof Map<?, ?> jobMap && jobMap.get("job_id") instanceof String id) {
+                        jobIds.add(id);
+                    }
                 }
             }
-            return "not_found"; // Fisco reachabil, jobul nu există în istoric
+            return jobIds;
         } catch (Exception e) {
-            return null; // Fisco inaccesibil — retry la ciclul următor
+            throw new RuntimeException("ERROR.FISCAL.AGENT_UNREACHABLE");
         }
     }
 
@@ -360,8 +378,9 @@ public class FiscalAgentService {
         }
     }
 
-    // Polling pe /api/v1/status?job_id=... până la printed/failed sau timeout
-    private String pollUntilDone(String jobId) throws Exception {
+    // Polling pe /api/v1/status?job_id=... până la printed/failed sau timeout.
+    // La "printed" returnează datele fiscale din result (manual 2.1), pentru salvare pe bon.
+    private PrintedResult pollUntilDone(String jobId) throws Exception {
         long deadline = System.currentTimeMillis() + (long) POLL_TIMEOUT_SECONDS * 1000;
 
         while (System.currentTimeMillis() < deadline) {
@@ -393,7 +412,7 @@ public class FiscalAgentService {
             String status = (String) statusResult.get("status");
 
             if ("printed".equals(status)) {
-                return jobId;
+                return parsePrintedResult(statusResult);
             }
             if ("failed".equals(status)) {
                 Map<?, ?> err = (Map<?, ?>) statusResult.get("error");
@@ -404,6 +423,42 @@ public class FiscalAgentService {
         }
 
         throw new RuntimeException("ERROR.FISCAL.TIMEOUT");
+    }
+
+    // Extrage datele fiscale din obiectul result al unui răspuns cu status "printed"
+    private PrintedResult parsePrintedResult(Map<?, ?> statusResult) {
+        Object resultObj = statusResult.get("result");
+        if (!(resultObj instanceof Map<?, ?> result)) {
+            return new PrintedResult(null, null, null, null);
+        }
+        return new PrintedResult(
+                asString(result.get("SlipNumber")),
+                asString(result.get("nZrep")),
+                asString(result.get("nFNum")),
+                asString(result.get("DeviceSerial")));
+    }
+
+    private String asString(Object value) {
+        return value != null ? String.valueOf(value) : null;
+    }
+
+    // GET /api/v1/status?job_id=... — datele fiscale ale unui job DEJA tipărit, sau null dacă
+    // jobul nu e "printed" ori Fisco nu răspunde. Best-effort: folosit la închiderea bonurilor
+    // confirmate ulterior (resolve/check/retry), unde lipsa datelor nu blochează închiderea.
+    public PrintedResult fetchPrintedResult(String jobId) {
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(FISCO_BASE + "/api/v1/status?job_id=" + jobId))
+                    .timeout(Duration.ofSeconds(10))
+                    .GET()
+                    .build();
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            Map<?, ?> body = objectMapper.readValue(response.body(), Map.class);
+            if (!"printed".equals(body.get("status"))) return null;
+            return parsePrintedResult(body);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private BigDecimal sumByMethod(List<ReceiptPayment> payments, String methodCode) {

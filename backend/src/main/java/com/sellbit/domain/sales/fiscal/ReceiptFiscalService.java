@@ -22,7 +22,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.locks.ReentrantLock;
 
 @Service
 @RequiredArgsConstructor
@@ -40,6 +42,16 @@ public class ReceiptFiscalService {
     @Setter(onMethod_ = {@Autowired, @Lazy})
     private ReceiptFiscalService self;
 
+    // Serializează secvența snapshot→POST pentru ORICE trimitere către Fisco (bonuri de
+    // vânzare, bonuri directe, rapoarte X/Z). Cu un singur POST in-flight și un singur client
+    // HTTP al driverului, diff-ul de reconciliere devine neambiguu: orice job apărut în Fisco
+    // după snapshotul unui bon nu poate fi decât jobul acelui bon.
+    private static final ReentrantLock SEND_LOCK = new ReentrantLock();
+
+    // Marker pentru „istoricul Fisco era gol la momentul snapshotului" — diferit de null,
+    // care înseamnă „nu s-a luat niciun snapshot / nimic trimis pentru bonul ăsta".
+    private static final String SNAPSHOT_EMPTY_HISTORY = "NONE";
+
     // Orchestrator: fără @Transactional intenționat — Fisco nu trebuie să fie în interiorul unei tranzacții DB
     public CustomerVoucherDTOs.VoucherIssuanceResult closeFiscal(Integer receiptId) {
         self.markFiscalPending(receiptId); // TX1 → commit
@@ -47,10 +59,10 @@ public class ReceiptFiscalService {
     }
 
     // Singura decizie de fiscalizare din tot fluxul: întreabă Fisco ce știe despre bonul ăsta
-    // și acționează direct pe baza răspunsului lui — exact fluxul din manualul Fisco. Dacă
-    // Fisco nu dă un răspuns clar în ~30s (fereastra din FiscalAgentService), bonul rămâne
-    // FISCAL_PENDING și decizia trece la casier — vezi confirmPrintedManually/retryNotPrinted.
-    // Nu există retry automat în fundal.
+    // și acționează direct pe baza răspunsului lui — exact fluxul din manualul Fisco. Nicio
+    // ramură nu poate retrimite o comandă cât timp există un job neconfirmat: retrimiterea e
+    // permisă DOAR cu dovadă negativă (rejected / failed / not_found / reconciliere cu zero
+    // joburi noi față de snapshot). Nu există retry automat în fundal.
     CustomerVoucherDTOs.VoucherIssuanceResult attemptPrintAndFinalize(Integer receiptId) {
         Receipt receipt = self.loadReceiptForFiscal(receiptId);
 
@@ -67,39 +79,74 @@ public class ReceiptFiscalService {
             return resolveExistingJob(receiptId, receipt.getFiscalJobId());
         }
 
-        // Verificare de conexiune chiar înainte de comandă (nu separat, ca statusul din UI) —
-        // fereastra dintre verificare și trimitere e de ordinul milisecundelor, nu secundelor.
-        // Dacă nu răspunde, sigur nimic nu poate ajunge la Fisco acum — revenim direct pe OPEN,
-        // fără ambiguitate, fără să mai așteptăm degeaba și fără să mai întrebăm casierul.
-        if (!fiscalAgentService.checkHealth()) {
-            self.rollbackToOpen(receiptId);
-            throw new RuntimeException("ERROR.FISCAL.NOT_CONNECTED");
-        }
-
+        SEND_LOCK.lock();
         try {
-            fiscalAgentService.printGvBon(receipt, jobId -> self.recordFiscalJobId(receiptId, jobId));
-        } catch (RuntimeException e) {
-            String msg = e.getMessage() != null ? e.getMessage() : "";
-            if (msg.startsWith("ERROR.FISCAL.PRINT_REJECTED")) {
-                // POST a ajuns la Fisco, dar a fost respins înainte de a crea un job → rollback sigur la OPEN
+            // Rest de la o trimitere anterioară al cărei răspuns s-a pierdut (bon FISCAL_FAILED
+            // reluat) — reconciliem întâi propriul bon: ori adoptăm jobul pierdut, ori dovedim
+            // că Fisco nu l-a primit și abia apoi trimitem din nou.
+            if (receipt.getFiscalSnapshotJobId() != null) {
+                reconcileUnconfirmedSend(receiptId);
+                Receipt after = receiptRepository.findById(receiptId)
+                        .orElseThrow(() -> new RuntimeException("ERROR.RECEIPT.NOT_FOUND"));
+                if (after.getFiscalJobId() != null) {
+                    return resolveExistingJob(receiptId, after.getFiscalJobId());
+                }
+                if (!"FISCAL_PENDING".equals(after.getStatus().getCode())) {
+                    // zero-diff → bonul a revenit pe OPEN; îl re-marcăm și trimitem curat
+                    self.markFiscalPending(receiptId);
+                }
+            }
+
+            // Alte bonuri cu răspuns pierdut blochează orice trimitere nouă până se lămuresc —
+            // altfel jobul nostru ar apărea în diff-ul lor ca job necunoscut.
+            try {
+                reconcileAllUnconfirmedSends(receiptId);
+            } catch (RuntimeException e) {
                 self.rollbackToOpen(receiptId);
-            } else if (msg.equals("ERROR.FISCAL.CONNECT_FAILED")) {
-                // TCP refused — tunel căzut, Fisco sigur nu a primit nimic → rollback sigur la OPEN
+                throw e;
+            }
+
+            // Verificare de conexiune chiar înainte de comandă — fereastra dintre verificare și
+            // trimitere e de ordinul milisecundelor. Dacă nu răspunde, sigur nimic nu poate
+            // ajunge la Fisco acum — revenim direct pe OPEN, fără ambiguitate.
+            if (!fiscalAgentService.checkHealth()) {
                 self.rollbackToOpen(receiptId);
-            } else if (msg.equals("ERROR.FISCAL.AGENT_UNREACHABLE")) {
-                // Conexiune căzută înainte de a primi job_id — incert dacă Fisco a primit request-ul.
-                String statusAfterUnreachable = fiscalAgentService.findStatusByExternalId("sb-" + receiptId);
-                if ("not_found".equals(statusAfterUnreachable)) {
-                    // Fisco e reachabil și confirmă că nu are jobul → rollback sigur la OPEN
+                throw new RuntimeException("ERROR.FISCAL.NOT_CONNECTED");
+            }
+
+            // Snapshot persistat ÎNAINTE de POST: dacă răspunsul se pierde, reconcilierea
+            // compară joburile Fisco cu acest reper și decide programatic, fără casier.
+            String latestJob;
+            try {
+                latestJob = fiscalAgentService.getLatestJobId();
+            } catch (RuntimeException e) {
+                self.rollbackToOpen(receiptId); // nimic trimis încă — rollback sigur
+                throw new RuntimeException("ERROR.FISCAL.NOT_CONNECTED");
+            }
+            self.recordFiscalSnapshot(receiptId, latestJob == null ? SNAPSHOT_EMPTY_HISTORY : latestJob);
+
+            try {
+                FiscalAgentService.PrintedResult printed = fiscalAgentService.printGvBon(
+                        receipt, jobId -> self.recordFiscalJobId(receiptId, jobId));
+                self.recordFiscalResult(receiptId, printed); // manual 2.2: nr. bon, raport Z, serie
+            } catch (RuntimeException e) {
+                String msg = e.getMessage() != null ? e.getMessage() : "";
+                if (msg.startsWith("ERROR.FISCAL.PRINT_REJECTED")) {
+                    // POST a ajuns la Fisco, dar a fost respins înainte de a crea un job → rollback sigur la OPEN
+                    self.rollbackToOpen(receiptId);
+                } else if (msg.equals("ERROR.FISCAL.CONNECT_FAILED")) {
+                    // TCP refused — tunel căzut, Fisco sigur nu a primit nimic → rollback sigur la OPEN
                     self.rollbackToOpen(receiptId);
                 }
-                // null = Fisco inaccesibil → rămâne FISCAL_PENDING, casierul confirmă manual
-                // orice alt status = Fisco are jobul dar nu e încă printed → rămâne FISCAL_PENDING
+                // ERROR.FISCAL.AGENT_UNREACHABLE → răspunsul la POST s-a pierdut. Bonul rămâne
+                // FISCAL_PENDING cu snapshotul persistat — reconcilierea de la următoarea
+                // atingere (check/retry/altă trimitere) decide programatic, fără casier.
+                // POLLING_LOST, TIMEOUT, PRINT_FAILED → job_id-ul a fost deja reținut prin
+                // callback → la reluare intră pe verificarea precisă, nu retrimite orbește.
+                throw e;
             }
-            // POLLING_LOST, TIMEOUT, PRINT_FAILED → job_id-ul a fost deja reținut prin callback
-            // (dacă a apucat să fie primit) → la reluare intră pe ramura de verificare precisă
-            // de mai sus, nu mai retrimite orbește. Rămâne FISCAL_PENDING, casierul confirmă.
-            throw e;
+        } finally {
+            SEND_LOCK.unlock();
         }
 
         return self.completeFiscalClose(receiptId); // TX2 → commit
@@ -111,26 +158,153 @@ public class ReceiptFiscalService {
         String jobStatus = fiscalAgentService.findStatusByJobId(jobId);
 
         if ("printed".equals(jobStatus)) {
+            self.recordFiscalResult(receiptId, fiscalAgentService.fetchPrintedResult(jobId));
             return self.completeFiscalClose(receiptId);
         }
         if ("queued".equals(jobStatus) || "processing".equals(jobStatus)) {
             throw new RuntimeException("ERROR.FISCAL.STILL_PROCESSING");
         }
-        if ("failed".equals(jobStatus)) {
-            // Fisco a confirmat explicit eșecul acestui job — sigur nu s-a tipărit, retry permis.
-            self.rollbackToOpen(receiptId); // curăță și fiscalJobId, ca reluarea să trimită un job nou
+        if ("failed".equals(jobStatus) || "not_found".equals(jobStatus)) {
+            // failed: Fisco a confirmat explicit eșecul — sigur nu s-a tipărit. not_found: cu
+            // trimiteri serializate și un singur client HTTP, rotația bufferului e exclusă,
+            // deci jobul nu mai există în Fisco și nu mai poate fi tipărit. Retry permis.
+            self.rollbackToOpen(receiptId); // curăță fiscalJobId + snapshot → reluarea trimite un job nou
             throw new RuntimeException("ERROR.FISCAL.PRINT_FAILED_CONFIRMED");
         }
-        // not_found (buffer Fisco a rotit) sau null (Fisco inaccesibil acum) — știm sigur că
-        // ceva a plecat (avem job_id-ul), dar nu putem confirma ce s-a întâmplat. NU retrimitem
-        // — rămâne FISCAL_PENDING, casierul confirmă vizual, la casă (DA/NU).
+        // null = Fisco inaccesibil acum — nu putem confirma nimic. NU retrimitem; rămâne
+        // FISCAL_PENDING, se reia verificarea când conexiunea revine.
         throw new RuntimeException("ERROR.FISCAL.UNCONFIRMED");
+    }
+
+    // Reconciliază toate bonurile rămase cu snapshot dar fără job_id confirmat (răspuns
+    // pierdut la POST), cu excepția celui curent — apelată înaintea oricărei trimiteri noi.
+    private void reconcileAllUnconfirmedSends(Integer excludeReceiptId) {
+        List<Receipt> unconfirmed = receiptRepository
+                .findByStatus_CodeAndFiscalJobIdIsNullAndFiscalSnapshotJobIdIsNotNull("FISCAL_PENDING");
+        for (Receipt r : unconfirmed) {
+            if (r.getId().equals(excludeReceiptId)) continue;
+            reconcileUnconfirmedSend(r.getId());
+        }
+    }
+
+    // Decide programatic soarta unui bon al cărui POST a rămas fără răspuns, pe baza listei
+    // de joburi Fisco (GET /api/v1/status, cele mai noi primele):
+    //  - exact un job necunoscut mai nou decât snapshotul = jobul nostru pierdut → îl adoptăm;
+    //  - zero joburi noi = Fisco n-a primit nimic → bonul revine pe OPEN (sau se șterge, dacă
+    //    e bon direct) și poate fi retrimis în siguranță;
+    //  - mai multe = nedecidabil (posibil doar cu un al doilea client HTTP) → rămâne pending.
+    // Rulează sub SEND_LOCK ca să nu prindă în diff un POST in-flight al altui thread.
+    private void reconcileUnconfirmedSend(Integer receiptId) {
+        SEND_LOCK.lock();
+        try {
+            Receipt receipt = receiptRepository.findById(receiptId).orElse(null);
+            if (receipt == null
+                    || !"FISCAL_PENDING".equals(receipt.getStatus().getCode())
+                    || receipt.getFiscalJobId() != null
+                    || receipt.getFiscalSnapshotJobId() == null) {
+                return; // lămurit între timp
+            }
+
+            List<String> jobs = fiscalAgentService.listRecentJobIds(); // aruncă AGENT_UNREACHABLE
+
+            String snapshot = receipt.getFiscalSnapshotJobId();
+            List<String> newerThanSnapshot;
+            if (SNAPSHOT_EMPTY_HISTORY.equals(snapshot)) {
+                newerThanSnapshot = jobs; // istoricul era gol la snapshot — orice job e nou
+            } else {
+                int idx = jobs.indexOf(snapshot);
+                // snapshot absent din listă = driverul și-a pierdut istoricul (restart) —
+                // toate joburile rămase sunt candidate, filtrate mai jos de cele deja atribuite
+                newerThanSnapshot = idx >= 0 ? jobs.subList(0, idx) : jobs;
+            }
+
+            List<String> candidates = newerThanSnapshot.stream()
+                    .filter(id -> !receiptRepository.existsByFiscalJobId(id))
+                    .toList();
+
+            if (candidates.isEmpty()) {
+                // Niciun job nou după snapshot → POST-ul sigur nu a ajuns la Fisco → curățare sigură
+                if (isDirectReceipt(receiptId)) {
+                    self.deletePendingReceipt(receiptId);
+                } else {
+                    self.rollbackToOpen(receiptId);
+                }
+                return;
+            }
+            if (candidates.size() == 1) {
+                self.recordFiscalJobId(receiptId, candidates.get(0));
+                return;
+            }
+            throw new RuntimeException("ERROR.FISCAL.UNCONFIRMED");
+        } finally {
+            SEND_LOCK.unlock();
+        }
+    }
+
+    /** ADVANCE / GIFT_CARD = bon direct: la eșec sigur se șterge, nu revine pe OPEN. */
+    private boolean isDirectReceipt(Integer receiptId) {
+        Receipt receipt = receiptRepository.findByIdWithItems(receiptId).orElse(null);
+        if (receipt == null) return false;
+        for (ReceiptItem item : receipt.getItems()) {
+            var type = item.getProduct().getProductType();
+            if (type != null && ("ADVANCE".equals(type.getCode()) || "GIFT_CARD".equals(type.getCode()))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Rapoartele trec prin același lock + gate ca bonurile: un raport trimis între snapshotul
+    // unui bon și reconcilierea lui ar apărea în diff ca job necunoscut și ar strica decizia.
+    public void printReportX() {
+        SEND_LOCK.lock();
+        try {
+            reconcileAllUnconfirmedSends(null);
+            fiscalAgentService.printReportX();
+        } finally {
+            SEND_LOCK.unlock();
+        }
+    }
+
+    public void printReportZ() {
+        SEND_LOCK.lock();
+        try {
+            reconcileAllUnconfirmedSends(null);
+            fiscalAgentService.printReportZ();
+        } finally {
+            SEND_LOCK.unlock();
+        }
     }
 
     @Transactional
     public void recordFiscalJobId(Integer receiptId, String jobId) {
         receiptRepository.findById(receiptId).ifPresent(r -> {
             r.setFiscalJobId(jobId);
+            // Jobul e confirmat — snapshotul nu mai are rol; de aici verificarea e 1:1 pe job_id
+            r.setFiscalSnapshotJobId(null);
+            receiptRepository.save(r);
+        });
+    }
+
+    // Persistat (commit) ÎNAINTE de POST /api/v1/print — reperul reconcilierii dacă răspunsul se pierde
+    @Transactional
+    public void recordFiscalSnapshot(Integer receiptId, String snapshotJobId) {
+        receiptRepository.findById(receiptId).ifPresent(r -> {
+            r.setFiscalSnapshotJobId(snapshotJobId);
+            receiptRepository.save(r);
+        });
+    }
+
+    // Datele fiscale din răspunsul "printed" (manual 2.2: numărul bonului, raportul Z, seria
+    // imprimantei). Best-effort: null nu blochează închiderea — printarea e deja confirmată.
+    @Transactional
+    public void recordFiscalResult(Integer receiptId, FiscalAgentService.PrintedResult result) {
+        if (result == null) return;
+        receiptRepository.findById(receiptId).ifPresent(r -> {
+            r.setFiscalSlipNumber(result.slipNumber());
+            r.setFiscalZReportNumber(result.zReportNumber());
+            r.setFiscalBonNumber(result.bonNumber());
+            r.setFiscalDeviceSerial(result.deviceSerial());
             receiptRepository.save(r);
         });
     }
@@ -141,9 +315,52 @@ public class ReceiptFiscalService {
         return self.completeFiscalClose(receiptId);
     }
 
-    // Casierul confirmă vizual că bonul NU s-a tipărit — revine pe OPEN și retrimite imediat
-    // comanda de închidere (același flux ca la prima încercare, cu verificarea Fisco înainte).
+    // „Verifică și reia": rezolvare sigură, fără încredere oarbă în vreo confirmare umană —
+    // retrimite DOAR cu dovadă negativă (failed / not_found / reconciliere cu zero joburi noi
+    // față de snapshot). Pe queued/processing sau cu Fisco inaccesibil refuză explicit.
     public CustomerVoucherDTOs.VoucherIssuanceResult retryNotPrinted(Integer receiptId) {
+        Receipt receipt = receiptRepository.findById(receiptId)
+                .orElseThrow(() -> new RuntimeException("ERROR.RECEIPT.NOT_FOUND"));
+        if (!"FISCAL_PENDING".equals(receipt.getStatus().getCode())) {
+            throw new RuntimeException("ERROR.RECEIPT.NOT_FISCAL_PENDING");
+        }
+
+        // Răspuns pierdut la POST (fără job_id) → reconciliere programatică întâi
+        if (receipt.getFiscalJobId() == null && receipt.getFiscalSnapshotJobId() != null) {
+            reconcileUnconfirmedSend(receiptId); // aruncă dacă Fisco inaccesibil / nedecidabil
+            Receipt after = receiptRepository.findById(receiptId).orElse(null);
+            if (after == null) {
+                // bon direct șters la reconciliere — comanda sigur nu a ajuns la casă
+                throw new RuntimeException("ERROR.FISCAL.DIRECT_NOT_PRINTED");
+            }
+            if ("OPEN".equals(after.getStatus().getCode())) {
+                return closeFiscal(receiptId); // dovadă: Fisco n-a primit nimic → retrimitere sigură
+            }
+            receipt = after; // job adoptat — cade pe verificarea de status de mai jos
+        }
+
+        if (receipt.getFiscalJobId() != null) {
+            String status = fiscalAgentService.findStatusByJobId(receipt.getFiscalJobId());
+            if ("printed".equals(status)) {
+                self.recordFiscalResult(receiptId, fiscalAgentService.fetchPrintedResult(receipt.getFiscalJobId()));
+                return self.completeFiscalClose(receiptId);
+            }
+            if ("queued".equals(status) || "processing".equals(status)) {
+                throw new RuntimeException("ERROR.FISCAL.STILL_PROCESSING");
+            }
+            if (status == null) {
+                throw new RuntimeException("ERROR.FISCAL.UNCONFIRMED");
+            }
+            // failed / not_found → dovadă negativă (vezi resolveExistingJob pentru raționament)
+            if (isDirectReceipt(receiptId)) {
+                self.deletePendingReceipt(receiptId);
+                throw new RuntimeException("ERROR.FISCAL.DIRECT_NOT_PRINTED");
+            }
+            self.rollbackToOpen(receiptId);
+            return closeFiscal(receiptId);
+        }
+
+        // FISCAL_PENDING fără snapshot și fără job: crash înainte de a trimite ceva → sigur
         self.rollbackToOpen(receiptId);
         return closeFiscal(receiptId);
     }
@@ -154,17 +371,39 @@ public class ReceiptFiscalService {
     // din nou casierul dacă s-a tipărit.
     public boolean checkAndCloseIfPrinted(Integer receiptId) {
         Receipt receipt = receiptRepository.findById(receiptId).orElse(null);
-        if (receipt == null) return false;
+        if (receipt == null || !"FISCAL_PENDING".equals(receipt.getStatus().getCode())) return false;
 
-        String status = receipt.getFiscalJobId() != null
-                ? fiscalAgentService.findStatusByJobId(receipt.getFiscalJobId())
-                : fiscalAgentService.findStatusByExternalId("sb-" + receiptId);
+        // Răspuns pierdut la POST (fără job_id) → reconciliere programatică pe snapshot:
+        // adoptă jobul pierdut sau curăță bonul (OPEN / ștergere) dacă Fisco n-a primit nimic.
+        if (receipt.getFiscalJobId() == null) {
+            if (receipt.getFiscalSnapshotJobId() == null) return false; // nimic trimis vreodată
+            try {
+                reconcileUnconfirmedSend(receiptId);
+            } catch (RuntimeException e) {
+                return false; // Fisco inaccesibil / nedecidabil acum — rămâne pending
+            }
+            receipt = receiptRepository.findById(receiptId).orElse(null);
+            // zero-diff: bon revenit pe OPEN sau șters — FE re-fetch-uiește și vede starea reală
+            if (receipt == null || receipt.getFiscalJobId() == null) return false;
+        }
+
+        String status = fiscalAgentService.findStatusByJobId(receipt.getFiscalJobId());
 
         if ("printed".equals(status)) {
+            self.recordFiscalResult(receiptId, fiscalAgentService.fetchPrintedResult(receipt.getFiscalJobId()));
             self.completeFiscalClose(receiptId);
             return true;
         }
-        return false;
+        if ("failed".equals(status) || "not_found".equals(status)) {
+            // Dovadă negativă — curățăm automat, casierul reia închiderea din fluxul normal
+            if (isDirectReceipt(receiptId)) {
+                self.deletePendingReceipt(receiptId);
+            } else {
+                self.rollbackToOpen(receiptId);
+            }
+            return false;
+        }
+        return false; // queued / processing / Fisco inaccesibil → rămâne pending
     }
 
     // Orchestrator avans petrecere: TX1 creare bon FISCAL_PENDING → print → TX2 finalizare.
@@ -196,39 +435,51 @@ public class ReceiptFiscalService {
             return; // fără plată reală cash/card — nu are nevoie de bon fiscal
         }
 
-        String existingStatus = fiscalAgentService.findStatusByExternalId("sb-" + receiptId);
-        if ("printed".equals(existingStatus)) {
-            return; // deja tipărit — nu retrimitem
-        }
-        // Job anterior încă activ la Fisco — nu trimitem altul peste el, cât timp e neterminat.
-        if ("queued".equals(existingStatus) || "processing".equals(existingStatus)) {
-            throw new RuntimeException("ERROR.FISCAL.STILL_PROCESSING");
-        }
-
-        // Verificare de conexiune chiar înainte de comandă — dacă nu răspunde, sigur nimic nu
-        // poate ajunge la Fisco acum; bonul abia creat se șterge direct, sigur, fără ambiguitate.
-        if (!fiscalAgentService.checkHealth()) {
-            self.deletePendingReceipt(receiptId);
-            throw new RuntimeException("ERROR.FISCAL.NOT_CONNECTED");
-        }
-
+        SEND_LOCK.lock();
         try {
-            fiscalAgentService.printGvBon(receipt, jobId -> self.recordFiscalJobId(receiptId, jobId));
-        } catch (RuntimeException e) {
-            String msg = e.getMessage() != null ? e.getMessage() : "";
-            if (msg.startsWith("ERROR.FISCAL.PRINT_REJECTED") || msg.equals("ERROR.FISCAL.CONNECT_FAILED")) {
-                // Fisco sigur nu a creat un job → ștergere sigură
+            // Alte bonuri cu răspuns pierdut se lămuresc înaintea oricărei trimiteri noi
+            try {
+                reconcileAllUnconfirmedSends(receiptId);
+            } catch (RuntimeException e) {
                 self.deletePendingReceipt(receiptId);
-            } else if (msg.equals("ERROR.FISCAL.AGENT_UNREACHABLE")) {
-                String statusAfterUnreachable = fiscalAgentService.findStatusByExternalId("sb-" + receiptId);
-                if ("not_found".equals(statusAfterUnreachable)) {
-                    // Fisco e reachabil și confirmă că nu are jobul → ștergere sigură
+                throw e;
+            }
+
+            // Verificare de conexiune chiar înainte de comandă — dacă nu răspunde, sigur nimic nu
+            // poate ajunge la Fisco acum; bonul abia creat se șterge direct, fără ambiguitate.
+            if (!fiscalAgentService.checkHealth()) {
+                self.deletePendingReceipt(receiptId);
+                throw new RuntimeException("ERROR.FISCAL.NOT_CONNECTED");
+            }
+
+            // Snapshot persistat ÎNAINTE de POST — reperul reconcilierii dacă răspunsul se pierde
+            String latestJob;
+            try {
+                latestJob = fiscalAgentService.getLatestJobId();
+            } catch (RuntimeException e) {
+                self.deletePendingReceipt(receiptId); // nimic trimis încă — ștergere sigură
+                throw new RuntimeException("ERROR.FISCAL.NOT_CONNECTED");
+            }
+            self.recordFiscalSnapshot(receiptId, latestJob == null ? SNAPSHOT_EMPTY_HISTORY : latestJob);
+
+            try {
+                FiscalAgentService.PrintedResult printed = fiscalAgentService.printGvBon(
+                        receipt, jobId -> self.recordFiscalJobId(receiptId, jobId));
+                self.recordFiscalResult(receiptId, printed); // manual 2.2: nr. bon, raport Z, serie
+            } catch (RuntimeException e) {
+                String msg = e.getMessage() != null ? e.getMessage() : "";
+                if (msg.startsWith("ERROR.FISCAL.PRINT_REJECTED") || msg.equals("ERROR.FISCAL.CONNECT_FAILED")) {
+                    // Fisco sigur nu a creat un job → ștergere sigură
                     self.deletePendingReceipt(receiptId);
                 }
-                // null / alt status → rămâne FISCAL_PENDING → decizie manuală (vezi confirmPrintedManually/retryNotPrinted)
+                // ERROR.FISCAL.AGENT_UNREACHABLE → răspuns pierdut; bonul rămâne FISCAL_PENDING
+                // cu snapshotul persistat — reconcilierea decide programatic la următoarea
+                // atingere (check/retry/altă trimitere), fără casier.
+                // POLLING_LOST, TIMEOUT, PRINT_FAILED → job_id reținut → verificare precisă la reluare
+                throw e;
             }
-            // POLLING_LOST, TIMEOUT, PRINT_FAILED → rămâne FISCAL_PENDING, decizie manuală
-            throw e;
+        } finally {
+            SEND_LOCK.unlock();
         }
     }
 
@@ -257,9 +508,10 @@ public class ReceiptFiscalService {
         ReceiptStatus openStatus = statusRepository.findByCode("OPEN")
                 .orElseThrow(() -> new RuntimeException("ERROR.STATUS.NOT_FOUND"));
         receipt.setStatus(openStatus);
-        // Curățăm job_id-ul vechi — o reluare de pe OPEN e o încercare nouă, are nevoie de un
-        // job_id nou. Fără asta, gate-ul din attemptPrintAndFinalize ar verifica greșit jobul abandonat.
+        // Curățăm job_id-ul și snapshotul vechi — o reluare de pe OPEN e o încercare nouă.
+        // Fără asta, gate-ul din attemptPrintAndFinalize ar verifica greșit jobul abandonat.
         receipt.setFiscalJobId(null);
+        receipt.setFiscalSnapshotJobId(null);
         receiptRepository.save(receipt);
     }
 

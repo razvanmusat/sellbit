@@ -207,29 +207,33 @@ const SellPage = () => {
         />
       )}
 
-      {/* Fisco n-a confirmat clar în timp util — întrebăm casierul, care poate vedea casa fizic */}
+      {/* Starea bonului la casă nu poate fi decisă acum (Fisco inaccesibil / job în lucru).
+          „Verifică și reia" e sigură: backend-ul retrimite DOAR cu dovadă că bonul nu a ieșit.
+          Confirmarea manuală rămâne doar pentru cazul în care casierul vede bonul tipărit. */}
       <Dialog open={!!askPrintedReceipt} maxWidth="xs" fullWidth>
-        <DialogTitle>Confirmare tipărire bon fiscal</DialogTitle>
+        <DialogTitle>Bon fiscal în așteptare</DialogTitle>
         <DialogContent>
           <Typography>
-            Casa de marcat nu a confirmat la timp. S-a tipărit fizic bonul fiscal pentru{' '}
-            <strong>{askPrintedReceipt?.tableName}</strong>?
+            Casa de marcat nu a confirmat încă tipărirea bonului pentru{' '}
+            <strong>{askPrintedReceipt?.tableName}</strong>.{' '}
+            „Verifică și reia" interoghează casa și retrimite doar dacă e sigur că bonul nu a
+            ieșit. Confirmă manual doar dacă vezi bonul tipărit fizic.
           </Typography>
         </DialogContent>
         <DialogActions>
           <Button
-            color="error"
-            variant="outlined"
-            onClick={() => actions.retryBonNotPrinted(askPrintedReceipt.id)}
-          >
-            Nu, reîncearcă
-          </Button>
-          <Button
             color="success"
-            variant="contained"
+            variant="outlined"
             onClick={() => actions.confirmBonPrinted(askPrintedReceipt.id)}
           >
-            Da, s-a tipărit
+            Văd bonul tipărit
+          </Button>
+          <Button
+            color="primary"
+            variant="contained"
+            onClick={() => actions.retryBonNotPrinted(askPrintedReceipt.id)}
+          >
+            Verifică și reia
           </Button>
         </DialogActions>
       </Dialog>

@@ -15,6 +15,7 @@ import java.util.Map;
 public class FiscalController {
 
     private final FiscalAgentService fiscalAgentService;
+    private final ReceiptFiscalService receiptFiscalService;
 
     // Frontend "bulina" — verifică dacă casa de marcat răspunde
     @GetMapping("/status")
@@ -29,15 +30,17 @@ public class FiscalController {
         return ResponseEntity.ok(fiscalAgentService.getLastReceipt());
     }
 
+    // Rapoartele trec prin ReceiptFiscalService: același lock de serializare + reconcilierea
+    // bonurilor cu răspuns pierdut, ca să nu polueze diff-ul de reconciliere cu joburi noi
     @PostMapping("/report-x")
     public ResponseEntity<Void> reportX() {
-        fiscalAgentService.printReportX();
+        receiptFiscalService.printReportX();
         return ResponseEntity.ok().build();
     }
 
     @PostMapping("/report-z")
     public ResponseEntity<Void> reportZ() {
-        fiscalAgentService.printReportZ();
+        receiptFiscalService.printReportZ();
         return ResponseEntity.ok().build();
     }
 

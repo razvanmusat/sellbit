@@ -80,6 +80,29 @@ public class Receipt {
     @Column(name = "fiscal_job_id", length = 100)
     private String fiscalJobId;
 
+    // Cel mai nou job_id cunoscut de Fisco, persistat ÎNAINTE de POST /api/v1/print.
+    // Dacă răspunsul la POST se pierde (fiscal_job_id rămâne null), reconcilierea compară
+    // lista de joburi Fisco cu acest reper: exact un job mai nou = jobul nostru pierdut
+    // (îl adoptăm); zero joburi noi = Fisco n-a primit nimic (retrimitere sigură).
+    // Valoarea "NONE" = istoricul Fisco era gol la momentul snapshotului (diferit de null,
+    // care înseamnă că nu s-a trimis nimic pentru bonul ăsta).
+    @Column(name = "fiscal_snapshot_job_id", length = 100)
+    private String fiscalSnapshotJobId;
+
+    // Datele fiscale din răspunsul "printed" al Fisco, salvate per recomandarea explicită din
+    // manual (2.2): leagă bonul din aplicație de bonul fizic din memoria fiscală a casei.
+    @Column(name = "fiscal_slip_number", length = 20)
+    private String fiscalSlipNumber; // SlipNumber: numărul general al bonului fiscal
+
+    @Column(name = "fiscal_z_report_number", length = 20)
+    private String fiscalZReportNumber; // nZrep: numărul raportului Z în care e inclus bonul
+
+    @Column(name = "fiscal_bon_number", length = 20)
+    private String fiscalBonNumber; // nFNum: numărul bonului fiscal din raportul Z
+
+    @Column(name = "fiscal_device_serial", length = 50)
+    private String fiscalDeviceSerial; // DeviceSerial: seria imprimantei fiscale
+
     // Relații bidirecționale cu gestionare în cascadă
     @OneToMany(mappedBy = "receipt", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @BatchSize(size = 50)
