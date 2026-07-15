@@ -136,7 +136,7 @@ public class FiscalAgentService {
         // GIFT_CARD → mereu pe subtotal, nu se știe dinainte ce produse vor fi pe bon.
         ReceiptItem voucherTargetItem = null;
         if (voucherAmount.compareTo(BigDecimal.ZERO) > 0) {
-            Optional<CustomerVoucher> usedVoucher = voucherRepository.findByUsedReceiptId(receipt.getId());
+            Optional<CustomerVoucher> usedVoucher = voucherRepository.findByUsedReceiptIdWithCampaign(receipt.getId());
             if (usedVoucher.isPresent()) {
                 String campaignTypeCode = usedVoucher.get().getCampaign().getCampaignType().getCode();
                 Integer targetProductId = usedVoucher.get().getCampaign().getApplicableProductId();

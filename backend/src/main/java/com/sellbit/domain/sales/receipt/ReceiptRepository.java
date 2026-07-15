@@ -90,8 +90,16 @@ public interface ReceiptRepository extends JpaRepository<Receipt, Integer> {
 
         @Query("""
                 SELECT r FROM Receipt r
+                LEFT JOIN FETCH r.status
+                WHERE r.id = :id
+                """)
+        java.util.Optional<Receipt> findByIdWithStatus(@Param("id") Integer id);
+
+        @Query("""
+                SELECT DISTINCT r FROM Receipt r
                 LEFT JOIN FETCH r.items i
                 LEFT JOIN FETCH i.product p
+                LEFT JOIN FETCH p.productType
                 LEFT JOIN FETCH p.vatRate
                 LEFT JOIN FETCH i.warehouse
                 WHERE r.id = :id

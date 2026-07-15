@@ -2,6 +2,7 @@ package com.sellbit.domain.voucher.customervoucher;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -15,6 +16,14 @@ public interface CustomerVoucherRepository extends JpaRepository<CustomerVoucher
     boolean existsByCode(String code);
 
     Optional<CustomerVoucher> findByUsedReceiptId(Integer receiptId);
+
+    @Query("""
+            SELECT v FROM CustomerVoucher v
+            LEFT JOIN FETCH v.campaign c
+            LEFT JOIN FETCH c.campaignType
+            WHERE v.usedReceipt.id = :receiptId
+            """)
+    Optional<CustomerVoucher> findByUsedReceiptIdWithCampaign(@Param("receiptId") Integer receiptId);
 
     boolean existsByIssuedReceiptId(Integer receiptId);
 
