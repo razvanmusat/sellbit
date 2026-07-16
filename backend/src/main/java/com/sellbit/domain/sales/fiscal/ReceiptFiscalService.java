@@ -24,6 +24,8 @@ import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -57,6 +59,7 @@ public class ReceiptFiscalService {
                 return t;
             });
     private static final long AUTO_CHECK_DELAY_SECONDS = 30;
+    private static final Set<Integer> ACTIVE_AUTO_CHECKS = ConcurrentHashMap.newKeySet();
 
     // Marker pentru „istoricul Fisco era gol la momentul snapshotului" — diferit de null,
     // care înseamnă „nu s-a luat niciun snapshot / nimic trimis pentru bonul ăsta".
@@ -320,66 +323,8 @@ public class ReceiptFiscalService {
         });
     }
 
-    // Casierul confirmă vizual, la casă, că bonul chiar s-a tipărit fizic — folosit când Fisco
-    // n-a putut confirma în timp util (~30s). Închide direct, fără să mai întrebe Fisco din nou.
-    public CustomerVoucherDTOs.VoucherIssuanceResult confirmPrintedManually(Integer receiptId) {
-        return self.completeFiscalClose(receiptId);
-    }
-
-    // „Verifică și reia": rezolvare sigură, fără încredere oarbă în vreo confirmare umană —
-    // retrimite DOAR cu dovadă negativă (failed / not_found / reconciliere cu zero joburi noi
-    // față de snapshot). Pe queued/processing sau cu Fisco inaccesibil refuză explicit.
-    public CustomerVoucherDTOs.VoucherIssuanceResult retryNotPrinted(Integer receiptId) {
-        Receipt receipt = receiptRepository.findByIdWithStatus(receiptId)
-                .orElseThrow(() -> new RuntimeException("ERROR.RECEIPT.NOT_FOUND"));
-        if (!"FISCAL_PENDING".equals(receipt.getStatus().getCode())) {
-            throw new RuntimeException("ERROR.RECEIPT.NOT_FISCAL_PENDING");
-        }
-
-        // Răspuns pierdut la POST (fără job_id) → reconciliere programatică întâi
-        if (receipt.getFiscalJobId() == null && receipt.getFiscalSnapshotJobId() != null) {
-            reconcileUnconfirmedSend(receiptId); // aruncă dacă Fisco inaccesibil / nedecidabil
-            Receipt after = receiptRepository.findByIdWithStatus(receiptId).orElse(null);
-            if (after == null) {
-                // bon direct șters la reconciliere — comanda sigur nu a ajuns la casă
-                throw new RuntimeException("ERROR.FISCAL.DIRECT_NOT_PRINTED");
-            }
-            if ("OPEN".equals(after.getStatus().getCode())) {
-                return closeFiscal(receiptId); // dovadă: Fisco n-a primit nimic → retrimitere sigură
-            }
-            receipt = after; // job adoptat — cade pe verificarea de status de mai jos
-        }
-
-        if (receipt.getFiscalJobId() != null) {
-            String status = fiscalAgentService.findStatusByJobId(receipt.getFiscalJobId());
-            if ("printed".equals(status)) {
-                self.recordFiscalResult(receiptId, fiscalAgentService.fetchPrintedResult(receipt.getFiscalJobId()));
-                return self.completeFiscalClose(receiptId);
-            }
-            if ("queued".equals(status) || "processing".equals(status)) {
-                throw new RuntimeException("ERROR.FISCAL.STILL_PROCESSING");
-            }
-            if (status == null) {
-                throw new RuntimeException("ERROR.FISCAL.UNCONFIRMED");
-            }
-            // failed / not_found → dovadă negativă (vezi resolveExistingJob pentru raționament)
-            if (isDirectReceipt(receiptId)) {
-                self.deletePendingReceipt(receiptId);
-                throw new RuntimeException("ERROR.FISCAL.DIRECT_NOT_PRINTED");
-            }
-            self.rollbackToOpen(receiptId);
-            return closeFiscal(receiptId);
-        }
-
-        // FISCAL_PENDING fără snapshot și fără job: crash înainte de a trimite ceva → sigur
-        self.rollbackToOpen(receiptId);
-        return closeFiscal(receiptId);
-    }
-
-    // Verificare pasivă, fără efecte secundare de retrimitere: folosită la redeschiderea unui
-    // bon FISCAL_PENDING (ex: casierul a plecat de pe pagină și s-a întors) — dacă între timp
-    // Fisco a confirmat "printed", închide automat; altfel nu face nimic, iar UI-ul întreabă
-    // din nou casierul dacă s-a tipărit.
+    // Verificare pasivă, fără POST nou către Fisco: dacă Fisco a confirmat "printed", închide
+    // automat; dacă există dovadă negativă, revine pe OPEN/șterge bonul direct; altfel rămâne pending.
     public boolean checkAndCloseIfPrinted(Integer receiptId) {
         Receipt receipt = receiptRepository.findByIdWithStatus(receiptId).orElse(null);
         if (receipt == null || !"FISCAL_PENDING".equals(receipt.getStatus().getCode())) return false;
@@ -418,13 +363,34 @@ public class ReceiptFiscalService {
     }
 
     private void schedulePendingFiscalCheck(Integer receiptId) {
+        if (!ACTIVE_AUTO_CHECKS.add(receiptId)) {
+            return;
+        }
+        scheduleNextPendingFiscalCheck(receiptId);
+    }
+
+    private void scheduleNextPendingFiscalCheck(Integer receiptId) {
         AUTO_CHECK_EXECUTOR.schedule(() -> {
             try {
                 checkAndCloseIfPrinted(receiptId);
             } catch (RuntimeException ignored) {
                 // Best effort only: no automatic retry; unresolved receipts remain FISCAL_PENDING.
             }
+            if (isFiscalPendingForAutoCheck(receiptId)) {
+                scheduleNextPendingFiscalCheck(receiptId);
+            } else {
+                ACTIVE_AUTO_CHECKS.remove(receiptId);
+            }
         }, AUTO_CHECK_DELAY_SECONDS, TimeUnit.SECONDS);
+    }
+
+    private boolean isFiscalPendingForAutoCheck(Integer receiptId) {
+        try {
+            Receipt receipt = receiptRepository.findByIdWithStatus(receiptId).orElse(null);
+            return receipt != null && "FISCAL_PENDING".equals(receipt.getStatus().getCode());
+        } catch (RuntimeException e) {
+            return true;
+        }
     }
 
     // Orchestrator avans petrecere: TX1 creare bon FISCAL_PENDING → print → TX2 finalizare.

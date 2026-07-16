@@ -1,7 +1,8 @@
 import React from 'react';
 import dayjs from 'dayjs';
 import PropTypes from 'prop-types';
-import { Card, CardContent, Typography, Box } from '@mui/material';
+import { Card, CardContent, Typography, Box, Chip } from '@mui/material';
+import HourglassTopIcon from '@mui/icons-material/HourglassTop';
 
 // Helper pentru a formata ora dintr-un string ISO (ex: "2024-01-25T10:30:00")
 const formatTime = (isoString) => {
@@ -10,7 +11,7 @@ const formatTime = (isoString) => {
   }
   try {
     return dayjs(isoString).format('HH:mm');
-  } catch (error) {
+  } catch {
     console.error('Format invalid pentru dată:', isoString);
     return 'Invalid';
   }
@@ -30,14 +31,47 @@ const ReceiptCard = ({ receipt, onClick }) => {
     userName = 'Necunoscut',
     tableName = 'Fără masă',
     createdAt,
+    statusCode,
   } = receipt;
+  const isFiscalPending = statusCode === 'FISCAL_PENDING';
 
   return (
-    <Card onClick={() => onClick(receipt.id)} sx={{ width: { xs: '100%', sm: 220 }, cursor: 'pointer', '&:hover': { boxShadow: 6, transform: 'translateY(-2px)' }, transition: 'all 0.2s' }}>
+    <Card
+      onClick={() => {
+        if (!isFiscalPending) onClick(receipt.id);
+      }}
+      sx={{
+        width: { xs: '100%', sm: 220 },
+        cursor: isFiscalPending ? 'not-allowed' : 'pointer',
+        border: isFiscalPending ? '1px solid' : undefined,
+        borderColor: isFiscalPending ? 'warning.main' : undefined,
+        bgcolor: isFiscalPending ? 'warning.50' : 'background.paper',
+        opacity: isFiscalPending ? 0.88 : 1,
+        '&:hover': isFiscalPending ? {} : { boxShadow: 6, transform: 'translateY(-2px)' },
+        transition: 'all 0.2s',
+      }}
+    >
       <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-        <Typography variant="h6" component="div" fontWeight="bold" noWrap>
-          {tableName}
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 1 }}>
+          <Typography variant="h6" component="div" fontWeight="bold" noWrap>
+            {tableName}
+          </Typography>
+          {isFiscalPending && (
+            <Chip
+              icon={<HourglassTopIcon />}
+              label="Fiscal"
+              color="warning"
+              size="small"
+              sx={{ flexShrink: 0 }}
+            />
+          )}
+        </Box>
+
+        {isFiscalPending && (
+          <Typography variant="caption" color="warning.dark" sx={{ display: 'block', mt: 0.5 }}>
+            In asteptare casa
+          </Typography>
+        )}
 
         <Box sx={{ display: 'flex', alignItems: 'baseline', mt: 1 }}>
           <Typography variant="h5" component="span" fontWeight="bold">
@@ -64,6 +98,7 @@ ReceiptCard.propTypes = {
     userName: PropTypes.string,
     tableName: PropTypes.string,
     createdAt: PropTypes.string,
+    statusCode: PropTypes.string,
   }).isRequired,
   onClick: PropTypes.func.isRequired,
 };

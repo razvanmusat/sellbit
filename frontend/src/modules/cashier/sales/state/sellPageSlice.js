@@ -171,29 +171,6 @@ export const closeReceiptManual = createAsyncThunk(
   }
 );
 
-export const confirmPrintedFiscal = createAsyncThunk(
-  'sellPage/confirmPrintedFiscal',
-  async (receiptId, { rejectWithValue }) => {
-    try {
-      const issuanceResult = await SalesService.confirmPrinted(receiptId);
-      return { receiptId: Number(receiptId), issuanceResult: issuanceResult || { vouchers: [], loyaltyCampaign: null } };
-    } catch (error) {
-      return rejectWithValue(error.message || 'Eroare la confirmarea bonului.');
-    }
-  }
-);
-
-export const retryNotPrintedFiscal = createAsyncThunk(
-  'sellPage/retryNotPrintedFiscal',
-  async (receiptId, { rejectWithValue }) => {
-    try {
-      const issuanceResult = await SalesService.retryNotPrinted(receiptId);
-      return { receiptId: Number(receiptId), issuanceResult: issuanceResult || { vouchers: [], loyaltyCampaign: null } };
-    } catch (error) {
-      return rejectWithValue(error.message || 'Eroare la reîncercarea închiderii bonului.');
-    }
-  }
-);
 
 export const registerGiftCard = createAsyncThunk(
   'sellPage/registerGiftCard',
@@ -278,18 +255,6 @@ const sellPageSlice = createSlice({
       })
       .addCase(closeReceiptManual.pending, (state) => { state.receiptsLoading = 'pending'; })
       .addCase(closeReceiptManual.fulfilled, (state, action) => {
-        state.receipts = state.receipts.filter(r => r.id !== action.payload.receiptId);
-        state.receiptsLoading = 'succeeded';
-        state.error = null;
-      })
-      .addCase(confirmPrintedFiscal.pending, (state) => { state.receiptsLoading = 'pending'; })
-      .addCase(confirmPrintedFiscal.fulfilled, (state, action) => {
-        state.receipts = state.receipts.filter(r => r.id !== action.payload.receiptId);
-        state.receiptsLoading = 'succeeded';
-        state.error = null;
-      })
-      .addCase(retryNotPrintedFiscal.pending, (state) => { state.receiptsLoading = 'pending'; })
-      .addCase(retryNotPrintedFiscal.fulfilled, (state, action) => {
         state.receipts = state.receipts.filter(r => r.id !== action.payload.receiptId);
         state.receiptsLoading = 'succeeded';
         state.error = null;

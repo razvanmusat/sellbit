@@ -9,16 +9,12 @@ import {
   useTheme,
   useMediaQuery,
   Snackbar,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import PaymentsIcon from '@mui/icons-material/Payments';
 import CardGiftcardIcon from '@mui/icons-material/CardGiftcard';
 import PointOfSaleIcon from '@mui/icons-material/PointOfSale';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 
 import { useSellPage } from '../hooks/useSellPage';
 
@@ -33,7 +29,6 @@ import VoucherIssuanceDialog from '../components/modals/VoucherIssuanceDialog';
 import FiscalModal from '../components/modals/FiscalModal';
 
 const SellPage = () => {
-  const navigate = useNavigate();
   const theme = useTheme();
   const isSmallScreen = useMediaQuery(theme.breakpoints.down('md'));
 
@@ -54,7 +49,6 @@ const SellPage = () => {
     voucherIssuance,
     giftCardStatus,
     fiscalStatus,
-    askPrintedReceipt,
     user,
   } = useSellPage();
 
@@ -206,37 +200,6 @@ const SellPage = () => {
           loading={loading.receipts === 'pending' || loading.paymentMethods === 'pending'}
         />
       )}
-
-      {/* Starea bonului la casă nu poate fi decisă acum (Fisco inaccesibil / job în lucru).
-          „Verifică și reia" e sigură: backend-ul retrimite DOAR cu dovadă că bonul nu a ieșit.
-          Confirmarea manuală rămâne doar pentru cazul în care casierul vede bonul tipărit. */}
-      <Dialog open={!!askPrintedReceipt} maxWidth="xs" fullWidth>
-        <DialogTitle>Bon fiscal în așteptare</DialogTitle>
-        <DialogContent>
-          <Typography>
-            Casa de marcat nu a confirmat încă tipărirea bonului pentru{' '}
-            <strong>{askPrintedReceipt?.tableName}</strong>.{' '}
-            „Verifică și reia" interoghează casa și retrimite doar dacă e sigur că bonul nu a
-            ieșit. Confirmă manual doar dacă vezi bonul tipărit fizic.
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button
-            color="success"
-            variant="outlined"
-            onClick={() => actions.confirmBonPrinted(askPrintedReceipt.id)}
-          >
-            Văd bonul tipărit
-          </Button>
-          <Button
-            color="primary"
-            variant="contained"
-            onClick={() => actions.retryBonNotPrinted(askPrintedReceipt.id)}
-          >
-            Verifică și reia
-          </Button>
-        </DialogActions>
-      </Dialog>
 
       <CancelReceiptModal
         open={modals.cancel}
