@@ -22,11 +22,20 @@ import {
 } from '@mui/material';
 import WarningIcon from '@mui/icons-material/Warning';
 import ErrorIcon from '@mui/icons-material/Error';
+import EditCalendarIcon from '@mui/icons-material/EditCalendar';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import { AlertsService } from './AlertsService';
+import 'dayjs/locale/ro';
 
 const AlertsModal = ({ open, onClose, unclosedAlerts, expirationAlerts, onResolved }) => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('expiration'); // 'unclosed' | 'expiration'
   const [error, setError] = useState(null);
+  const [editingAlert, setEditingAlert] = useState(null);
+  const [expirationDate, setExpirationDate] = useState(null);
+  const [savingExpiration, setSavingExpiration] = useState(false);
 
   // Smart tab opening logic
   useEffect(() => {
@@ -55,6 +64,39 @@ const AlertsModal = ({ open, onClose, unclosedAlerts, expirationAlerts, onResolv
   const handleTabChange = (tab) => {
     setActiveTab(tab);
     setError(null);
+  };
+
+  const handleEditExpiration = (alert) => {
+    setEditingAlert(alert);
+    setExpirationDate(dayjs(alert.expirationDate));
+    setError(null);
+  };
+
+  const handleCloseExpirationEditor = () => {
+    if (savingExpiration) return;
+    setEditingAlert(null);
+    setExpirationDate(null);
+    setError(null);
+  };
+
+  const handleSaveExpiration = async () => {
+    if (!editingAlert || !expirationDate?.isValid()) return;
+
+    setSavingExpiration(true);
+    setError(null);
+    try {
+      await AlertsService.updateExpirationDate(
+        editingAlert.purchaseId,
+        expirationDate.format('YYYY-MM-DD')
+      );
+      setEditingAlert(null);
+      setExpirationDate(null);
+      onResolved?.();
+    } catch (err) {
+      setError(err.message || 'Nu s-a putut actualiza data expirării.');
+    } finally {
+      setSavingExpiration(false);
+    }
   };
 
   return (
@@ -171,14 +213,14 @@ const AlertsModal = ({ open, onClose, unclosedAlerts, expirationAlerts, onResolv
                       <TableCell align="center" sx={{ fontWeight: 'bold', color: 'text.secondary', fontSize: '0.75rem' }}>
                         EXPIRARE
                       </TableCell>
+                      <TableCell align="center" sx={{ fontWeight: 'bold', color: 'text.secondary', fontSize: '0.75rem' }}>
+                        ACȚIUNI
+                      </TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {expirationAlerts.map((alert, idx) => {
-                      const daysUntilExpiry = Math.floor(
-                        (dayjs(alert.expirationDate).diff(dayjs(), 'day'))
-                      );
-                      const isExpired = daysUntilExpiry <= 0;
+                    {expirationAlerts.map((alert) => {
+                      const isExpired = Number(alert.daysUntilExpiration) <= 0;
 
                       return (
                         <TableRow
@@ -214,6 +256,16 @@ const AlertsModal = ({ open, onClose, unclosedAlerts, expirationAlerts, onResolv
                           >
                             {dayjs(alert.expirationDate).format('DD.MM.YYYY')}
                           </TableCell>
+                          <TableCell align="center" sx={{ py: 1 }}>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              startIcon={<EditCalendarIcon />}
+                              onClick={() => handleEditExpiration(alert)}
+                            >
+                              Corectează
+                            </Button>
+                          </TableCell>
                         </TableRow>
                       );
                     })}
@@ -230,6 +282,41 @@ const AlertsModal = ({ open, onClose, unclosedAlerts, expirationAlerts, onResolv
           Inchide
         </Button>
       </DialogActions>
+
+      <Dialog open={Boolean(editingAlert)} onClose={handleCloseExpirationEditor} fullWidth maxWidth="xs">
+        <DialogTitle>Corectează data expirării</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" sx={{ mb: 2 }}>
+            {editingAlert?.productName} — {editingAlert?.warehouseName}
+          </Typography>
+          {error && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {error}
+            </Alert>
+          )}
+          <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="ro">
+            <DatePicker
+              label="Data expirării"
+              value={expirationDate}
+              onChange={setExpirationDate}
+              format="DD.MM.YYYY"
+              slotProps={{ textField: { size: 'small', sx: { width: 180 } } }}
+            />
+          </LocalizationProvider>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseExpirationEditor} disabled={savingExpiration}>
+            Renunță
+          </Button>
+          <Button
+            onClick={handleSaveExpiration}
+            variant="contained"
+            disabled={savingExpiration || !expirationDate?.isValid()}
+          >
+            Salvează
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Dialog>
   );
 };

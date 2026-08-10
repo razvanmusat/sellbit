@@ -9,6 +9,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -69,5 +70,14 @@ public class PurchaseController {
             @RequestParam(defaultValue = "15") int days) { 
         // Default 15 zile, dar poți trimite orice valoare din React/Script
         return ResponseEntity.ok(purchaseService.getExpirationAlerts(days));
+    }
+
+    @PreAuthorize("hasAnyAuthority('50', '100')")
+    @PatchMapping("/{purchaseId}/expiration")
+    public ResponseEntity<Void> updateExpirationDate(
+            @PathVariable Integer purchaseId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+        purchaseService.updateExpirationDate(purchaseId, date);
+        return ResponseEntity.ok().build();
     }
 }

@@ -201,6 +201,56 @@ class PurchaseServiceTest {
                 p.getRemainingQuantity().equals(BigDecimal.TEN)));
     }
 
+    @Test
+    @DisplayName("Batch virtual: Copiază prețul și expirarea din primul lot real activ")
+    void createVirtualReturnBatch_CopiesMetadataFromFirstRealActiveBatch() {
+        LocalDate expirationDate = LocalDate.now().plusMonths(2);
+        Purchase referenceBatch = Purchase.builder()
+                .purchasePrice(new BigDecimal("12.50"))
+                .expirationDate(expirationDate)
+                .remainingQuantity(BigDecimal.TEN)
+                .build();
+
+        when(productRepository.findById(10)).thenReturn(Optional.of(mockProduct));
+        when(warehouseRepository.findById(5)).thenReturn(Optional.of(mockWarehouse));
+        when(userRepository.findById(1)).thenReturn(Optional.of(mockUser));
+        when(purchaseRepository.findActiveBatchesFIFO(5, 10)).thenReturn(List.of(referenceBatch));
+
+        purchaseService.createVirtualReturnBatch(5, 10, 1, BigDecimal.ONE, "Inventar");
+
+        verify(purchaseRepository).save(argThat(p ->
+                p.getPurchasePrice().compareTo(new BigDecimal("12.50")) == 0
+                        && expirationDate.equals(p.getExpirationDate())
+                        && p.getRemainingQuantity().compareTo(BigDecimal.ONE) == 0));
+    }
+
+    @Test
+    @DisplayName("Batch virtual: Ignoră loturile virtuale când alege metadatele")
+    void createVirtualReturnBatch_IgnoresExistingVirtualBatches() {
+        LocalDate expirationDate = LocalDate.now().plusMonths(3);
+        Purchase existingVirtual = Purchase.builder()
+                .purchasePrice(BigDecimal.ZERO)
+                .note("VIRTUAL_IN: Ajustare veche")
+                .remainingQuantity(BigDecimal.ONE)
+                .build();
+        Purchase realBatch = Purchase.builder()
+                .purchasePrice(new BigDecimal("7.25"))
+                .expirationDate(expirationDate)
+                .remainingQuantity(BigDecimal.TEN)
+                .build();
+
+        when(productRepository.findById(10)).thenReturn(Optional.of(mockProduct));
+        when(warehouseRepository.findById(5)).thenReturn(Optional.of(mockWarehouse));
+        when(userRepository.findById(1)).thenReturn(Optional.of(mockUser));
+        when(purchaseRepository.findActiveBatchesFIFO(5, 10)).thenReturn(List.of(existingVirtual, realBatch));
+
+        purchaseService.createVirtualReturnBatch(5, 10, 1, BigDecimal.ONE, "Inventar");
+
+        verify(purchaseRepository).save(argThat(p ->
+                p.getPurchasePrice().compareTo(new BigDecimal("7.25")) == 0
+                        && expirationDate.equals(p.getExpirationDate())));
+    }
+
     // --- TESTE: Rapoarte și Alerte ---
 
     @Test
@@ -220,6 +270,25 @@ class PurchaseServiceTest {
         assertFalse(alerts.isEmpty());
         assertEquals(10, alerts.get(0).daysUntilExpiration());
         assertEquals("Produs Test", alerts.get(0).productName());
+    }
+
+    @Test
+    @DisplayName("Actualizare expirare: Modifică doar data lotului selectat")
+    void updateExpirationDate_Success() {
+        LocalDate newExpirationDate = LocalDate.now().plusMonths(4);
+        Purchase purchase = Purchase.builder()
+                .id(100)
+                .expirationDate(LocalDate.now().plusDays(2))
+                .remainingQuantity(BigDecimal.TEN)
+                .build();
+
+        when(purchaseRepository.findById(100)).thenReturn(Optional.of(purchase));
+
+        purchaseService.updateExpirationDate(100, newExpirationDate);
+
+        assertEquals(newExpirationDate, purchase.getExpirationDate());
+        assertEquals(0, purchase.getRemainingQuantity().compareTo(BigDecimal.TEN));
+        verify(purchaseRepository).save(purchase);
     }
 
     @Test

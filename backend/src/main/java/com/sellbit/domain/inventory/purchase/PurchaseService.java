@@ -207,19 +207,47 @@ public class PurchaseService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("ERROR.USER.NOT_FOUND"));
 
+        Purchase referenceBatch = purchaseRepository.findActiveBatchesFIFO(warehouseId, productId).stream()
+                .filter(batch -> !isVirtualBatch(batch))
+                .findFirst()
+                .orElse(null);
+
+        BigDecimal virtualPurchasePrice;
+        LocalDate virtualExpirationDate;
+
+        if (referenceBatch != null) {
+            virtualPurchasePrice = referenceBatch.getPurchasePrice() != null
+                    ? referenceBatch.getPurchasePrice()
+                    : BigDecimal.ZERO;
+            virtualExpirationDate = referenceBatch.getExpirationDate();
+        } else {
+            virtualPurchasePrice = purchaseRepository.findAllBatchesFIFO(warehouseId, productId).stream()
+                    .filter(batch -> !isVirtualBatch(batch))
+                    .map(Purchase::getPurchasePrice)
+                    .filter(price -> price != null)
+                    .reduce((first, second) -> second)
+                    .orElse(BigDecimal.ZERO);
+            virtualExpirationDate = null;
+        }
+
         Purchase virtual = Purchase.builder()
                 .product(product)
                 .warehouse(warehouse)
                 .user(user)
                 .quantity(quantity)
                 .remainingQuantity(quantity)
-                .purchasePrice(BigDecimal.ZERO)
+                .purchasePrice(virtualPurchasePrice)
+                .expirationDate(virtualExpirationDate)
                 // Data 1970 = prioritate FIFO maximă — se consumă primul la următoarea vânzare
                 .purchasedAt(LocalDateTime.of(1970, 1, 1, 0, 0))
                 .note("VIRTUAL_IN: " + reason)
                 .build();
 
         purchaseRepository.save(virtual);
+    }
+
+    private boolean isVirtualBatch(Purchase purchase) {
+        return purchase.getNote() != null && purchase.getNote().startsWith("VIRTUAL_IN:");
     }
 
     @Transactional
@@ -429,6 +457,15 @@ public class PurchaseService {
                         p.getExpirationDate(),
                         ChronoUnit.DAYS.between(LocalDate.now(), p.getExpirationDate())))
                 .toList();
+    }
+
+    @Transactional
+    public void updateExpirationDate(Integer purchaseId, LocalDate expirationDate) {
+        Purchase purchase = purchaseRepository.findById(purchaseId)
+                .orElseThrow(() -> new RuntimeException("ERROR.PURCHASE.NOT_FOUND"));
+
+        purchase.setExpirationDate(expirationDate);
+        purchaseRepository.save(purchase);
     }
 
     /**

@@ -13,6 +13,13 @@ export const AlertsService = {
     });
   },
 
+  updateExpirationDate: async (purchaseId, date) => {
+    return client(`inventory/purchases/${purchaseId}/expiration`, {
+      method: 'PATCH',
+      params: { date },
+    });
+  },
+
   // Deservă bonul neinchis
   closeReceipt: async (receiptId) => {
     return client(`sales/receipts/${receiptId}/close`, {
