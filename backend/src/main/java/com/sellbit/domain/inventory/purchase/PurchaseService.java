@@ -115,11 +115,11 @@ public class PurchaseService {
     }
 
     /**
-     * Descarcă din loturi (FIFO).
+     * Descarcă din loturi (FEFO).
      * Dacă produsul este compus, descarcă din loturile fiecărei componente.
      */
     @Transactional
-    public void deductFromBatchesFIFO(Integer warehouseId, Integer productId, BigDecimal quantityToDeduct) {
+    public void deductFromBatchesFEFO(Integer warehouseId, Integer productId, BigDecimal quantityToDeduct) {
         if (quantityToDeduct == null || quantityToDeduct.compareTo(BigDecimal.ZERO) <= 0) {
             return;
         }
@@ -133,7 +133,7 @@ public class PurchaseService {
                 Integer childWarehouseId = (child.getForcedWarehouse() != null)
                         ? child.getForcedWarehouse().getId()
                         : warehouseId;
-                deductFromBatchesFIFO(childWarehouseId, child.getId(), totalCompQty);
+                deductFromBatchesFEFO(childWarehouseId, child.getId(), totalCompQty);
             }
         } else {
             // --- MODIFICARE AICI ---
@@ -143,7 +143,7 @@ public class PurchaseService {
             // Descarcă din loturi DOAR dacă produsul are trackStock activ (ex: Suc, Apă)
             // Pizza (Catering) și Joaca (Service) vor fi ignorate aici
             if (Boolean.TRUE.equals(product.getTrackStock())) {
-                List<Purchase> activeBatches = purchaseRepository.findActiveBatchesFIFO(warehouseId, productId);
+                List<Purchase> activeBatches = purchaseRepository.findActiveBatchesFEFO(warehouseId, productId);
                 BigDecimal remaining = quantityToDeduct;
 
                 for (Purchase batch : activeBatches) {
@@ -207,7 +207,7 @@ public class PurchaseService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("ERROR.USER.NOT_FOUND"));
 
-        Purchase referenceBatch = purchaseRepository.findActiveBatchesFIFO(warehouseId, productId).stream()
+        Purchase referenceBatch = purchaseRepository.findActiveBatchesFEFO(warehouseId, productId).stream()
                 .filter(batch -> !isVirtualBatch(batch))
                 .findFirst()
                 .orElse(null);
@@ -221,7 +221,7 @@ public class PurchaseService {
                     : BigDecimal.ZERO;
             virtualExpirationDate = referenceBatch.getExpirationDate();
         } else {
-            virtualPurchasePrice = purchaseRepository.findAllBatchesFIFO(warehouseId, productId).stream()
+            virtualPurchasePrice = purchaseRepository.findAllBatchesByReception(warehouseId, productId).stream()
                     .filter(batch -> !isVirtualBatch(batch))
                     .map(Purchase::getPurchasePrice)
                     .filter(price -> price != null)
@@ -238,7 +238,7 @@ public class PurchaseService {
                 .remainingQuantity(quantity)
                 .purchasePrice(virtualPurchasePrice)
                 .expirationDate(virtualExpirationDate)
-                // Data 1970 = prioritate FIFO maximă — se consumă primul la următoarea vânzare
+                // La aceeași expirare, data 1970 pune lotul virtual primul în ordinea FEFO.
                 .purchasedAt(LocalDateTime.of(1970, 1, 1, 0, 0))
                 .note("VIRTUAL_IN: " + reason)
                 .build();
@@ -338,7 +338,7 @@ public class PurchaseService {
                         ? child.getForcedWarehouse().getId()
                         : warehouseId;
                 System.out.println(
-                        "[FIFO] Componenta: " + child.getId() + " | forcedWarehouse: " + child.getForcedWarehouse()
+                        "[FEFO] Componenta: " + child.getId() + " | forcedWarehouse: " + child.getForcedWarehouse()
                                 + " | warehouseId folosit: " + childWarehouseId + " | qty: " + componentQty);
                 BigDecimal componentCost = consumeAndRecordTotalCost(
                         childWarehouseId,
@@ -360,8 +360,8 @@ public class PurchaseService {
             return BigDecimal.ZERO;
         }
 
-        List<Purchase> activeBatches = purchaseRepository.findActiveBatchesFIFO(warehouseId, product.getId());
-        System.out.println("[FIFO] Produs simplu: " + product.getId() + " | warehouseId: " + warehouseId
+        List<Purchase> activeBatches = purchaseRepository.findActiveBatchesFEFO(warehouseId, product.getId());
+        System.out.println("[FEFO] Produs simplu: " + product.getId() + " | warehouseId: " + warehouseId
                 + " | loturi active: " + activeBatches.size() + " | qty necesara: " + quantityToDeduct);
         BigDecimal remaining = quantityToDeduct;
         BigDecimal totalCost = BigDecimal.ZERO;
@@ -431,7 +431,7 @@ public class PurchaseService {
             return;
         }
 
-        BigDecimal available = purchaseRepository.findActiveBatchesFIFO(warehouseId, product.getId())
+        BigDecimal available = purchaseRepository.findActiveBatchesFEFO(warehouseId, product.getId())
                 .stream()
                 .map(Purchase::getRemainingQuantity)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -469,12 +469,12 @@ public class PurchaseService {
     }
 
     /**
-     * Calculează prețul de achiziție FIFO.
+     * Calculează prețul de achiziție FEFO.
      * Dacă produsul este compus, prețul de achiziție este SUMA prețurilor
      * componentelor.
      */
     @Transactional(readOnly = true)
-    public BigDecimal getCurrentFIFOPurchasePrice(Integer warehouseId, Integer productId) {
+    public BigDecimal getCurrentFEFOPurchasePrice(Integer warehouseId, Integer productId) {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new RuntimeException("ERROR.PRODUCT.NOT_FOUND"));
 
@@ -487,7 +487,7 @@ public class PurchaseService {
                 Integer childWarehouseId = (child.getForcedWarehouse() != null)
                         ? child.getForcedWarehouse().getId()
                         : warehouseId;
-                BigDecimal unitCost = getCurrentFIFOPurchasePrice(childWarehouseId, child.getId());
+                BigDecimal unitCost = getCurrentFEFOPurchasePrice(childWarehouseId, child.getId());
                 totalCost = totalCost.add(comp.getQuantity().multiply(unitCost));
             }
             return totalCost.setScale(2, java.math.RoundingMode.HALF_UP);
@@ -498,13 +498,13 @@ public class PurchaseService {
             return product.getPurchasePrice() != null ? product.getPurchasePrice() : BigDecimal.ZERO;
         }
 
-        // 3. Produse cu STOC (Suc, Apă) - FIFO
+        // 3. Produse cu STOC (Suc, Apă) - FEFO
         if (Boolean.TRUE.equals(product.getTrackStock())) {
-            return purchaseRepository.findActiveBatchesFIFO(warehouseId, productId)
+            return purchaseRepository.findActiveBatchesFEFO(warehouseId, productId)
                     .stream()
                     .findFirst()
                     .map(Purchase::getPurchasePrice)
-                    .orElseGet(() -> purchaseRepository.findAllBatchesFIFO(warehouseId, productId)
+                    .orElseGet(() -> purchaseRepository.findAllBatchesByReception(warehouseId, productId)
                             .stream()
                             .reduce((first, second) -> second)
                             .map(Purchase::getPurchasePrice)

@@ -134,7 +134,7 @@ class StockCurrentServiceTest {
 
         // Trebuie să apeleze deductFromBatchesFIFO pentru minus (cu valoarea absolută
         // 6)
-        verify(purchaseService).deductFromBatchesFIFO(eq(1), eq(10),
+        verify(purchaseService).deductFromBatchesFEFO(eq(1), eq(10),
                 argThat(val -> val.compareTo(new BigDecimal("6.00")) == 0));
     }
 
@@ -251,6 +251,6 @@ class StockCurrentServiceTest {
         // Pt ID 10 (+5) -> Virtual Return
         verify(purchaseService).createVirtualReturnBatch(eq(1), eq(10), eq(1), eq(new BigDecimal("5.00")), anyString());
         // Pt ID 11 (-2) -> Deduct FIFO
-        verify(purchaseService).deductFromBatchesFIFO(eq(1), eq(11), eq(new BigDecimal("2.00")));
+        verify(purchaseService).deductFromBatchesFEFO(eq(1), eq(11), eq(new BigDecimal("2.00")));
     }
 }

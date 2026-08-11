@@ -89,7 +89,7 @@ public class StockAdjustmentService {
 
         // 4. Sincronizare FIFO
         if (dto.quantityChange().compareTo(BigDecimal.ZERO) < 0) {
-            purchaseService.deductFromBatchesFIFO(
+            purchaseService.deductFromBatchesFEFO(
                     warehouse.getId(),
                     product.getId(),
                     dto.quantityChange().abs());

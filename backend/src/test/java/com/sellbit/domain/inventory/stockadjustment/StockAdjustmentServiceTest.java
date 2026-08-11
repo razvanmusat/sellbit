@@ -79,7 +79,7 @@ class StockAdjustmentServiceTest {
         adjustmentService.processAdjustment(dto);
 
         verify(adjustmentRepository).save(any());
-        verify(purchaseService).deductFromBatchesFIFO(eq(5), eq(10), eq(new BigDecimal("5.000")));
+        verify(purchaseService).deductFromBatchesFEFO(eq(5), eq(10), eq(new BigDecimal("5.000")));
         verify(stockCurrentService).updateStockRelative(eq(5), eq(10), eq(new BigDecimal("-5.000")));
     }
 

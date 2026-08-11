@@ -103,7 +103,7 @@ public class StockCurrentService {
                     .build());
 
             if (difference.compareTo(BigDecimal.ZERO) < 0) {
-                purchaseService.deductFromBatchesFIFO(warehouse.getId(), product.getId(), difference.abs());
+                purchaseService.deductFromBatchesFEFO(warehouse.getId(), product.getId(), difference.abs());
             } else {
                 purchaseService.createVirtualReturnBatch(warehouse.getId(), product.getId(), adminUser.getId(),
                         difference, "INVENTORY_PLUS: " + request.reason());

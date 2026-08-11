@@ -157,19 +157,19 @@ class PurchaseServiceTest {
         assertThrows(RuntimeException.class, () -> purchaseService.processBulkPurchase(request));
     }
 
-    // --- TESTE: deductFromBatchesFIFO ---
+    // --- TESTE: deductFromBatchesFEFO ---
 
     @Test
-    @DisplayName("FIFO: Deducere corectă din loturi multiple (Scade 7 din 5+10)")
-    void deductFromBatchesFIFO_MultipleBatches() {
+    @DisplayName("FEFO: Deducere corectă din loturi multiple (Scade 7 din 5+10)")
+    void deductFromBatchesFEFO_MultipleBatches() {
         Purchase batch1 = Purchase.builder().id(1).remainingQuantity(new BigDecimal("5.000")).build();
         Purchase batch2 = Purchase.builder().id(2).remainingQuantity(new BigDecimal("10.000")).build();
 
         when(productRepository.findById(10)).thenReturn(Optional.of(mockProduct));
-        when(purchaseRepository.findActiveBatchesFIFO(5, 10)).thenReturn(List.of(batch1, batch2));
+        when(purchaseRepository.findActiveBatchesFEFO(5, 10)).thenReturn(List.of(batch1, batch2));
         when(productComponentRepository.findByParentProductIdAndIsActiveTrue(10)).thenReturn(new ArrayList<>());
 
-        purchaseService.deductFromBatchesFIFO(5, 10, new BigDecimal("7.000"));
+        purchaseService.deductFromBatchesFEFO(5, 10, new BigDecimal("7.000"));
 
         assertEquals(0, batch1.getRemainingQuantity().compareTo(BigDecimal.ZERO));
         assertEquals(0, batch2.getRemainingQuantity().compareTo(new BigDecimal("8.000")));
@@ -178,10 +178,10 @@ class PurchaseServiceTest {
 
     @Test
     @DisplayName("Corner Case: Deducere cantitate ZERO (nu trebuie să interogheze DB)")
-    void deductFromBatchesFIFO_ZeroQuantity() {
-        purchaseService.deductFromBatchesFIFO(5, 10, BigDecimal.ZERO);
+    void deductFromBatchesFEFO_ZeroQuantity() {
+        purchaseService.deductFromBatchesFEFO(5, 10, BigDecimal.ZERO);
 
-        verify(purchaseRepository, never()).findActiveBatchesFIFO(any(), any());
+        verify(purchaseRepository, never()).findActiveBatchesFEFO(any(), any());
         verify(purchaseRepository, never()).save(any());
     }
 
@@ -214,7 +214,7 @@ class PurchaseServiceTest {
         when(productRepository.findById(10)).thenReturn(Optional.of(mockProduct));
         when(warehouseRepository.findById(5)).thenReturn(Optional.of(mockWarehouse));
         when(userRepository.findById(1)).thenReturn(Optional.of(mockUser));
-        when(purchaseRepository.findActiveBatchesFIFO(5, 10)).thenReturn(List.of(referenceBatch));
+        when(purchaseRepository.findActiveBatchesFEFO(5, 10)).thenReturn(List.of(referenceBatch));
 
         purchaseService.createVirtualReturnBatch(5, 10, 1, BigDecimal.ONE, "Inventar");
 
@@ -242,7 +242,7 @@ class PurchaseServiceTest {
         when(productRepository.findById(10)).thenReturn(Optional.of(mockProduct));
         when(warehouseRepository.findById(5)).thenReturn(Optional.of(mockWarehouse));
         when(userRepository.findById(1)).thenReturn(Optional.of(mockUser));
-        when(purchaseRepository.findActiveBatchesFIFO(5, 10)).thenReturn(List.of(existingVirtual, realBatch));
+        when(purchaseRepository.findActiveBatchesFEFO(5, 10)).thenReturn(List.of(existingVirtual, realBatch));
 
         purchaseService.createVirtualReturnBatch(5, 10, 1, BigDecimal.ONE, "Inventar");
 

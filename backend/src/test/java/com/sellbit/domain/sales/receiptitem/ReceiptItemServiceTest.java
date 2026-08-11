@@ -103,7 +103,7 @@ class ReceiptItemServiceTest {
         when(productComponentRepository.findByParentProductIdAndIsActiveTrue(50))
                 .thenReturn(Collections.emptyList());
 
-        when(purchaseService.getCurrentFIFOPurchasePrice(1, 50)).thenReturn(new BigDecimal("50.00"));
+        when(purchaseService.getCurrentFEFOPurchasePrice(1, 50)).thenReturn(new BigDecimal("50.00"));
         
         // CORECTAT: Folosim getQuantity
         when(stockCurrentService.getQuantity(1, 50)).thenReturn(new BigDecimal("10.000"));

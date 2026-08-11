@@ -88,7 +88,7 @@ public class ReceiptItemService {
             validateStockAvailability(resolvedWarehouse.getId(), product, delta);
         }
 
-        BigDecimal currentPurchasePrice = purchaseService.getCurrentFIFOPurchasePrice(
+        BigDecimal currentPurchasePrice = purchaseService.getCurrentFEFOPurchasePrice(
                 resolvedWarehouse.getId(), productId);
 
         if (item == null) {
