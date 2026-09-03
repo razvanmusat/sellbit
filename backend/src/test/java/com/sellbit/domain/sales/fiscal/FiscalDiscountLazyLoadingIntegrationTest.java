@@ -96,6 +96,55 @@ class FiscalDiscountLazyLoadingIntegrationTest {
     }
 
     @Test
+    void advancePaidByBankTransferOnGvIsFiscalizedAsCard() throws Exception {
+        LoadedReceipt loaded = createAndLoadDetached(data -> {
+            Product advance = createProduct("Avans petrecere", data.advanceType(), data);
+            addItem(data.receipt(), advance, data.gv(), "200.00");
+            addPayment(data.receipt(), data.bankTransferMethod(), data.gv(), "200.00");
+        });
+        FakeHttpClient httpClient = new FakeHttpClient();
+
+        FiscalAgentService service = newFiscalAgentService(httpClient, mock(CustomerVoucherRepository.class));
+
+        assertThat(service.needsFiscalPrint(loaded.receipt())).isTrue();
+        service.printGvBon(loaded.receipt(), jobId -> {});
+
+        List<String> commands = postedCommands(httpClient);
+        assertThat(commands).contains("T,1,______,_,__;1;200.00;;;;");
+        assertThat(commands).noneMatch(command -> command.startsWith("C,1,______,_,__;3;"));
+    }
+
+    @Test
+    void bankTransferOnRegularGvReceiptIsNotFiscalized() {
+        LoadedReceipt loaded = createAndLoadDetached(data -> {
+            Product menu = createProduct("Meniu obisnuit", data.menuType(), data);
+            addItem(data.receipt(), menu, data.gv(), "200.00");
+            addPayment(data.receipt(), data.bankTransferMethod(), data.gv(), "200.00");
+        });
+
+        FiscalAgentService service = newFiscalAgentService(
+                new FakeHttpClient(), mock(CustomerVoucherRepository.class));
+
+        assertThat(service.needsFiscalPrint(loaded.receipt())).isFalse();
+    }
+
+    @Test
+    void advancePaidByBankTransferOutsideGvIsNotFiscalized() {
+        LoadedReceipt loaded = createAndLoadDetached(data -> {
+            Warehouse gp = findOrCreate(Warehouse.class, "GP",
+                    () -> Warehouse.builder().code("GP").name("Gestiune petrecere").build());
+            Product advance = createProduct("Avans petrecere GP", data.advanceType(), data);
+            addItem(data.receipt(), advance, gp, "200.00");
+            addPayment(data.receipt(), data.bankTransferMethod(), gp, "200.00");
+        });
+
+        FiscalAgentService service = newFiscalAgentService(
+                new FakeHttpClient(), mock(CustomerVoucherRepository.class));
+
+        assertThat(service.needsFiscalPrint(loaded.receipt())).isFalse();
+    }
+
+    @Test
     void voucherPaymentOnGvApplicableProductBuildsFiscalDiscountAfterDetachedLoad() throws Exception {
         LoadedReceipt loaded = createAndLoadDetached(data -> {
             Product target = createProduct("Produs voucher aplicabil", data.menuType(), data);
@@ -158,12 +207,16 @@ class FiscalDiscountLazyLoadingIntegrationTest {
                 () -> ReceiptStatus.builder().code("FISCAL_PENDING").label("Fiscal pending").build());
         PaymentMethod card = findOrCreate(PaymentMethod.class, "CARD",
                 () -> PaymentMethod.builder().code("CARD").label("Card").build());
+        PaymentMethod bankTransfer = findOrCreate(PaymentMethod.class, "BANK_TRANSFER",
+                () -> PaymentMethod.builder().code("BANK_TRANSFER").label("Transfer bancar").build());
         PaymentMethod advance = findOrCreate(PaymentMethod.class, "ADVANCE",
                 () -> PaymentMethod.builder().code("ADVANCE").label("Avans").build());
         PaymentMethod voucher = findOrCreate(PaymentMethod.class, "VOUCHER",
                 () -> PaymentMethod.builder().code("VOUCHER").label("Voucher").build());
         ProductType menuType = findOrCreate(ProductType.class, "MENU",
                 () -> ProductType.builder().code("MENU").label("Meniu").build());
+        ProductType advanceType = findOrCreate(ProductType.class, "ADVANCE",
+                () -> ProductType.builder().code("ADVANCE").label("Avans").build());
         UnitOfMeasure unit = findOrCreate(UnitOfMeasure.class, "BUC",
                 () -> UnitOfMeasure.builder().code("BUC").label("Bucata").build());
         VatRate vatRate = findOrCreate(VatRate.class, "TVA21", () -> VatRate.builder()
@@ -186,7 +239,7 @@ class FiscalDiscountLazyLoadingIntegrationTest {
                 .totalVat(BigDecimal.ZERO)
                 .build());
 
-        return new TestData(gv, pending, card, advance, voucher, menuType, unit, vatRate,
+        return new TestData(gv, pending, card, bankTransfer, advance, voucher, menuType, advanceType, unit, vatRate,
                 category, regularCampaignType, receipt);
     }
 
@@ -301,9 +354,11 @@ class FiscalDiscountLazyLoadingIntegrationTest {
             Warehouse gv,
             ReceiptStatus pending,
             PaymentMethod cardMethod,
+            PaymentMethod bankTransferMethod,
             PaymentMethod advanceMethod,
             PaymentMethod voucherMethod,
             ProductType menuType,
+            ProductType advanceType,
             UnitOfMeasure unit,
             VatRate vatRate,
             Category category,

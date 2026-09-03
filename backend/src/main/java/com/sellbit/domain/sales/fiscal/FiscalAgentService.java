@@ -65,25 +65,24 @@ public class FiscalAgentService {
     }
 
     // Determină dacă bonul are nevoie efectiv de fiscalizare — produse pe gestiunea GV, cu
-    // plată reală cash/card (nu doar voucher/avans/transfer). Trebuie verificată ÎNAINTE de
+    // plată reală cash/card. Pentru un avans direct, transferul bancar se declară fiscal
+    // drept CARD, dar rămâne BANK_TRANSFER în Sellbit. Trebuie verificată ÎNAINTE de
     // orice verificare de conexiune la Fisco — un bon acoperit integral din voucher/avans
     // (total de plată zero) nu trebuie să depindă deloc de starea casei de marcat.
     public boolean needsFiscalPrint(Receipt receipt) {
+        boolean advanceReceipt = isAdvanceReceipt(receipt);
         boolean hasGvItems = receipt.getItems().stream()
                 .anyMatch(item -> item.getWarehouse() != null
                         && FISCAL_WAREHOUSE.equals(item.getWarehouse().getCode()));
         if (!hasGvItems) return false;
 
-        BigDecimal cashCardTotal = receipt.getPayments().stream()
+        BigDecimal fiscalPaymentTotal = receipt.getPayments().stream()
                 .filter(p -> p.getWarehouse() != null && FISCAL_WAREHOUSE.equals(p.getWarehouse().getCode()))
-                .filter(p -> {
-                    String code = p.getPaymentMethod().getCode();
-                    return "CASH".equals(code) || "CARD".equals(code);
-                })
+                .filter(p -> isFiscalPayment(p, advanceReceipt))
                 .map(ReceiptPayment::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        return cashCardTotal.compareTo(BigDecimal.ZERO) > 0;
+        return fiscalPaymentTotal.compareTo(BigDecimal.ZERO) > 0;
     }
 
     // POST /api/v1/print + polling status până la printed/failed/timeout
@@ -92,6 +91,7 @@ public class FiscalAgentService {
     // (înainte de polling) — apelantul trebuie să-l reția pe bon pe loc, ca să nu se piardă
     // dacă pollingul de mai jos eșuează (conexiune pierdută, timeout etc.).
     public PrintedResult printGvBon(Receipt receipt, java.util.function.Consumer<String> onJobAccepted) {
+        boolean advanceReceipt = isAdvanceReceipt(receipt);
         List<ReceiptItem> gvItems = receipt.getItems().stream()
                 .filter(item -> item.getWarehouse() != null
                         && FISCAL_WAREHOUSE.equals(item.getWarehouse().getCode()))
@@ -104,23 +104,24 @@ public class FiscalAgentService {
                         && FISCAL_WAREHOUSE.equals(p.getWarehouse().getCode()))
                 .collect(Collectors.toList());
 
-        // Plăți cash/card GV → T^ pe bon fiscal
-        List<ReceiptPayment> cashCardPayments = gvPayments.stream()
-                .filter(p -> {
-                    String code = p.getPaymentMethod().getCode();
-                    return "CASH".equals(code) || "CARD".equals(code);
-                })
+        // Plăți cash/card GV → T^ pe bon fiscal. Transferul unui avans direct se trimite
+        // ca CARD către casa de marcat, fără a-i schimba metoda contabilă din Sellbit.
+        List<ReceiptPayment> fiscalPayments = gvPayments.stream()
+                .filter(p -> isFiscalPayment(p, advanceReceipt))
                 .collect(Collectors.toList());
 
-        BigDecimal cashCardTotal = cashCardPayments.stream()
+        BigDecimal fiscalPaymentTotal = fiscalPayments.stream()
                 .map(ReceiptPayment::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         // Fără plată reală pe GV → nu emitem bon fiscal
-        if (cashCardTotal.compareTo(BigDecimal.ZERO) <= 0) return null;
+        if (fiscalPaymentTotal.compareTo(BigDecimal.ZERO) <= 0) return null;
 
-        // Transfer bancar GV → mereu discount pe subtotal (nu se fiscalizează — se facturează prin contabilitate)
-        BigDecimal bankTransferAmount = sumByMethod(gvPayments, "BANK_TRANSFER");
+        // Transferul bancar obișnuit rămâne discount de subtotal (facturat prin contabilitate).
+        // La avans direct este deja inclus mai sus ca plată fiscală CARD, deci nu îl discountăm.
+        BigDecimal bankTransferAmount = advanceReceipt
+                ? BigDecimal.ZERO
+                : sumByMethod(gvPayments, "BANK_TRANSFER");
         BigDecimal advanceAmount = sumByMethod(gvPayments, "ADVANCE");
         BigDecimal voucherAmount = sumByMethod(gvPayments, "VOUCHER");
 
@@ -172,8 +173,8 @@ public class FiscalAgentService {
             commands.add(buildDiscountCommand(subtotalDiscount));
         }
 
-        for (ReceiptPayment payment : cashCardPayments) {
-            int type = "CARD".equals(payment.getPaymentMethod().getCode()) ? 1 : 0;
+        for (ReceiptPayment payment : fiscalPayments) {
+            int type = "CASH".equals(payment.getPaymentMethod().getCode()) ? 0 : 1;
             commands.add(String.format(Locale.US, "T,1,______,_,__;%d;%.2f;;;;", type, payment.getAmount()));
         }
 
@@ -230,6 +231,20 @@ public class FiscalAgentService {
         } catch (Exception e) {
             throw new RuntimeException("ERROR.FISCAL.AGENT_UNREACHABLE");
         }
+    }
+
+    private boolean isAdvanceReceipt(Receipt receipt) {
+        return receipt.getItems().stream().anyMatch(item ->
+                item.getProduct() != null
+                        && item.getProduct().getProductType() != null
+                        && "ADVANCE".equals(item.getProduct().getProductType().getCode()));
+    }
+
+    private boolean isFiscalPayment(ReceiptPayment payment, boolean advanceReceipt) {
+        String code = payment.getPaymentMethod().getCode();
+        return "CASH".equals(code)
+                || "CARD".equals(code)
+                || (advanceReceipt && "BANK_TRANSFER".equals(code));
     }
 
     // POST /api/v1/print cu X^ sau Z^ (sintaxă simplificată, request separat față de bon)
