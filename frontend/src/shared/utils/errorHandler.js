@@ -342,7 +342,11 @@ export const getFriendlyErrorMessage = (error) => {
 
   for (const [key, message] of Object.entries(ERROR_MESSAGES)) {
     if (codeString === key || codeString.startsWith(key + '|')) {
-      if (productNameMatch && (key === "ERROR.STOCK.INSUFFICIENT_QUANTITY" || key === "ERROR.STOCK.BATCHES_INSUFFICIENT")) {
+      const casaMessage = codeString.slice(codeString.indexOf('|') + 1).trim();
+      if ((key === "ERROR.FISCAL.PRINT_FAILED" || key === "ERROR.FISCAL.PRINT_REJECTED")
+          && codeString.includes('|') && casaMessage) {
+        friendlyMessage = `Casa de marcat a respins bonul: ${casaMessage}. Bonul a revenit pe deschis.`;
+      } else if (productNameMatch && (key === "ERROR.STOCK.INSUFFICIENT_QUANTITY" || key === "ERROR.STOCK.BATCHES_INSUFFICIENT")) {
         friendlyMessage = `Stoc insuficient pentru produsul: ${productNameMatch[1]}`;
       } else {
         friendlyMessage = message;

@@ -147,6 +147,9 @@ public class ReceiptFiscalService {
                 if (msg.startsWith("ERROR.FISCAL.PRINT_REJECTED")) {
                     // POST a ajuns la Fisco, dar a fost respins înainte de a crea un job → rollback sigur la OPEN
                     self.rollbackToOpen(receiptId);
+                } else if (msg.startsWith("ERROR.FISCAL.PRINT_FAILED|")) {
+                    // Fisco a confirmat explicit eșecul jobului → rollback sigur la OPEN
+                    self.rollbackToOpen(receiptId);
                 } else if (msg.equals("ERROR.FISCAL.CONNECT_FAILED")) {
                     // TCP refused — tunel căzut, Fisco sigur nu a primit nimic → rollback sigur la OPEN
                     self.rollbackToOpen(receiptId);

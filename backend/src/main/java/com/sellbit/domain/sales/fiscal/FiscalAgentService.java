@@ -129,7 +129,9 @@ public class FiscalAgentService {
         ReceiptItem advanceTargetItem = advanceAmount.compareTo(BigDecimal.ZERO) > 0
                 ? gvItems.stream()
                         .filter(i -> i.getProduct().getProductType() != null
-                                && "MENU".equals(i.getProduct().getProductType().getCode()))
+                                && "MENU".equals(i.getProduct().getProductType().getCode())
+                                && i.getLineTotal() != null
+                                && i.getLineTotal().compareTo(advanceAmount) > 0)
                         .findFirst().orElse(null)
                 : null;
 
@@ -144,7 +146,9 @@ public class FiscalAgentService {
                 if (("REGULAR".equals(campaignTypeCode) || "LOYALTY".equals(campaignTypeCode))
                         && targetProductId != null) {
                     voucherTargetItem = gvItems.stream()
-                            .filter(i -> targetProductId.equals(i.getProduct().getId()))
+                            .filter(i -> targetProductId.equals(i.getProduct().getId())
+                                    && i.getLineTotal() != null
+                                    && i.getLineTotal().compareTo(voucherAmount) > 0)
                             .findFirst().orElse(null);
                 }
             }

@@ -292,6 +292,26 @@ class ReceiptFiscalServiceTest {
         verify(receiptRepository).save(receipt);
     }
 
+    @Test
+    @DisplayName("attemptPrintAndFinalize - PRINT_FAILED|mesaj: bonul revine pe OPEN, mesajul casei se propagă")
+    void attemptPrintAndFinalize_PrintFailed_RollsBackToOpen() {
+        Receipt receipt = buildReceipt(fiscalPendingStatus, BigDecimal.TEN, List.of(), List.of());
+        when(receiptRepository.findByIdWithItems(1)).thenReturn(Optional.of(receipt));
+        when(receiptRepository.findByIdWithPayments(1)).thenReturn(Optional.of(receipt));
+        when(receiptRepository.findById(1)).thenReturn(Optional.of(receipt));
+        when(statusRepository.findByCode("OPEN")).thenReturn(Optional.of(openStatus));
+        when(fiscalAgentService.needsFiscalPrint(receipt)).thenReturn(true);
+        when(fiscalAgentService.checkHealth()).thenReturn(true);
+        when(fiscalAgentService.printGvBon(eq(receipt), any()))
+                .thenThrow(new RuntimeException("ERROR.FISCAL.PRINT_FAILED|Suma Produselor este: 2135 dar suma de plata: 1935"));
+
+        RuntimeException ex = assertThrows(RuntimeException.class,
+                () -> receiptFiscalService.attemptPrintAndFinalize(1));
+
+        assertEquals("ERROR.FISCAL.PRINT_FAILED|Suma Produselor este: 2135 dar suma de plata: 1935", ex.getMessage());
+        assertEquals("OPEN", receipt.getStatus().getCode());
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // completeFiscalClose
     // ─────────────────────────────────────────────────────────────────────────

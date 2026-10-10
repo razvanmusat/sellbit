@@ -96,6 +96,29 @@ class FiscalDiscountLazyLoadingIntegrationTest {
     }
 
     @Test
+    void advanceDiscountSkipsMenuLineSmallerThanAdvance() throws Exception {
+        LoadedReceipt loaded = createAndLoadDetached(data -> {
+            Product free = createProduct("Apa si suc petrecere", data.menuType(), data);
+            Product menu = createProduct("Meniu petrecere cu pret", data.menuType(), data);
+            addItem(data.receipt(), free, data.gv(), "0.00");
+            addItem(data.receipt(), menu, data.gv(), "2135.00");
+            addPayment(data.receipt(), data.advanceMethod(), data.gv(), "200.00");
+            addPayment(data.receipt(), data.cardMethod(), data.gv(), "1935.00");
+        });
+        FakeHttpClient httpClient = new FakeHttpClient();
+
+        FiscalAgentService service = newFiscalAgentService(httpClient, mock(CustomerVoucherRepository.class));
+        service.printGvBon(loaded.receipt(), jobId -> {});
+
+        List<String> commands = postedCommands(httpClient);
+        int freeIndex = indexOfCommandStartingWith(commands, "S,1,______,_,__;Apa si suc petrecere");
+        int menuIndex = indexOfCommandStartingWith(commands, "S,1,______,_,__;Meniu petrecere cu pret");
+
+        assertThat(commands.get(freeIndex + 1)).startsWith("S,1,______,_,__;Meniu petrecere cu pret");
+        assertThat(commands.get(menuIndex + 1)).isEqualTo("C,1,______,_,__;3;200.00;;;;");
+    }
+
+    @Test
     void advancePaidByBankTransferOnGvIsFiscalizedAsCard() throws Exception {
         LoadedReceipt loaded = createAndLoadDetached(data -> {
             Product advance = createProduct("Avans petrecere", data.advanceType(), data);
