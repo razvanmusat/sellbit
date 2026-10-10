@@ -25,6 +25,13 @@ public class StockCurrentController {
         return ResponseEntity.ok(stockCurrentService.getStockByWarehouse(warehouseId));
     }
 
+    // RAPORT: Stocul per depozit pe produs, cu preț de achiziție și preț de vânzare (fără TVA).
+    @PreAuthorize("hasAnyAuthority('100')")
+    @GetMapping("/warehouse/{warehouseId}/value")
+    public ResponseEntity<List<StockCurrentDTOs.StockValue>> getStockValueByWarehouse(@PathVariable Integer warehouseId) {
+        return ResponseEntity.ok(stockCurrentService.getStockValueByWarehouse(warehouseId));
+    }
+
     // PRINT: Stoc per depozit filtrat — doar produse cu qty > 0 sau vândute cel puțin o dată.
     @PreAuthorize("hasAnyAuthority('50', '100')")
     @GetMapping("/warehouse/{warehouseId}/for-print")

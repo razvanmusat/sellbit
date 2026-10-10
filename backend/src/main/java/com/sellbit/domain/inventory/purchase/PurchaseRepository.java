@@ -33,6 +33,16 @@ public interface PurchaseRepository extends JpaRepository<Purchase, Integer> {
 	@Query("SELECT p FROM Purchase p WHERE p.warehouse.id = :wId AND p.product.id = :pId ORDER BY p.purchasedAt ASC, p.id ASC")
     List<Purchase> findAllBatchesByReception(Integer wId, Integer pId);
 
+	// Stocul dintr-o gestiune pe produs, fără TVA: cantitatea rămasă, prețul de achiziție (loturi)
+	// și prețul de vânzare (preț produs fără TVA × cantitate rămasă).
+	@Query("SELECT pr.id, pr.name, u.label, SUM(p.remainingQuantity), "
+			+ "SUM(p.remainingQuantity * p.purchasePrice), "
+			+ "SUM(p.remainingQuantity * COALESCE(pr.salePrice, 0) / (1 + COALESCE(vr.rate, 0) / 100)) "
+			+ "FROM Purchase p JOIN p.product pr JOIN pr.unit u LEFT JOIN pr.vatRate vr "
+			+ "WHERE p.warehouse.id = :wId AND p.remainingQuantity > 0 AND pr.trackStock = true "
+			+ "GROUP BY pr.id, pr.name, u.label ORDER BY pr.name")
+	List<Object[]> findStockValueByWarehouse(Integer wId);
+
 	@Query("SELECT p FROM Purchase p WHERE p.remainingQuantity > 0 " + "AND p.expirationDate IS NOT NULL "
 			+ "AND p.expirationDate <= :thresholdDate " + "ORDER BY p.expirationDate ASC")
 	List<Purchase> findExpiringBatches(LocalDate thresholdDate);

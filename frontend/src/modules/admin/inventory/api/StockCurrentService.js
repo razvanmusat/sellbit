@@ -13,6 +13,14 @@ export const StockCurrentService = {
     },
 
     /**
+     * RAPORT: Stocul per depozit pe produs, cu preț de achiziție și preț de vânzare (fără TVA).
+     * @param {number} warehouseId
+     */
+    getStockValueByWarehouse: async (warehouseId) => {
+        return await client(`${ENDPOINT}/warehouse/${warehouseId}/value`);
+    },
+
+    /**
      * PRINT: Stoc per depozit filtrat — qty > 0 sau vândut cel puțin o dată.
      * @param {number} warehouseId
      */

@@ -22,6 +22,16 @@ public class StockCurrentDTOs {
         LocalDateTime updatedAt
     ) {}
 
+    // 1.1 Stocul pe produs, fără TVA: preț de achiziție (loturi) și preț de vânzare
+    public record StockValue(
+        Integer productId,
+        String productName,
+        String unitName,
+        BigDecimal quantity,
+        BigDecimal purchasePrice,
+        BigDecimal salePrice
+    ) {}
+
     // 2. Folosit dacă vrem să actualizăm stocul manual (ajustări rapide)
     public record UpdateQuantity(
         Integer warehouseId,

@@ -7,12 +7,14 @@ import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import PaymentsIcon from '@mui/icons-material/Payments';
 import SavingsIcon from '@mui/icons-material/Savings';
+import InventoryIcon from '@mui/icons-material/Inventory';
 
 import { WarehouseService } from '../../settings/warehouses/api/WarehouseService';
 import Receipts from '../components/Receipts';
 import ProductStats from '../components/ProductStats';
 import PaymentStats from '../components/PaymentStats';
 import ProfitStats from '../components/ProfitStats';
+import StockValueStats from '../components/StockValueStats';
 
 import { resetStats } from '../store/productStatsSlice';
 import { resetReceipts } from '../store/receiptsSlice';
@@ -91,6 +93,7 @@ const SalesMainPage = () => {
                     <Tab icon={<PaymentsIcon />} iconPosition="start" label="Situație Încasări" value={1} />
                     <Tab icon={<AssessmentIcon />} iconPosition="start" label="Raport Produse" value={2} />                    
                     <Tab icon={<SavingsIcon />} iconPosition="start" label="Profitabilitate" value={3} />
+                    <Tab icon={<InventoryIcon />} iconPosition="start" label="Valoare Stoc" value={4} />
                 </Tabs>
             </Box>
 
@@ -105,6 +108,7 @@ const SalesMainPage = () => {
                         {activeTab === 1 && <PaymentStats warehouses={filteredWarehouses} />}
                         {activeTab === 2 && <ProductStats warehouses={filteredWarehouses} />}                        
                         {activeTab === 3 && <ProfitStats warehouses={filteredWarehouses} />}
+                        {activeTab === 4 && <StockValueStats warehouses={warehouses} />}
                     </>
                 )}
             </Box>

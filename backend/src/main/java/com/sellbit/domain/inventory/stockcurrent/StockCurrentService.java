@@ -13,6 +13,7 @@ import com.sellbit.domain.catalog.product.Product;
 import com.sellbit.domain.catalog.product.ProductRepository;
 import com.sellbit.domain.catalog.productcomposite.ProductComponent;
 import com.sellbit.domain.catalog.productcomposite.ProductComponentRepository;
+import com.sellbit.domain.inventory.purchase.PurchaseRepository;
 import com.sellbit.domain.inventory.purchase.PurchaseService;
 import com.sellbit.domain.inventory.stockadjustment.StockAdjustment;
 import com.sellbit.domain.inventory.stockadjustment.StockAdjustmentRepository;
@@ -38,6 +39,7 @@ public class StockCurrentService {
     private final AdjustmentReasonRepository reasonRepository;
     private final UserRepository userRepository;
     private final PurchaseService purchaseService;
+    private final PurchaseRepository purchaseRepository;
 
     @Transactional(readOnly = true)
     public List<StockCurrentDTOs.Response> getStockByWarehouse(Integer warehouseId) {
@@ -46,6 +48,17 @@ public class StockCurrentService {
         }
         return stockCurrentRepository.findById_WarehouseId(warehouseId).stream()
                 .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public List<StockCurrentDTOs.StockValue> getStockValueByWarehouse(Integer warehouseId) {
+        if (!warehouseRepository.existsById(warehouseId)) {
+            throw new RuntimeException("ERROR.WAREHOUSE.NOT_FOUND");
+        }
+        return purchaseRepository.findStockValueByWarehouse(warehouseId).stream()
+                .map(r -> new StockCurrentDTOs.StockValue(
+                        (Integer) r[0], (String) r[1], (String) r[2], (BigDecimal) r[3], (BigDecimal) r[4], (BigDecimal) r[5]))
                 .collect(Collectors.toList());
     }
 
