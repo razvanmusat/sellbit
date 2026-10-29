@@ -8,6 +8,8 @@ import AssessmentIcon from '@mui/icons-material/Assessment';
 import PaymentsIcon from '@mui/icons-material/Payments';
 import SavingsIcon from '@mui/icons-material/Savings';
 import InventoryIcon from '@mui/icons-material/Inventory';
+import BarChartIcon from '@mui/icons-material/BarChart';
+import PercentIcon from '@mui/icons-material/Percent';
 
 import { WarehouseService } from '../../settings/warehouses/api/WarehouseService';
 import Receipts from '../components/Receipts';
@@ -15,6 +17,8 @@ import ProductStats from '../components/ProductStats';
 import PaymentStats from '../components/PaymentStats';
 import ProfitStats from '../components/ProfitStats';
 import StockValueStats from '../components/StockValueStats';
+import TurnoverStats from '../components/TurnoverStats';
+import MarkupStats from '../components/MarkupStats';
 
 import { resetStats } from '../store/productStatsSlice';
 import { resetReceipts } from '../store/receiptsSlice';
@@ -94,6 +98,8 @@ const SalesMainPage = () => {
                     <Tab icon={<AssessmentIcon />} iconPosition="start" label="Raport Produse" value={2} />                    
                     <Tab icon={<SavingsIcon />} iconPosition="start" label="Profitabilitate" value={3} />
                     <Tab icon={<InventoryIcon />} iconPosition="start" label="Valoare Stoc" value={4} />
+                    <Tab icon={<BarChartIcon />} iconPosition="start" label="Cifra de Afaceri" value={5} />
+                    <Tab icon={<PercentIcon />} iconPosition="start" label="Adaos Comercial" value={6} />
                 </Tabs>
             </Box>
 
@@ -109,6 +115,8 @@ const SalesMainPage = () => {
                         {activeTab === 2 && <ProductStats warehouses={filteredWarehouses} />}                        
                         {activeTab === 3 && <ProfitStats warehouses={filteredWarehouses} />}
                         {activeTab === 4 && <StockValueStats warehouses={warehouses} />}
+                        {activeTab === 5 && <TurnoverStats warehouses={filteredWarehouses} />}
+                        {activeTab === 6 && <MarkupStats />}
                     </>
                 )}
             </Box>

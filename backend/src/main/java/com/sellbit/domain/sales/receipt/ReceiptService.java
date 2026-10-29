@@ -573,6 +573,73 @@ public class ReceiptService {
         }
 
         @Transactional(readOnly = true)
+        public TurnoverReportDTO.Response getTurnoverReport(LocalDateTime start, LocalDateTime end, Integer warehouseId) {
+                Map<Integer, BigDecimal[]> total = new LinkedHashMap<>();
+                Map<BigDecimal, Map<Integer, BigDecimal[]>> byRate = new java.util.TreeMap<>();
+                Map<java.time.LocalDate, Map<Integer, BigDecimal[]>> byDay = new java.util.TreeMap<>();
+
+                for (Object[] r : itemRepository.findTurnoverRows(start, end, warehouseId)) {
+                        Integer receiptId = (Integer) r[0];
+                        java.time.LocalDate day = ((LocalDateTime) r[1]).toLocalDate();
+                        BigDecimal rate = ((BigDecimal) r[2]).stripTrailingZeros();
+                        BigDecimal[] amounts = { (BigDecimal) r[3], (BigDecimal) r[4], (BigDecimal) r[5] };
+                        for (Map<Integer, BigDecimal[]> bucket : List.of(total,
+                                        byRate.computeIfAbsent(rate, k -> new LinkedHashMap<>()),
+                                        byDay.computeIfAbsent(day, k -> new LinkedHashMap<>()))) {
+                                bucket.merge(receiptId, amounts, (a, b) -> new BigDecimal[] { a[0].add(b[0]), a[1].add(b[1]), a[2].add(b[2]) });
+                        }
+                }
+
+                BigDecimal[] sum = sumOf(total);
+                return new TurnoverReportDTO.Response(total.size(), sum[0], sum[1], sum[2],
+                                byRate.entrySet().stream().map(e -> {
+                                        BigDecimal[] s = sumOf(e.getValue());
+                                        return new TurnoverReportDTO.VatRateRow(e.getKey(), e.getValue().size(), s[0], s[1], s[2]);
+                                }).toList(),
+                                byDay.entrySet().stream().map(e -> {
+                                        BigDecimal[] s = sumOf(e.getValue());
+                                        return new TurnoverReportDTO.DayRow(e.getKey(), e.getValue().size(), s[0], s[1], s[2]);
+                                }).toList());
+        }
+
+        private static BigDecimal[] sumOf(Map<Integer, BigDecimal[]> byReceipt) {
+                BigDecimal[] s = { BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO };
+                for (BigDecimal[] a : byReceipt.values()) {
+                        s[0] = s[0].add(a[0]);
+                        s[1] = s[1].add(a[1]);
+                        s[2] = s[2].add(a[2]);
+                }
+                return s;
+        }
+
+        @Transactional(readOnly = true)
+        public MarkupReportDTO.Response getMarkupReport(LocalDateTime start, LocalDateTime end) {
+                BigDecimal totalCost = BigDecimal.ZERO;
+                BigDecimal totalNet = BigDecimal.ZERO;
+                List<MarkupReportDTO.ProductRow> products = new ArrayList<>();
+
+                for (Object[] r : itemRepository.findMarkupRows(start, end)) {
+                        BigDecimal cost = (BigDecimal) r[2];
+                        BigDecimal net = (BigDecimal) r[3];
+                        products.add(new MarkupReportDTO.ProductRow((Integer) r[0], (String) r[1], markupFigures(cost, net)));
+                        totalCost = totalCost.add(cost);
+                        totalNet = totalNet.add(net);
+                }
+
+                return new MarkupReportDTO.Response(markupFigures(totalCost, totalNet), products);
+        }
+
+        /** Costul vine doar din linii cu preț de achiziție > 0; la cost 0 nu există nicio linie de calculat, deci totul e null. */
+        private static MarkupReportDTO.Figures markupFigures(BigDecimal cost, BigDecimal net) {
+                if (cost.signum() == 0) {
+                        return new MarkupReportDTO.Figures(null, null);
+                }
+                BigDecimal amount = net.subtract(cost);
+                BigDecimal percent = amount.multiply(new BigDecimal("100")).divide(cost, 2, java.math.RoundingMode.HALF_UP);
+                return new MarkupReportDTO.Figures(amount, percent);
+        }
+
+        @Transactional(readOnly = true)
         public ReceiptPrintDTO getBillNoteData(Integer receiptId) {
                 Store store = storeRepository.getSettings()
                                 .orElseThrow(() -> new RuntimeException("ERROR.STORE.NOT_CONFIGURED"));

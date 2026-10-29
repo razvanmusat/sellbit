@@ -33,6 +33,45 @@ public interface ReceiptItemRepository extends JpaRepository<ReceiptItem, Intege
                         @Param("warehouseId") Integer warehouseId);
 
         /**
+         * Cifra de afaceri: un rând per (bon, cotă TVA), filtrat după gestiunea LINIEI (ri.warehouse.id).
+         * Fără retururi (bonuri cu original_receipt_id). Rând: [receiptId, closedAt, vatRate, net, vat, total].
+         */
+        @Query("SELECT r.id, r.closedAt, ri.vatRate, " +
+                        "COALESCE(SUM(ri.netTotal), 0), COALESCE(SUM(ri.vatTotal), 0), COALESCE(SUM(ri.lineTotal), 0) " +
+                        "FROM ReceiptItem ri " +
+                        "JOIN ri.receipt r " +
+                        "WHERE r.closedAt BETWEEN :start AND :end " +
+                        "AND r.status.code = 'CLOSED' " +
+                        "AND r.internalCorrection = false " +
+                        "AND r.originalReceipt IS NULL " +
+                        "AND ri.product.productType.code != 'ADVANCE' " +
+                        "AND ri.warehouse.id = :warehouseId " +
+                        "GROUP BY r.id, r.closedAt, ri.vatRate")
+        List<Object[]> findTurnoverRows(
+                        @Param("start") LocalDateTime start,
+                        @Param("end") LocalDateTime end,
+                        @Param("warehouseId") Integer warehouseId);
+
+        /**
+         * Adaos comercial: un rând per produs, pe toate gestiunile.
+         * Costul și vânzarea se adună DOAR pe liniile cu preț de achiziție > 0.
+         * Rând: [productId, productName, cost, net (vânzare fără TVA)].
+         */
+        @Query("SELECT ri.product.id, ri.product.name, " +
+                        "COALESCE(SUM(CASE WHEN ri.purchaseUnitPrice > 0 THEN ri.purchaseUnitPrice * ri.quantity ELSE 0 END), 0), " +
+                        "COALESCE(SUM(CASE WHEN ri.purchaseUnitPrice > 0 THEN ri.netTotal ELSE 0 END), 0) " +
+                        "FROM ReceiptItem ri " +
+                        "JOIN ri.receipt r " +
+                        "WHERE r.closedAt BETWEEN :start AND :end " +
+                        "AND r.status.code = 'CLOSED' " +
+                        "AND r.internalCorrection = false " +
+                        "GROUP BY ri.product.id, ri.product.name " +
+                        "ORDER BY ri.product.name ASC")
+        List<Object[]> findMarkupRows(
+                        @Param("start") LocalDateTime start,
+                        @Param("end") LocalDateTime end);
+
+        /**
          * Raport cantitativ: filtrat după gestiunea LINIEI (ri.warehouse.id).
          */
         @Query("SELECT new com.sellbit.domain.sales.receiptitem.ReceiptItemDTO$QuantityReportResponse(" +

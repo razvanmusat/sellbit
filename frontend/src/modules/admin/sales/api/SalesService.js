@@ -14,6 +14,26 @@ export const SalesService = {
     },
 
     /**
+     * RAPORT CIFRA DE AFACERI (fără TVA, per gestiune)
+     * Endpoint: /api/sales/receipts/reports/turnover
+     */
+    getTurnover: async ({ start, end, warehouseId }) => {
+        return await client('sales/receipts/reports/turnover', {
+            params: { start, end, warehouseId }
+        });
+    },
+
+    /**
+     * RAPORT ADAOS COMERCIAL (global + per produs, fără filtru pe gestiune)
+     * Endpoint: /api/sales/receipts/reports/markup
+     */
+    getMarkup: async ({ start, end }) => {
+        return await client('sales/receipts/reports/markup', {
+            params: { start, end }
+        });
+    },
+
+    /**
      * 2. RAPORT CANTITATIV (Top Vânzări)
      * Returnează o listă de produse cu cantitatea totală vândută și totalul încasat pe linie.
      * Endpoint: /api/sales/receipt-items/report/quantity

@@ -51,6 +51,23 @@ public class ReceiptController {
         return ResponseEntity.ok(receiptService.getGrossProfitReport(start, end, warehouseId));
     }
 
+    @PreAuthorize("hasAuthority('100')")
+    @GetMapping("/reports/turnover")
+    public ResponseEntity<TurnoverReportDTO.Response> getTurnover(
+            @RequestParam Integer warehouseId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end) {
+        return ResponseEntity.ok(receiptService.getTurnoverReport(start, end, warehouseId));
+    }
+
+    @PreAuthorize("hasAuthority('100')")
+    @GetMapping("/reports/markup")
+    public ResponseEntity<MarkupReportDTO.Response> getMarkup(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end) {
+        return ResponseEntity.ok(receiptService.getMarkupReport(start, end));
+    }
+
     // POS: Toate bonurile deschise — fără filtru pe gestiune.
     @PreAuthorize("hasAnyAuthority('50', '100')")
     @GetMapping("/active")
