@@ -572,6 +572,10 @@ public class ReceiptService {
                 return grossTheoreticalProfit.subtract(totalVouchers);
         }
 
+        /**
+         * Cifra de afaceri pe gestiune: liniile bonurilor, inclusiv bonurile de avans (în ziua încasării).
+         * Plățile cu avans de pe bonurile finale se scad (la cota produsului de avans), ca suma să nu fie numărată de două ori.
+         */
         @Transactional(readOnly = true)
         public TurnoverReportDTO.Response getTurnoverReport(LocalDateTime start, LocalDateTime end, Integer warehouseId) {
                 Map<Integer, BigDecimal[]> total = new LinkedHashMap<>();
@@ -590,24 +594,65 @@ public class ReceiptService {
                         }
                 }
 
-                BigDecimal[] sum = sumOf(total);
+                BigDecimal advanceRate = advanceVatRate().stripTrailingZeros();
+                BigDecimal[] totalAdvance = zeroAmounts();
+                Map<BigDecimal, BigDecimal[]> rateAdvance = new java.util.TreeMap<>();
+                Map<java.time.LocalDate, BigDecimal[]> dayAdvance = new java.util.TreeMap<>();
+                for (Object[] r : paymentRepository.findAdvancePayments(start, end, warehouseId)) {
+                        BigDecimal gross = (BigDecimal) r[1];
+                        BigDecimal net = gross.divide(BigDecimal.ONE.add(advanceRate.divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP)),
+                                        2, RoundingMode.HALF_UP);
+                        BigDecimal[] advance = { net, gross.subtract(net), gross };
+                        addAmounts(totalAdvance, advance);
+                        addAmounts(rateAdvance.computeIfAbsent(advanceRate, k -> zeroAmounts()), advance);
+                        addAmounts(dayAdvance.computeIfAbsent(((LocalDateTime) r[0]).toLocalDate(), k -> zeroAmounts()), advance);
+                }
+
+                BigDecimal[] sum = minus(sumOf(total), totalAdvance);
+                java.util.Set<BigDecimal> rates = new java.util.TreeSet<>(byRate.keySet());
+                rates.addAll(rateAdvance.keySet());
+                java.util.Set<java.time.LocalDate> days = new java.util.TreeSet<>(byDay.keySet());
+                days.addAll(dayAdvance.keySet());
+
                 return new TurnoverReportDTO.Response(total.size(), sum[0], sum[1], sum[2],
-                                byRate.entrySet().stream().map(e -> {
-                                        BigDecimal[] s = sumOf(e.getValue());
-                                        return new TurnoverReportDTO.VatRateRow(e.getKey(), e.getValue().size(), s[0], s[1], s[2]);
+                                rates.stream().map(rate -> {
+                                        Map<Integer, BigDecimal[]> receipts = byRate.getOrDefault(rate, Map.of());
+                                        BigDecimal[] s = minus(sumOf(receipts), rateAdvance.getOrDefault(rate, zeroAmounts()));
+                                        return new TurnoverReportDTO.VatRateRow(rate, receipts.size(), s[0], s[1], s[2]);
                                 }).toList(),
-                                byDay.entrySet().stream().map(e -> {
-                                        BigDecimal[] s = sumOf(e.getValue());
-                                        return new TurnoverReportDTO.DayRow(e.getKey(), e.getValue().size(), s[0], s[1], s[2]);
+                                days.stream().map(day -> {
+                                        Map<Integer, BigDecimal[]> receipts = byDay.getOrDefault(day, Map.of());
+                                        BigDecimal[] s = minus(sumOf(receipts), dayAdvance.getOrDefault(day, zeroAmounts()));
+                                        return new TurnoverReportDTO.DayRow(day, receipts.size(), s[0], s[1], s[2]);
                                 }).toList());
         }
 
+        /** Cota TVA a produsului de avans; fără produs de avans configurat nu există plăți cu avans, deci cota nu contează. */
+        private BigDecimal advanceVatRate() {
+                return productRepository.findByProductTypeCode("ADVANCE").stream().findFirst()
+                                .filter(p -> p.getVatRate() != null && p.getVatRate().getRate() != null)
+                                .map(p -> p.getVatRate().getRate())
+                                .orElse(BigDecimal.ZERO);
+        }
+
+        private static BigDecimal[] zeroAmounts() {
+                return new BigDecimal[] { BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO };
+        }
+
+        private static void addAmounts(BigDecimal[] target, BigDecimal[] amounts) {
+                for (int i = 0; i < 3; i++) {
+                        target[i] = target[i].add(amounts[i]);
+                }
+        }
+
+        private static BigDecimal[] minus(BigDecimal[] a, BigDecimal[] b) {
+                return new BigDecimal[] { a[0].subtract(b[0]), a[1].subtract(b[1]), a[2].subtract(b[2]) };
+        }
+
         private static BigDecimal[] sumOf(Map<Integer, BigDecimal[]> byReceipt) {
-                BigDecimal[] s = { BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO };
+                BigDecimal[] s = zeroAmounts();
                 for (BigDecimal[] a : byReceipt.values()) {
-                        s[0] = s[0].add(a[0]);
-                        s[1] = s[1].add(a[1]);
-                        s[2] = s[2].add(a[2]);
+                        addAmounts(s, a);
                 }
                 return s;
         }

@@ -34,7 +34,7 @@ public interface ReceiptItemRepository extends JpaRepository<ReceiptItem, Intege
 
         /**
          * Cifra de afaceri: un rând per (bon, cotă TVA), filtrat după gestiunea LINIEI (ri.warehouse.id).
-         * Fără retururi (bonuri cu original_receipt_id). Rând: [receiptId, closedAt, vatRate, net, vat, total].
+         * Fără retururi (bonuri cu original_receipt_id). Include liniile de avans. Rând: [receiptId, closedAt, vatRate, net, vat, total].
          */
         @Query("SELECT r.id, r.closedAt, ri.vatRate, " +
                         "COALESCE(SUM(ri.netTotal), 0), COALESCE(SUM(ri.vatTotal), 0), COALESCE(SUM(ri.lineTotal), 0) " +
@@ -44,7 +44,6 @@ public interface ReceiptItemRepository extends JpaRepository<ReceiptItem, Intege
                         "AND r.status.code = 'CLOSED' " +
                         "AND r.internalCorrection = false " +
                         "AND r.originalReceipt IS NULL " +
-                        "AND ri.product.productType.code != 'ADVANCE' " +
                         "AND ri.warehouse.id = :warehouseId " +
                         "GROUP BY r.id, r.closedAt, ri.vatRate")
         List<Object[]> findTurnoverRows(

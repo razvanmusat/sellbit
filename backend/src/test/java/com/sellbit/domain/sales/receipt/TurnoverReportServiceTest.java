@@ -1,6 +1,10 @@
 package com.sellbit.domain.sales.receipt;
 
+import com.sellbit.domain.catalog.product.Product;
+import com.sellbit.domain.catalog.product.ProductRepository;
+import com.sellbit.domain.lookup.vatrate.VatRate;
 import com.sellbit.domain.sales.receiptitem.ReceiptItemRepository;
+import com.sellbit.domain.sales.receiptpayment.ReceiptPaymentRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -27,6 +31,12 @@ class TurnoverReportServiceTest {
 
     @Mock
     private ReceiptItemRepository itemRepository;
+
+    @Mock
+    private ReceiptPaymentRepository paymentRepository;
+
+    @Mock
+    private ProductRepository productRepository;
 
     @InjectMocks
     private ReceiptService receiptService;
@@ -212,5 +222,205 @@ class TurnoverReportServiceTest {
         assertEquals(0, result.net().compareTo(netByDay));
         assertEquals(0, result.total().compareTo(totalByRate));
         assertEquals(0, result.net().add(result.vat()).compareTo(result.total()));
+    }
+
+    /** Plată cu avans pe un bon final: [closedAt, amount]. */
+    private static Object[] advancePayment(LocalDateTime closedAt, String amount) {
+        return new Object[] { closedAt, new BigDecimal(amount) };
+    }
+
+    private void givenAdvanceProduct(String vatRate) {
+        Product advance = Product.builder().vatRate(VatRate.builder().rate(new BigDecimal(vatRate)).build()).build();
+        when(productRepository.findByProductTypeCode("ADVANCE")).thenReturn(List.of(advance));
+    }
+
+    private void givenAdvancePayments(Object[]... payments) {
+        when(paymentRepository.findAdvancePayments(START, END, WAREHOUSE_ID)).thenReturn(List.of(payments));
+    }
+
+    @Test
+    @DisplayName("Avans: bonul de avans intră în ziua încasării, iar plata cu avans de pe bonul final se scade")
+    void advanceReceiptCountedAndAdvancePaymentSubtracted() {
+        // avans 121 încasat pe 5 (net 100, TVA 21); petrecere pe 20 la 363 cu TVA (net 300, TVA 63), din care 121 plătit cu avans
+        givenRows(
+                row(1, at(5, 10), "21.00", "100.00", "21.00", "121.00"),
+                row(2, at(20, 18), "21.00", "300.00", "63.00", "363.00"));
+        givenAdvanceProduct("21.00");
+        givenAdvancePayments(advancePayment(at(20, 18), "121.00"));
+
+        var result = report();
+
+        assertEquals(2, result.receiptCount());
+        assertEquals(0, new BigDecimal("300.00").compareTo(result.net()));
+        assertEquals(0, new BigDecimal("63.00").compareTo(result.vat()));
+        assertEquals(0, new BigDecimal("363.00").compareTo(result.total()));
+    }
+
+    @Test
+    @DisplayName("Avans: ziua bonului final scade avansul, ziua încasării păstrează avansul")
+    void advanceSubtractedOnFinalReceiptDay() {
+        givenRows(
+                row(1, at(5, 10), "21.00", "100.00", "21.00", "121.00"),
+                row(2, at(20, 18), "21.00", "300.00", "63.00", "363.00"));
+        givenAdvanceProduct("21.00");
+        givenAdvancePayments(advancePayment(at(20, 18), "121.00"));
+
+        var days = report().byDay();
+
+        assertEquals(2, days.size());
+        assertEquals(LocalDate.of(2026, 10, 5), days.get(0).day());
+        assertEquals(0, new BigDecimal("121.00").compareTo(days.get(0).total()));
+        assertEquals(LocalDate.of(2026, 10, 20), days.get(1).day());
+        assertEquals(0, new BigDecimal("242.00").compareTo(days.get(1).total()));
+        assertEquals(1, days.get(1).receiptCount());
+    }
+
+    @Test
+    @DisplayName("Avans: scăderea se face pe cota produsului de avans, iar numărul de bonuri pe cotă nu se schimbă")
+    void advanceSubtractedOnAdvanceVatRate() {
+        givenRows(
+                row(1, at(5, 10), "21.00", "100.00", "21.00", "121.00"),
+                row(2, at(20, 18), "21.00", "300.00", "63.00", "363.00"));
+        givenAdvanceProduct("21.00");
+        givenAdvancePayments(advancePayment(at(20, 18), "121.00"));
+
+        var rates = report().byVatRate();
+
+        assertEquals(1, rates.size());
+        assertEquals(2, rates.get(0).receiptCount());
+        assertEquals(0, new BigDecimal("300.00").compareTo(rates.get(0).net()));
+        assertEquals(0, new BigDecimal("63.00").compareTo(rates.get(0).vat()));
+    }
+
+    @Test
+    @DisplayName("Avans anulat sau eveniment privat: doar bonul de avans, fără bon final, rămâne numărat")
+    void advanceWithoutFinalReceiptStaysCounted() {
+        givenRows(row(1, at(5, 10), "21.00", "100.00", "21.00", "121.00"));
+        givenAdvanceProduct("21.00");
+
+        var result = report();
+
+        assertEquals(1, result.receiptCount());
+        assertEquals(0, new BigDecimal("100.00").compareTo(result.net()));
+        assertEquals(0, new BigDecimal("121.00").compareTo(result.total()));
+    }
+
+    @Test
+    @DisplayName("Avans: mai multe plăți cu avans pe aceeași zi se adună")
+    void severalAdvancePaymentsAreSummed() {
+        givenRows(row(2, at(20, 18), "21.00", "600.00", "126.00", "726.00"));
+        givenAdvanceProduct("21.00");
+        givenAdvancePayments(advancePayment(at(20, 18), "121.00"), advancePayment(at(20, 20), "121.00"));
+
+        var result = report();
+
+        assertEquals(0, new BigDecimal("484.00").compareTo(result.total()));
+        assertEquals(0, new BigDecimal("400.00").compareTo(result.net()));
+        assertEquals(0, new BigDecimal("84.00").compareTo(result.vat()));
+    }
+
+    @Test
+    @DisplayName("Avans: plata cu avans pe o zi fără linii în gestiune creează rând cu 0 bonuri și sumă negativă")
+    void advancePaymentOnDayWithoutLines() {
+        givenRows(row(1, at(5, 10), "21.00", "100.00", "21.00", "121.00"));
+        givenAdvanceProduct("21.00");
+        givenAdvancePayments(advancePayment(at(9, 12), "121.00"));
+
+        var days = report().byDay();
+
+        assertEquals(2, days.size());
+        assertEquals(LocalDate.of(2026, 10, 9), days.get(1).day());
+        assertEquals(0, days.get(1).receiptCount());
+        assertEquals(0, new BigDecimal("-121.00").compareTo(days.get(1).total()));
+    }
+
+    @Test
+    @DisplayName("Avans: partea de TVA se calculează din suma plătită cu avans, cu cota produsului de avans")
+    void advanceVatSplitUsesAdvanceProductRate() {
+        givenRows(row(1, at(20, 18), "9.00", "1000.00", "90.00", "1090.00"));
+        givenAdvanceProduct("9.00");
+        givenAdvancePayments(advancePayment(at(20, 18), "109.00"));
+
+        var result = report();
+
+        assertEquals(0, new BigDecimal("900.00").compareTo(result.net()));
+        assertEquals(0, new BigDecimal("81.00").compareTo(result.vat()));
+        assertEquals(0, new BigDecimal("981.00").compareTo(result.total()));
+    }
+
+    @Test
+    @DisplayName("Fără plăți cu avans, produsul de avans nu e necesar și rezultatul nu se schimbă")
+    void noAdvancePayments_unchanged() {
+        givenRows(row(1, at(5, 10), "19.00", "100.00", "19.00", "119.00"));
+
+        var result = report();
+
+        assertEquals(0, new BigDecimal("100.00").compareTo(result.net()));
+        assertEquals(0, new BigDecimal("119.00").compareTo(result.total()));
+    }
+
+    @Test
+    @DisplayName("Avans fără produs de avans în catalog: cota e 0, deci plata se scade integral din net, fără TVA")
+    void advancePaymentWithoutAdvanceProduct_rateZero() {
+        givenRows(row(1, at(20, 18), "21.00", "100.00", "21.00", "121.00"));
+        givenAdvancePayments(advancePayment(at(20, 18), "121.00"));
+
+        var result = report();
+
+        assertEquals(1, result.receiptCount());
+        assertEquals(0, new BigDecimal("-21.00").compareTo(result.net()));
+        assertEquals(0, new BigDecimal("21.00").compareTo(result.vat()));
+        assertEquals(0, BigDecimal.ZERO.compareTo(result.total()));
+
+        var rates = result.byVatRate();
+        assertEquals(2, rates.size());
+        assertEquals(0, BigDecimal.ZERO.compareTo(rates.get(0).vatRate()));
+        assertEquals(0, rates.get(0).receiptCount());
+        assertEquals(0, new BigDecimal("-121.00").compareTo(rates.get(0).net()));
+        assertEquals(0, BigDecimal.ZERO.compareTo(rates.get(0).vat()));
+        assertEquals(0, new BigDecimal("21").compareTo(rates.get(1).vatRate()));
+        assertEquals(1, rates.get(1).receiptCount());
+        assertEquals(0, new BigDecimal("121.00").compareTo(rates.get(1).total()));
+    }
+
+    @Test
+    @DisplayName("Avans mai mare decât ce rămâne de scăzut: rezultat negativ, fără eroare")
+    void advancePaymentLargerThanReceipt_negativeResult() {
+        givenRows(row(1, at(20, 18), "21.00", "100.00", "21.00", "121.00"));
+        givenAdvanceProduct("21.00");
+        givenAdvancePayments(advancePayment(at(20, 18), "242.00"));
+
+        var result = report();
+
+        assertEquals(1, result.receiptCount());
+        assertEquals(0, new BigDecimal("-100.00").compareTo(result.net()));
+        assertEquals(0, new BigDecimal("-21.00").compareTo(result.vat()));
+        assertEquals(0, new BigDecimal("-121.00").compareTo(result.total()));
+        assertEquals(0, new BigDecimal("-121.00").compareTo(result.byDay().get(0).total()));
+        assertEquals(0, new BigDecimal("-121.00").compareTo(result.byVatRate().get(0).total()));
+    }
+
+    @Test
+    @DisplayName("Produs de avans cu altă cotă decât liniile: scăderea apare pe cota avansului, în rând propriu")
+    void advanceProductWithDifferentRate_ownRateRow() {
+        givenRows(row(1, at(20, 18), "21.00", "100.00", "21.00", "121.00"));
+        givenAdvanceProduct("9.00");
+        givenAdvancePayments(advancePayment(at(20, 18), "109.00"));
+
+        var result = report();
+
+        var rates = result.byVatRate();
+        assertEquals(2, rates.size());
+        assertEquals(0, new BigDecimal("9").compareTo(rates.get(0).vatRate()));
+        assertEquals(0, rates.get(0).receiptCount());
+        assertEquals(0, new BigDecimal("-100.00").compareTo(rates.get(0).net()));
+        assertEquals(0, new BigDecimal("-9.00").compareTo(rates.get(0).vat()));
+        assertEquals(0, new BigDecimal("-109.00").compareTo(rates.get(0).total()));
+        assertEquals(0, new BigDecimal("21").compareTo(rates.get(1).vatRate()));
+        assertEquals(0, new BigDecimal("121.00").compareTo(rates.get(1).total()));
+
+        assertEquals(0, BigDecimal.ZERO.compareTo(result.net()));
+        assertEquals(0, new BigDecimal("12.00").compareTo(result.vat()));
+        assertEquals(0, new BigDecimal("12.00").compareTo(result.total()));
     }
 }

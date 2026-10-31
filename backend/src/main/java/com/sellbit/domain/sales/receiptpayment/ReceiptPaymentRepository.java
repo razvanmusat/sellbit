@@ -30,6 +30,23 @@ public interface ReceiptPaymentRepository extends JpaRepository<ReceiptPayment, 
                         @Param("warehouseId") Integer warehouseId);
 
         /**
+         * Plățile cu avans (metoda ADVANCE) de pe bonurile finale, per gestiunea plății. Aceeași sumă a fost numărată
+         * deja pe bonul de avans. Fără retururi (bonuri cu original_receipt_id). Rând: [closedAt, amount].
+         */
+        @Query("SELECT rp.receipt.closedAt, rp.amount " +
+                        "FROM ReceiptPayment rp " +
+                        "WHERE rp.paymentMethod.code = 'ADVANCE' " +
+                        "AND rp.receipt.status.code = 'CLOSED' " +
+                        "AND rp.receipt.internalCorrection = false " +
+                        "AND rp.receipt.originalReceipt IS NULL " +
+                        "AND rp.receipt.closedAt BETWEEN :start AND :end " +
+                        "AND rp.warehouse.id = :warehouseId")
+        List<Object[]> findAdvancePayments(
+                        @Param("start") LocalDateTime start,
+                        @Param("end") LocalDateTime end,
+                        @Param("warehouseId") Integer warehouseId);
+
+        /**
          * Suma încasărilor per metodă de plată, filtrate direct după warehouseId al plății.
          * Dacă warehouseId = null → toate gestiunile.
          * VOUCHER și ADVANCE excluse — tratate separat.
