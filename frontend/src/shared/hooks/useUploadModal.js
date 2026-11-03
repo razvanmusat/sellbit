@@ -45,7 +45,7 @@ export function useUploadModal(open, isAdmin) {
       const uniqueFolders = Array.from(
         new Set(
           result.filter(
-            f => typeof f === 'string' && f.trim() && f !== '.chunks'
+            f => typeof f === 'string' && f.trim() && f !== '.chunks' && f !== 'player'
           )
         )
       );

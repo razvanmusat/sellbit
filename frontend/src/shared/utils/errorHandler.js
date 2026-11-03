@@ -221,10 +221,32 @@ const ERROR_MESSAGES = {
   "ERROR.UPLOAD.NOT_FOUND": "Fișierul nu a fost găsit.",
   "ERROR.UPLOAD.READ_FAILED": "Fișierul nu a putut fi deschis.",
   "ERROR.UPLOAD.DELETE_FAILED": "Fișierul nu a putut fi șters.",
+  "ERROR.UPLOAD.RENAME_FAILED": "Fișierul nu a putut fi redenumit.",
+  "ERROR.PLAYER.FOLDER_NAME_INVALID": "Numele folderului e invalid (maxim 60 de caractere).",
+  "ERROR.PLAYER.FOLDER_NOT_EMPTY": "Folderul nu e gol. Mută fișierele din el în alt folder înainte să-l ștergi.",
+  "ERROR.PLAYER.FOLDER_EXISTS": "Există deja un folder cu acest nume.",
+  "ERROR.PLAYER.FOLDER_NOT_FOUND": "Folderul nu mai există. Reîncarcă pagina.",
   "ERROR.UPLOAD.FOLDER_NOT_EMPTY":
     "Folderul nu poate fi șters deoarece conține fișiere.",
   "ERROR.UPLOAD.FOLDER_NOT_FOUND": "Folderul nu a fost găsit.",
   "ERROR.UPLOAD.FOLDER_DELETE_FAILED": "Folderul nu a putut fi șters.",
+
+  // --- PLAYER TV ---
+  "ERROR.PLAYER.OFFLINE": "Playerul nu răspunde (Pi4 sau tunelul sunt oprite).",
+  "ERROR.PLAYER.AGENT_ERROR": "Playerul a răspuns cu o eroare.",
+  "ERROR.PLAYER.COMMAND_INVALID": "Comandă invalidă.",
+  "ERROR.PLAYER.COMMAND_REJECTED": "Playerul a refuzat comanda.",
+  "ERROR.PLAYER.PROGRAM_UNREADABLE": "Programul salvat pe server nu a putut fi citit.",
+  "ERROR.PLAYER.PROGRAM_REQUIRED": "Programul lipsește.",
+  "ERROR.PLAYER.SAVE_FAILED": "Programul nu a putut fi salvat pe server.",
+  "ERROR.PLAYER.DIR_NOT_AVAILABLE": "Folderul player nu este disponibil pe server.",
+  "ERROR.PLAYER.INVALID_TIME": "Ora de deschidere, închidere sau începere este invalidă (format OO:MM).",
+  "ERROR.PLAYER.INVALID_DATE": "Data petrecerii este invalidă.",
+  "ERROR.PLAYER.INVALID_DURATION": "Durata petrecerii trebuie să fie un număr de minute mai mare ca 0.",
+  "ERROR.PLAYER.INVALID_DAYS": "Alege cel puțin o zi pentru fiecare clip implicit.",
+  "ERROR.PLAYER.INVALID_FILE_NAME": "Alege un fișier valid pentru fiecare rând din program.",
+  "ERROR.PLAYER.INVALID_IMAGE_SECONDS": "Durata unei poze pe ecran trebuie să fie mai mare ca 0.",
+  "ERROR.PLAYER.PARTY_FILES_REQUIRED": "Fiecare petrecere trebuie să aibă cel puțin un fișier.",
 
   // --- CATEGORIES (ADMIN) ---
   "ERROR.CATEGORY.DUPLICATE_CODE":

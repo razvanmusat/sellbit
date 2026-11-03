@@ -26,6 +26,7 @@ import SettingsSuggestIcon from '@mui/icons-material/SettingsSuggest';
 import StorefrontIcon from '@mui/icons-material/Storefront'; 
 import KeyIcon from '@mui/icons-material/Key';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
+import LiveTvIcon from '@mui/icons-material/LiveTv';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import DownloadIcon from '@mui/icons-material/Download';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -99,6 +100,7 @@ const BottomBar = () => {
 
   const handleOpenUploadModal = () => setUploadModalOpen(true);
   const handleCloseUploadModal = () => setUploadModalOpen(false);
+  const handleOpenPlayer = () => navigate(isAdminMode ? '/admin/player' : '/home/player');
 
   const handleChangePassword = async () => {
     if (!oldPassword.trim() || !newPassword.trim() || !confirmNewPassword.trim()) {
@@ -158,12 +160,22 @@ const BottomBar = () => {
           </Box>
 
           {/* CENTRU: Butoane rapide */}
-          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 0.5, width: 118 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 0.5, width: 132 }}>
             {hasCashierOrAdminRights && (
               <Tooltip title="Upload fișiere">
                 <span>
                   <IconButton color="primary" onClick={handleOpenUploadModal}>
                     <UploadFileIcon fontSize="medium" />
+                  </IconButton>
+                </span>
+              </Tooltip>
+            )}
+
+            {hasCashierOrAdminRights && (
+              <Tooltip title="Player TV">
+                <span>
+                  <IconButton color="primary" onClick={handleOpenPlayer}>
+                    <LiveTvIcon fontSize="medium" />
                   </IconButton>
                 </span>
               </Tooltip>

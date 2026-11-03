@@ -55,6 +55,7 @@ import { StoreService } from './modules/admin/settings/company/api/StoreService'
 // --- COMPONENTE DE SISTEM ---
 import ProtectedRoute from './modules/auth/components/ProtectedRoute';
 import MainLayout from './shared/components/layout/MainLayout';
+import PlayerPage from './shared/pages/PlayerPage';
 
 dayjs.locale('ro');
 
@@ -178,6 +179,9 @@ function App() {
         
         {/* 5. Stoc */}
         <Route path="stock" element={<StockMainPage />} />
+
+        {/* 6. Player TV */}
+        <Route path="player" element={<PlayerPage />} />
         </Route>
 
       {/* --- ZONA ADMIN (AdminLayout) --- */}
@@ -222,6 +226,9 @@ function App() {
         <Route path="company" element={<Navigate to="/admin/settings/company" replace />} />
 
         <Route path="vouchers" element={<VoucherMainPage />} />
+
+        {/* Player TV */}
+        <Route path="player" element={<PlayerPage />} />
         </Route>
 
       {/* CATCH ALL */}
