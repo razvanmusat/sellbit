@@ -56,6 +56,7 @@ import { StoreService } from './modules/admin/settings/company/api/StoreService'
 import ProtectedRoute from './modules/auth/components/ProtectedRoute';
 import MainLayout from './shared/components/layout/MainLayout';
 import PlayerPage from './shared/pages/PlayerPage';
+import PlaybackErrorWatcher from './shared/components/player/PlaybackErrorWatcher';
 
 dayjs.locale('ro');
 
@@ -234,6 +235,9 @@ function App() {
       {/* CATCH ALL */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+
+      {/* eroare de redare a unui clip pe TV: fereastra apare pe orice ecran, cât timp ești logat */}
+      {isAuthenticated && userAuthority >= 50 && <PlaybackErrorWatcher />}
 
       <Snackbar
         open={showStoreSetupWarning}

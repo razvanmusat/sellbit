@@ -7,7 +7,7 @@ export const PLAYER_FOLDER = 'player';
 export const ALL_DAYS = [1, 2, 3, 4, 5, 6, 7];
 export const TOAST_MS = 4000;
 
-const STATUS_POLL_MS = 5000;
+export const STATUS_POLL_MS = 5000;
 const SYNC_POLL_MS = 1500;
 const SYNC_WAIT_MS = 15 * 60 * 1000; // agentul oprește un transfer după 900 s
 const SYNC_MAX_STATUS_FAILURES = 5;
@@ -216,10 +216,6 @@ export function usePlayer() {
   const [savedParties, setSavedParties] = useState([]);
   const [status, setStatus] = useState(null);
   const [offline, setOffline] = useState(false);
-  // Eroare de redare a unui clip, raportată de agent în status (playback_error: { id, file, message }).
-  // seenErrorId: null = prima stare încă nevăzută (o eroare mai veche decât deschiderea paginii nu se afișează).
-  const [playbackError, setPlaybackError] = useState(null);
-  const seenErrorId = useRef(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [commandBusy, setCommandBusy] = useState('');
@@ -301,19 +297,6 @@ export function usePlayer() {
   useEffect(() => () => {
     syncToken.current += 1;
   }, []);
-
-  useEffect(() => {
-    if (!status) return;
-    const current = status.playback_error;
-    if (seenErrorId.current === null) {
-      seenErrorId.current = current?.id ?? 0;
-    } else if (!current) {
-      seenErrorId.current = 0;   // agentul a repornit (contorul lui începe din nou)
-    } else if (current.id !== seenErrorId.current) {
-      seenErrorId.current = current.id;
-      setPlaybackError(current);
-    }
-  }, [status]);
 
   useEffect(() => {
     refreshStatus();
@@ -641,7 +624,6 @@ export function usePlayer() {
 
   return {
     files, filesByName, library, folders, assignments, program, status, offline,
-    playbackError, closePlaybackError: () => setPlaybackError(null),
     loading, saving, commandBusy, uploadProgress,
     toast, closeToast,
     reload, sendCommand, startParty, startQuick, isPartySaved, uploadFiles, deleteFile, renameFile,
