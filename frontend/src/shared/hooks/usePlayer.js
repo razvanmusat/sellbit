@@ -70,17 +70,28 @@ export const crossesMidnight = (start, end) => {
   return from !== null && to !== null && to < from;
 };
 
-// Petrecerile se ordonează crescător: după zi, apoi după ora de început (la egalitate, după ora de sfârșit).
-// Cele fără oră completată (încă în lucru) vin ultimele în zi. Sortarea e stabilă.
+// Petrecerile fără ore (nici început, nici sfârșit: rulează doar manual) vin primele, indiferent de zi.
+// Restul se ordonează crescător: după zi, apoi după ora de început (la egalitate, după ora de sfârșit).
+// Cele cu o singură oră completată (încă în lucru) vin ultimele în zi. Sortarea e stabilă.
 const timeKey = (value) => value || '99:99';
+export const isManualParty = (party) => !party.start && !party.end;
 export const compareParties = (a, b) => (
-  String(a.date || '').localeCompare(String(b.date || ''))
+  (Number(isManualParty(b)) - Number(isManualParty(a)))
+  || String(a.date || '').localeCompare(String(b.date || ''))
   || timeKey(a.start).localeCompare(timeKey(b.start))
   || timeKey(a.end).localeCompare(timeKey(b.end))
 );
 
-// Id-ul petrecerii pe care îl cunoaște agentul: data și ora de început.
-export const partyId = (party) => `${party.date} ${party.start}`;
+// Id-ul petrecerii pe care îl cunoaște agentul: „data ora de început” sau, la petrecerea fără ore,
+// „data #N” (N = a câta petrecere fără ore din acea zi, în ordinea din programul salvat).
+// savedParties = petrecerile salvate, în ordinea în care le-a primit agentul.
+export const partyId = (party, savedParties) => {
+  if (party.start) return `${party.date} ${party.start}`;
+  const signature = partySignature(party);
+  const sameDay = savedParties.filter((item) => isManualParty(item) && item.date === party.date);
+  const index = sameDay.findIndex((item) => partySignature(item) === signature);
+  return `${party.date} #${index + 1}`;
+};
 
 const partySignature = (party) => JSON.stringify([party.date, party.start, party.end, party.files.map((file) => file.file)]);
 
@@ -175,7 +186,7 @@ export const toPayload = (program, filesByName) => ({
   })),
   parties: [...program.parties].sort(compareParties).map((party) => ({
     date: party.date,
-    start: party.start,
+    start: party.start || undefined,
     durationMinutes: partyDurationMinutes(party.start, party.end) ?? undefined,
     files: party.files.map((file, index) => ({
       file: file.file,
@@ -205,6 +216,10 @@ export function usePlayer() {
   const [savedParties, setSavedParties] = useState([]);
   const [status, setStatus] = useState(null);
   const [offline, setOffline] = useState(false);
+  // Eroare de redare a unui clip, raportată de agent în status (playback_error: { id, file, message }).
+  // seenErrorId: null = prima stare încă nevăzută (o eroare mai veche decât deschiderea paginii nu se afișează).
+  const [playbackError, setPlaybackError] = useState(null);
+  const seenErrorId = useRef(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [commandBusy, setCommandBusy] = useState('');
@@ -216,7 +231,7 @@ export function usePlayer() {
 
   const filesByName = useMemo(() => new Map(files.map((file) => [file.fileName, file])), [files]);
   const savedSignatures = useMemo(() => new Set(savedParties.map(partySignature)), [savedParties]);
-  const isPartySaved = (party) => !!party.date && !!party.start && savedSignatures.has(partySignature(party));
+  const isPartySaved = (party) => !!party.date && savedSignatures.has(partySignature(party));
 
   const notify = useCallback((message, severity = 'success') => {
     setToast((prev) => ({ open: true, message, severity, key: prev.key + 1 }));
@@ -288,6 +303,19 @@ export function usePlayer() {
   }, []);
 
   useEffect(() => {
+    if (!status) return;
+    const current = status.playback_error;
+    if (seenErrorId.current === null) {
+      seenErrorId.current = current?.id ?? 0;
+    } else if (!current) {
+      seenErrorId.current = 0;   // agentul a repornit (contorul lui începe din nou)
+    } else if (current.id !== seenErrorId.current) {
+      seenErrorId.current = current.id;
+      setPlaybackError(current);
+    }
+  }, [status]);
+
+  useEffect(() => {
     refreshStatus();
     const timer = setInterval(refreshStatus, STATUS_POLL_MS);
     return () => clearInterval(timer);
@@ -312,7 +340,7 @@ export function usePlayer() {
   const startParty = async (party) => {
     setCommandBusy('party');
     try {
-      await PlayerService.startParty(partyId(party));
+      await PlayerService.startParty(partyId(party, savedParties));
       notify('Petrecerea a fost pornită.');
       await refreshStatus();
     } catch (error) {
@@ -561,8 +589,9 @@ export function usePlayer() {
       const party = program.parties[i];
       const label = `Petrecerea ${i + 1}${party.date ? ` (${displayDate(party.date)})` : ''}`;
       if (!party.date) return `${label}: alege data.`;
-      if (!party.start) return `${label}: alege ora de început.`;
-      if (!party.end) return `${label}: alege ora de sfârșit.`;
+      if (isManualParty(party)) continue;   // fără ore: rulează doar manual
+      if (!party.start) return `${label}: alege ora de început (sau golește și ora de sfârșit).`;
+      if (!party.end) return `${label}: alege ora de sfârșit (sau golește și ora de început).`;
       if (partyDurationMinutes(party.start, party.end) === null) return `${label}: ora de sfârșit trebuie să fie diferită de ora de început.`;
     }
     return null;
@@ -612,6 +641,7 @@ export function usePlayer() {
 
   return {
     files, filesByName, library, folders, assignments, program, status, offline,
+    playbackError, closePlaybackError: () => setPlaybackError(null),
     loading, saving, commandBusy, uploadProgress,
     toast, closeToast,
     reload, sendCommand, startParty, startQuick, isPartySaved, uploadFiles, deleteFile, renameFile,

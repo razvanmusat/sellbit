@@ -2,23 +2,23 @@ import React, { useState } from 'react';
 import dayjs from 'dayjs';
 import { Alert, Box, Button, IconButton, Paper, Stack, TextField, Tooltip, Typography } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import { TimePicker } from '@mui/x-date-pickers/TimePicker';
 import AddIcon from '@mui/icons-material/Add';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import DeleteIcon from '@mui/icons-material/Delete';
 import FilePickerField from './FilePickerField';
+import OptionalTimePicker from './OptionalTimePicker';
 import SortableList from './SortableList';
 import AddPartyDialog from './AddPartyDialog';
 import QuickRunDialog from './QuickRunDialog';
 import InfoButton from './InfoButton';
 import { PARTIES_INFO } from './tabInfo';
-import { pickerChange, toDate, toTime } from './playerUtils';
+import { toDate } from './playerUtils';
 import { compareParties, crossesMidnight, displayDate } from '../../hooks/usePlayer';
 
 // Orele sunt înguste (jumătate din lățimea implicită), iar numele fișierului se vede mai mare și bold.
-const TIME_FIELD_WIDTH = 125;
+const TIME_FIELD_WIDTH = 150;
 const FILE_TEXT_STYLE = { fontSize: '1.1rem', fontWeight: 700 };
 
 const startTooltip = (saved, offline) => {
@@ -51,19 +51,17 @@ const PartiesTab = ({
         <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start', flexWrap: { xs: 'wrap', md: 'nowrap' } }}>
           <Box sx={{ flexShrink: 0 }}>
             <Stack direction="row" spacing={1}>
-              <TimePicker
+              <OptionalTimePicker
                 label="Ora de început"
-                ampm={false}
-                value={toTime(party.start)}
-                onChange={pickerChange('HH:mm', (start) => onUpdateParty(partyIndex, { start }))}
-                slotProps={{ textField: { size: 'small', sx: { width: TIME_FIELD_WIDTH } } }}
+                value={party.start}
+                onChange={(start) => onUpdateParty(partyIndex, { start })}
+                sx={{ width: TIME_FIELD_WIDTH }}
               />
-              <TimePicker
+              <OptionalTimePicker
                 label="Ora de sfârșit"
-                ampm={false}
-                value={toTime(party.end)}
-                onChange={pickerChange('HH:mm', (end) => onUpdateParty(partyIndex, { end }))}
-                slotProps={{ textField: { size: 'small', sx: { width: TIME_FIELD_WIDTH } } }}
+                value={party.end}
+                onChange={(end) => onUpdateParty(partyIndex, { end })}
+                sx={{ width: TIME_FIELD_WIDTH }}
               />
             </Stack>
             {crossesMidnight(party.start, party.end) && (

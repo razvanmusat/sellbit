@@ -12,6 +12,7 @@ import ImageIcon from '@mui/icons-material/Image';
 import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolder';
 import DriveFileMoveIcon from '@mui/icons-material/DriveFileMove';
 import FolderList from './FolderList';
+import { FilePreviewDialog, PreviewIconButton } from './FilePreview';
 import InfoButton from './InfoButton';
 import { FILES_INFO } from './tabInfo';
 import { fileLabel, filesInFolder, formatSize, splitExtension } from './playerUtils';
@@ -133,6 +134,7 @@ const FilesTab = ({
   const [renameTarget, setRenameTarget] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [moveMenu, setMoveMenu] = useState(null); // { anchor, file }
+  const [previewFile, setPreviewFile] = useState(null);
 
   // folderul ales; dacă nu mai există (șters sau redenumit) sau nu e ales niciunul, primul
   const folder = folders.includes(selected) ? selected : (folders[0] || null);
@@ -274,6 +276,7 @@ const FilesTab = ({
                             </IconButton>
                           </span>
                         </Tooltip>
+                        <PreviewIconButton file={file} onOpen={setPreviewFile} size="medium" />
                         {isAdmin && (
                           <>
                             <Tooltip title="Redenumește">
@@ -363,6 +366,8 @@ const FilesTab = ({
           onSubmit={onRename}
         />
       )}
+
+      <FilePreviewDialog file={previewFile} onClose={() => setPreviewFile(null)} />
 
       <Dialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} maxWidth="xs" fullWidth>
         <DialogTitle>Ștergi fișierul?</DialogTitle>

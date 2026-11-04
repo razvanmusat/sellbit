@@ -5,6 +5,7 @@ import ClearIcon from '@mui/icons-material/Clear';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import FilePickerDialog from './FilePickerDialog';
+import { FilePreviewDialog, PreviewIconButton } from './FilePreview';
 import { fileLabel, shortName } from './playerUtils';
 
 // Câmp care arată fișierul ales; la click se deschide modala „Alege fișier”.
@@ -16,6 +17,7 @@ const FilePickerField = ({
   onAdd, onRemove, removeDisabled = false, removeTitle = 'Scoate fișierul', sx,
 }) => {
   const [open, setOpen] = useState(false);
+  const [previewFile, setPreviewFile] = useState(null);
   const file = library.files.find((item) => item.fileName === value);
   const display = !value ? '' : (file ? fileLabel(file) : `${shortName(value)} (lipsește din folder)`);
 
@@ -73,6 +75,7 @@ const FilePickerField = ({
                     <FolderOpenIcon fontSize="small" />
                   </IconButton>
                 </Tooltip>
+                {value && <PreviewIconButton file={file} onOpen={setPreviewFile} />}
                 {onRemove && (
                   <Tooltip title={removeTitle}>
                     <span>
@@ -97,6 +100,7 @@ const FilePickerField = ({
         }}
         sx={{ minWidth: 200, flex: 1, cursor: 'pointer', ...sx }}
       />
+      <FilePreviewDialog file={previewFile} onClose={() => setPreviewFile(null)} />
       {open && (
         <FilePickerDialog
           open

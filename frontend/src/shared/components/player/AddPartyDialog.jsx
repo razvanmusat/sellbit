@@ -3,10 +3,10 @@ import {
   Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, Stack, TextField, Typography,
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import { TimePicker } from '@mui/x-date-pickers/TimePicker';
 import FilePickerField from './FilePickerField';
+import OptionalTimePicker from './OptionalTimePicker';
 import SortableList from './SortableList';
-import { pickerChange, toDate, toTime } from './playerUtils';
+import { toDate } from './playerUtils';
 import { crossesMidnight, moveItem, partyDurationMinutes } from '../../hooks/usePlayer';
 
 // Fiecare rând de fișier are un id propriu (cheie React și țintă la drag & drop).
@@ -16,7 +16,8 @@ const newRow = () => {
   return { id: `new-${rowCounter}`, file: '', imageMinutes: '' };
 };
 
-// Modală „Adaugă petrecere”: ziua, ora de început, ora de sfârșit și fișierele ei.
+// Modală „Adaugă petrecere”: ziua, ora de început și de sfârșit (opționale, dar numai împreună) și fișierele ei.
+// Fără ore, petrecerea rulează doar manual, din „Pornește acum”.
 // Petrecerea se adaugă în program (se salvează apoi cu „Salvează și aplică”).
 const AddPartyDialog = ({ onClose, onAdd, defaultDate, library, filesByName }) => {
   const [date, setDate] = useState(defaultDate);
@@ -26,7 +27,9 @@ const AddPartyDialog = ({ onClose, onAdd, defaultDate, library, filesByName }) =
 
   const isImage = (fileName) => !!filesByName.get(fileName)?.image;
   const timesDiffer = partyDurationMinutes(start, end) !== null;
-  const valid = !!date && !!start && !!end && timesDiffer && files.length > 0 && files.every((item) => item.file);
+  const noTimes = !start && !end;
+  const timesValid = noTimes || (!!start && !!end && timesDiffer);
+  const valid = !!date && timesValid && files.length > 0 && files.every((item) => item.file);
 
   const updateFile = (index, patch) => setFiles((prev) => prev.map((item, i) => (i === index ? { ...item, ...patch } : item)));
 
@@ -50,21 +53,14 @@ const AddPartyDialog = ({ onClose, onAdd, defaultDate, library, filesByName }) =
               }}
               slotProps={{ textField: { size: 'small' } }}
             />
-            <TimePicker
-              label="Ora de început"
-              ampm={false}
-              value={toTime(start)}
-              onChange={pickerChange('HH:mm', setStart)}
-              slotProps={{ textField: { size: 'small' } }}
-            />
+            <OptionalTimePicker label="Ora de început" value={start} onChange={setStart} />
             <Box>
-              <TimePicker
-                label="Ora de sfârșit"
-                ampm={false}
-                value={toTime(end)}
-                onChange={pickerChange('HH:mm', setEnd)}
-                slotProps={{ textField: { size: 'small' } }}
-              />
+              <OptionalTimePicker label="Ora de sfârșit" value={end} onChange={setEnd} />
+              {!noTimes && (!start || !end) && (
+                <Typography variant="caption" color="error" sx={{ display: 'block' }}>
+                  Completează ambele ore sau lasă-le pe amândouă goale.
+                </Typography>
+              )}
               {start && end && !timesDiffer && (
                 <Typography variant="caption" color="error" sx={{ display: 'block' }}>
                   Ora de sfârșit trebuie să fie diferită de ora de început.

@@ -6,12 +6,14 @@ import {
 import MovieIcon from '@mui/icons-material/Movie';
 import ImageIcon from '@mui/icons-material/Image';
 import FolderList from './FolderList';
+import { FilePreviewDialog, PreviewIconButton } from './FilePreview';
 import { fileLabel, filesInFolder, formatSize, initialFolder } from './playerUtils';
 
 // Modală mică: alegi un folder și apoi fișierul din el. imagesOnly = doar poze (poza de fundal).
 const FilePickerDialog = ({ open, onClose, onSelect, library, imagesOnly = false, currentValue }) => {
   const { folders, assignments } = library;
   const files = imagesOnly ? library.files.filter((file) => file.image) : library.files;
+  const [previewFile, setPreviewFile] = useState(null);
   const [folder, setFolder] = useState(() => initialFolder(files, folders, assignments, currentValue));
 
   // dacă folderul ales a dispărut între timp, trecem pe primul
@@ -44,6 +46,7 @@ const FilePickerDialog = ({ open, onClose, onSelect, library, imagesOnly = false
                   >
                     <ListItemIcon sx={{ minWidth: 36 }}>{file.image ? <ImageIcon /> : <MovieIcon />}</ListItemIcon>
                     <ListItemText primary={fileLabel(file)} secondary={formatSize(file.size)} />
+                    <PreviewIconButton file={file} onOpen={setPreviewFile} />
                   </ListItemButton>
                 ))}
               </List>
@@ -55,6 +58,7 @@ const FilePickerDialog = ({ open, onClose, onSelect, library, imagesOnly = false
       <DialogActions>
         <Button onClick={onClose} color="inherit">Anulează</Button>
       </DialogActions>
+      <FilePreviewDialog file={previewFile} onClose={() => setPreviewFile(null)} />
     </Dialog>
   );
 };

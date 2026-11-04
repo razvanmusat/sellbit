@@ -51,6 +51,7 @@ export const PARTIES_INFO = {
     '„Pornește acum” (doar după ce petrecerea e salvată) pornește petrecerea imediat, ca un clip implicit: ignoră doar ora ei de început și de sfârșit (merge și înainte de oră, și după ce s-ar fi terminat).',
     'Următoarea petrecere programată începe singură la ora ei, iar la închiderea programului playerul se oprește, indiferent cum a pornit ce rula.',
     '„Rulează acum” pornește direct fișiere alese din foldere, fără să adauge o petrecere, cu același comportament.',
+    'Orele de început și de sfârșit sunt opționale (ambele sau niciuna). Fără ore, petrecerea nu pornește singură, ci doar din „Pornește acum”; astfel de petreceri apar primele în listă.',
     'Petrecerile sunt grupate pe zile: alegi ziua cu săgețile sau din calendar.',
   ],
 };

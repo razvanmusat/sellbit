@@ -15,6 +15,7 @@ import FilesTab from '../components/player/FilesTab';
 import WorkingHoursTab from '../components/player/WorkingHoursTab';
 import DefaultClipsTab from '../components/player/DefaultClipsTab';
 import PartiesTab from '../components/player/PartiesTab';
+import PlaybackErrorDialog from '../components/player/PlaybackErrorDialog';
 
 const TAB_FILES = 0;
 
@@ -32,7 +33,7 @@ const PlayerPage = () => {
   const [partyDay, setPartyDay] = useState(() => dayjs().format('YYYY-MM-DD'));
 
   const {
-    library, filesByName, program, status, offline,
+    library, filesByName, program, status, offline, playbackError, closePlaybackError,
     loading, saving, commandBusy, uploadProgress,
     toast, closeToast,
     reload, sendCommand, startParty, startQuick, isPartySaved, uploadFiles, deleteFile, renameFile,
@@ -163,6 +164,8 @@ const PlayerPage = () => {
           <Box sx={{ p: 2 }}>{renderTab()}</Box>
         </Paper>
       </Box>
+
+      <PlaybackErrorDialog error={playbackError} onClose={closePlaybackError} />
 
       {/* key = numărul mesajului: un mesaj nou înlocuiește imediat pe cel vechi și are propriile 4 secunde */}
       <Snackbar

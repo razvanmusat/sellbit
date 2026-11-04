@@ -58,7 +58,7 @@ public class PlayerService {
 
     private static final Set<String> COMMANDS = Set.of("play", "pause", "stop", "next", "party", "quick");
     private static final int QUICK_MAX_FILES = 50;
-    private static final Pattern PARTY_ID = Pattern.compile("^\\d{4}-\\d{2}-\\d{2} ([01]\\d|2[0-3]):[0-5]\\d$");
+    private static final Pattern PARTY_ID = Pattern.compile("^\\d{4}-\\d{2}-\\d{2} (([01]\\d|2[0-3]):[0-5]\\d|#[1-9]\\d*)$");
     private static final Pattern TIME = Pattern.compile("^([01]\\d|2[0-3]):[0-5]\\d$");
 
     private static final int DEFAULT_MAX_ATTEMPTS = 3;
@@ -664,9 +664,17 @@ public class PlayerService {
                     throw new RuntimeException("ERROR.PLAYER.INVALID_DATE");
                 }
                 requireDate(party.date());
-                requireTime(party.start());
-                if (party.durationMinutes() == null || party.durationMinutes() <= 0) {
-                    throw new RuntimeException("ERROR.PLAYER.INVALID_DURATION");
+                // ora de inceput si durata (sfarsitul) sunt optionale, dar numai impreuna: fara ele petrecerea ruleaza doar manual
+                boolean hasStart = party.start() != null;
+                boolean hasDuration = party.durationMinutes() != null;
+                if (hasStart != hasDuration) {
+                    throw new RuntimeException(hasStart ? "ERROR.PLAYER.INVALID_DURATION" : "ERROR.PLAYER.INVALID_TIME");
+                }
+                if (hasStart) {
+                    requireTime(party.start());
+                    if (party.durationMinutes() <= 0) {
+                        throw new RuntimeException("ERROR.PLAYER.INVALID_DURATION");
+                    }
                 }
                 if (party.files() == null || party.files().isEmpty()) {
                     throw new RuntimeException("ERROR.PLAYER.PARTY_FILES_REQUIRED");

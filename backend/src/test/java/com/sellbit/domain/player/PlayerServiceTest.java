@@ -692,6 +692,47 @@ class PlayerServiceTest {
     // ------------------------------------------------------------ comanda party
 
     @Test
+    @DisplayName("saveProgram - petrecere fara ore (start si durata null): se salveaza, fara start/durationMinutes in JSON")
+    void saveProgram_PartyWithoutTimes_Saved() throws IOException {
+        service.saveProgram(withParty(new Party("2026-12-05", null, null, List.of(new PartyFile("a.mp4", 1, null)))));
+
+        Party saved = service.getProgram().parties().get(0);
+        assertEquals("2026-12-05", saved.date());
+        assertEquals(null, saved.start());
+        assertEquals(null, saved.durationMinutes());
+        String json = Files.readString(tempDir.resolve("player").resolve("program.json"));
+        assertTrue(!json.contains("\"start\"") && !json.contains("durationMinutes"));
+    }
+
+    @Test
+    @DisplayName("saveProgram - petrecere cu doar una dintre ore: eroare")
+    void saveProgram_PartyWithOnlyOneTime_Rejected() {
+        List<PartyFile> files = List.of(new PartyFile("a.mp4", 1, null));
+
+        assertEquals("ERROR.PLAYER.INVALID_TIME",
+                errorOf(() -> service.saveProgram(withParty(new Party("2026-12-05", null, 150, files)))));
+        assertEquals("ERROR.PLAYER.INVALID_DURATION",
+                errorOf(() -> service.saveProgram(withParty(new Party("2026-12-05", "15:00", null, files)))));
+    }
+
+    @Test
+    @DisplayName("command party - id fara ora (data si #N) ajunge la agent")
+    void command_Party_WithoutTime() {
+        service.command(new CommandRequest("party", "2026-12-05 #2"));
+
+        assertEquals(List.of("POST /command {\"command\":\"party\",\"party\":\"2026-12-05 #2\"}"), requests);
+    }
+
+    @Test
+    @DisplayName("command party - id cu # invalid (#0, #, #x): nu ajunge la agent")
+    void command_Party_InvalidManualId() {
+        for (String bad : new String[] {"2026-12-05 #0", "2026-12-05 #", "2026-12-05 #x", "2026-12-05 #01"}) {
+            assertEquals("ERROR.PLAYER.COMMAND_INVALID", errorOf(() -> service.command(new CommandRequest("party", bad))), bad);
+        }
+        assertTrue(requests.isEmpty());
+    }
+
+    @Test
     @DisplayName("command party - trimite id-ul petrecerii (data si ora de inceput) la agent")
     void command_Party_Success() {
         service.command(new CommandRequest("party", " 2026-12-05 14:00 "));

@@ -7,6 +7,7 @@ import MovieIcon from '@mui/icons-material/Movie';
 import ImageIcon from '@mui/icons-material/Image';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import FolderList from './FolderList';
+import { FilePreviewDialog, PreviewIconButton } from './FilePreview';
 import { fileLabel, filesInFolder, formatSize, initialFolder } from './playerUtils';
 
 // Alegi fișiere din foldere (mai multe, în ordinea în care le alegi) și le rulezi acum, fără să adaugi o petrecere.
@@ -15,6 +16,7 @@ const QuickRunDialog = ({ onClose, onRun, library }) => {
   const [folder, setFolder] = useState(() => initialFolder(files, folders, assignments, null));
   const [selected, setSelected] = useState([]); // numele fișierelor, în ordinea alegerii
   const [busy, setBusy] = useState(false);
+  const [previewFile, setPreviewFile] = useState(null);
 
   const activeFolder = folders.includes(folder) ? folder : (folders[0] || null);
   const visible = activeFolder ? filesInFolder(files, assignments, activeFolder) : [];
@@ -54,6 +56,7 @@ const QuickRunDialog = ({ onClose, onRun, library }) => {
                         <Checkbox edge="start" size="small" checked={selected.includes(file.fileName)} tabIndex={-1} disableRipple />
                         <ListItemIcon sx={{ minWidth: 32 }}>{file.image ? <ImageIcon fontSize="small" /> : <MovieIcon fontSize="small" />}</ListItemIcon>
                         <ListItemText primary={fileLabel(file)} secondary={formatSize(file.size)} />
+                        <PreviewIconButton file={file} onOpen={setPreviewFile} />
                       </ListItemButton>
                     ))}
                   </List>
@@ -92,6 +95,7 @@ const QuickRunDialog = ({ onClose, onRun, library }) => {
           Rulează acum
         </Button>
       </DialogActions>
+      <FilePreviewDialog file={previewFile} onClose={() => setPreviewFile(null)} />
     </Dialog>
   );
 };
